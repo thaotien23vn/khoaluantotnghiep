@@ -1,12 +1,29 @@
 const express = require('express');
 const cors = require('cors');
+const helmet = require('helmet');
 const authRoutes = require('./routes/auth.routes');
+const protectedRoutes = require('./routes/protected.routes');
+const validateInput = require('./middlewares/validateInput');
+const { apiLimiter } = require('./middlewares/rateLimiter');
 
 const app = express();
 
-app.use(cors());
+// Security middleware
+app.use(helmet()); // Add security headers
+app.use(cors({
+  origin: process.env.ALLOWED_ORIGINS || 'http://localhost:3000',
+  credentials: true
+}));
+
+// Body parsing middleware
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
+
+// Input validation and sanitization
+app.use(validateInput);
+
+// General API rate limiting
+app.use('/api/', apiLimiter);
 
 // Health check
 app.get('/api/health', (req, res) => {
@@ -18,6 +35,11 @@ app.get('/api/health', (req, res) => {
 
 // Auth routes
 app.use('/api/auth', authRoutes);
+
+// Protected routes (require authentication and authorization)
+app.use('/api/admin', protectedRoutes);
+app.use('/api/teacher', protectedRoutes);
+app.use('/api/student', protectedRoutes);
 
 // 404 handler
 app.use((req, res) => {

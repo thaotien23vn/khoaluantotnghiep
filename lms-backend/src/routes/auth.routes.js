@@ -2,12 +2,18 @@ const express = require('express');
 const { body } = require('express-validator');
 const authController = require('../controllers/auth.controller');
 const authMiddleware = require('../middlewares/auth');
+const {
+  authLimiter,
+  emailVerificationLimiter,
+  passwordResetLimiter,
+} = require('../middlewares/rateLimiter');
 
 const router = express.Router();
 
 // ============= Đăng ký =============
 router.post(
   '/register',
+  authLimiter, // Rate limit: 5 attempts per 15 minutes
   [
     body('name').trim().notEmpty().withMessage('Tên không được trống'),
     body('username').trim().notEmpty().withMessage('Tên đăng nhập không được trống'),
@@ -28,17 +34,18 @@ router.post(
 );
 
 // ============= Xác nhận email (qua link) =============
-router.get('/verify-email/:token', authController.verifyEmail);
+router.get('/verify-email/:token', emailVerificationLimiter, authController.verifyEmail);
 
 // ============= Xác nhận email (qua code) =============
-router.post('/verify-email-code', authController.verifyEmailByCode);
+router.post('/verify-email-code', emailVerificationLimiter, authController.verifyEmailByCode);
 
 // ============= Gửi lại email xác nhận =============
-router.post('/resend-verification-email', authController.resendVerificationEmail);
+router.post('/resend-verification-email', emailVerificationLimiter, authController.resendVerificationEmail);
 
 // ============= Đăng nhập =============
 router.post(
   '/login',
+  authLimiter, // Rate limit: 5 attempts per 15 minutes
   [
     body('email')
       .optional()
@@ -63,6 +70,7 @@ router.post(
 // ============= Quên mật khẩu =============
 router.post(
   '/forgot-password',
+  passwordResetLimiter, // Rate limit: 3 attempts per hour
   [body('email').isEmail().withMessage('Email không hợp lệ')],
   authController.forgotPassword
 );
@@ -70,6 +78,7 @@ router.post(
 // ============= Đặt lại mật khẩu =============
 router.post(
   '/reset-password',
+  passwordResetLimiter, // Rate limit: 3 attempts per hour
   [
     body('token').notEmpty().withMessage('Token không được trống'),
     body('password')
