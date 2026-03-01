@@ -1,0 +1,751 @@
+const { Op } = require('sequelize');
+const db = require('../models');
+
+const { Course, Chapter, Lecture, User } = db.models;
+
+// Helper: build URL-friendly slug from title (basic, no extra dependency)
+const generateSlugFromTitle = (title) => {
+  if (!title) return '';
+
+  return title
+    .toString()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '') // remove accents
+    .toLowerCase()
+    .trim()
+    .replace(/[^a-z0-9\s-]/g, '') // remove invalid chars
+    .replace(/\s+/g, '-') // spaces to dashes
+    .replace(/-+/g, '-'); // collapse dashes
+};
+
+// Ensure slug is unique by appending -1, -2, ...
+const generateUniqueSlug = async (title) => {
+  const baseSlug = generateSlugFromTitle(title) || 'course';
+  let slug = baseSlug;
+  let suffix = 1;
+
+  // eslint-disable-next-line no-constant-condition
+  while (true) {
+    // check if slug exists
+    // use findOne with limit 1 for efficiency
+    const existing = await Course.findOne({ where: { slug } });
+    if (!existing) {
+      return slug;
+    }
+    slug = `${baseSlug}-${suffix}`;
+    suffix += 1;
+  }
+};
+
+// ============= PUBLIC: LIST PUBLISHED COURSES =============
+exports.getPublishedCourses = async (req, res) => {
+  try {
+    const { q } = req.query;
+
+    const where = { published: true };
+    if (q) {
+      where.title = { [Op.like]: `%${q}%` };
+    }
+
+    const courses = await Course.findAll({
+      where,
+      order: [['createdAt', 'DESC']],
+      include: [
+        {
+          model: User,
+          as: 'creator',
+          attributes: ['id', 'name', 'username'],
+        },
+      ],
+    });
+
+    res.json({
+      success: true,
+      data: {
+        courses,
+      },
+    });
+  } catch (error) {
+    console.error('Lỗi lấy danh sách khóa học:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Lỗi máy chủ',
+      error: error.message,
+    });
+  }
+};
+
+// ============= PUBLIC: COURSE DETAIL (WITH CONTENT) =============
+exports.getCourseDetail = async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    const course = await Course.findByPk(id, {
+      where: { published: true },
+      include: [
+        {
+          model: User,
+          as: 'creator',
+          attributes: ['id', 'name', 'username'],
+        },
+        {
+          model: Chapter,
+          include: [Lecture],
+        },
+      ],
+      order: [
+        [Chapter, 'order', 'ASC'],
+        [Chapter, Lecture, 'order', 'ASC'],
+      ],
+    });
+
+    if (!course) {
+      return res.status(404).json({
+        success: false,
+        message: 'Không tìm thấy khóa học',
+      });
+    }
+
+    res.json({
+      success: true,
+      data: {
+        course,
+      },
+    });
+  } catch (error) {
+    console.error('Lỗi lấy chi tiết khóa học:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Lỗi máy chủ',
+      error: error.message,
+    });
+  }
+};
+
+// ============= TEACHER/ADMIN: LIST OWN (OR ALL) COURSES =============
+exports.getMyCourses = async (req, res) => {
+  try {
+    const userId = req.user.id;
+    const role = req.user.role;
+
+    const where = {};
+    if (role === 'teacher') {
+      where.createdBy = userId;
+    }
+
+    const courses = await Course.findAll({
+      where,
+      order: [['createdAt', 'DESC']],
+    });
+
+    res.json({
+      success: true,
+      data: {
+        courses,
+      },
+    });
+  } catch (error) {
+    console.error('Lỗi lấy khóa học của giảng viên:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Lỗi máy chủ',
+      error: error.message,
+    });
+  }
+};
+
+// ============= TEACHER/ADMIN: CREATE COURSE =============
+exports.createCourse = async (req, res) => {
+  try {
+    const { title, description, price, categoryId, published } = req.body;
+
+    if (!title) {
+      return res.status(400).json({
+        success: false,
+        message: 'Tiêu đề khóa học không được để trống',
+      });
+    }
+
+    const slug = await generateUniqueSlug(title);
+
+    const course = await Course.create({
+      title,
+      slug,
+      description: description || '',
+      price: price != null ? price : 0,
+      published: !!published,
+      categoryId: categoryId || null,
+      createdBy: req.user.id,
+    });
+
+    res.status(201).json({
+      success: true,
+      message: 'Tạo khóa học thành công',
+      data: {
+        course,
+      },
+    });
+  } catch (error) {
+    console.error('Lỗi tạo khóa học:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Lỗi máy chủ',
+      error: error.message,
+    });
+  }
+};
+
+// ============= TEACHER/ADMIN: GET SINGLE COURSE (OWN COURSE OR ANY FOR ADMIN) =============
+exports.getCourseForOwner = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const userId = req.user.id;
+    const role = req.user.role;
+
+    const course = await Course.findByPk(id);
+
+    if (!course) {
+      return res.status(404).json({
+        success: false,
+        message: 'Không tìm thấy khóa học',
+      });
+    }
+
+    if (role === 'teacher' && course.createdBy !== userId) {
+      return res.status(403).json({
+        success: false,
+        message: 'Bạn không có quyền truy cập khóa học này',
+      });
+    }
+
+    res.json({
+      success: true,
+      data: {
+        course,
+      },
+    });
+  } catch (error) {
+    console.error('Lỗi lấy khóa học:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Lỗi máy chủ',
+      error: error.message,
+    });
+  }
+};
+
+// ============= TEACHER/ADMIN: UPDATE COURSE =============
+exports.updateCourse = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const userId = req.user.id;
+    const role = req.user.role;
+
+    const course = await Course.findByPk(id);
+
+    if (!course) {
+      return res.status(404).json({
+        success: false,
+        message: 'Không tìm thấy khóa học',
+      });
+    }
+
+    if (role === 'teacher' && course.createdBy !== userId) {
+      return res.status(403).json({
+        success: false,
+        message: 'Bạn không có quyền cập nhật khóa học này',
+      });
+    }
+
+    const { title, description, price, categoryId, published } = req.body;
+
+    if (title && title !== course.title) {
+      course.slug = await generateUniqueSlug(title);
+      course.title = title;
+    }
+
+    if (description != null) {
+      course.description = description;
+    }
+    if (price != null) {
+      course.price = price;
+    }
+    if (categoryId !== undefined) {
+      course.categoryId = categoryId;
+    }
+    if (published !== undefined) {
+      course.published = !!published;
+    }
+
+    await course.save();
+
+    res.json({
+      success: true,
+      message: 'Cập nhật khóa học thành công',
+      data: {
+        course,
+      },
+    });
+  } catch (error) {
+    console.error('Lỗi cập nhật khóa học:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Lỗi máy chủ',
+      error: error.message,
+    });
+  }
+};
+
+// ============= TEACHER/ADMIN: DELETE COURSE =============
+exports.deleteCourse = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const userId = req.user.id;
+    const role = req.user.role;
+
+    const course = await Course.findByPk(id);
+
+    if (!course) {
+      return res.status(404).json({
+        success: false,
+        message: 'Không tìm thấy khóa học',
+      });
+    }
+
+    if (role === 'teacher' && course.createdBy !== userId) {
+      return res.status(403).json({
+        success: false,
+        message: 'Bạn không có quyền xóa khóa học này',
+      });
+    }
+
+    await course.destroy();
+
+    res.json({
+      success: true,
+      message: 'Xóa khóa học thành công',
+    });
+  } catch (error) {
+    console.error('Lỗi xóa khóa học:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Lỗi máy chủ',
+      error: error.message,
+    });
+  }
+};
+
+// ============= TEACHER/ADMIN: COURSE CONTENT MANAGEMENT =============
+
+// List chapters + lectures for a course (for owner/admin)
+exports.getCourseContentForOwner = async (req, res) => {
+  try {
+    const { courseId } = req.params;
+    const userId = req.user.id;
+    const role = req.user.role;
+
+    const course = await Course.findByPk(courseId);
+
+    if (!course) {
+      return res.status(404).json({
+        success: false,
+        message: 'Không tìm thấy khóa học',
+      });
+    }
+
+    if (role === 'teacher' && course.createdBy !== userId) {
+      return res.status(403).json({
+        success: false,
+        message: 'Bạn không có quyền truy cập khóa học này',
+      });
+    }
+
+    const chapters = await Chapter.findAll({
+      where: { courseId: course.id },
+      include: [Lecture],
+      order: [
+        ['order', 'ASC'],
+        [Lecture, 'order', 'ASC'],
+      ],
+    });
+
+    res.json({
+      success: true,
+      data: {
+        course,
+        chapters,
+      },
+    });
+  } catch (error) {
+    console.error('Lỗi lấy nội dung khóa học:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Lỗi máy chủ',
+      error: error.message,
+    });
+  }
+};
+
+// Create chapter in a course
+exports.createChapter = async (req, res) => {
+  try {
+    const { courseId } = req.params;
+    const userId = req.user.id;
+    const role = req.user.role;
+    const { title, order } = req.body;
+
+    if (!title) {
+      return res.status(400).json({
+        success: false,
+        message: 'Tiêu đề chương không được để trống',
+      });
+    }
+
+    const course = await Course.findByPk(courseId);
+
+    if (!course) {
+      return res.status(404).json({
+        success: false,
+        message: 'Không tìm thấy khóa học',
+      });
+    }
+
+    if (role === 'teacher' && course.createdBy !== userId) {
+      return res.status(403).json({
+        success: false,
+        message: 'Bạn không có quyền chỉnh sửa khóa học này',
+      });
+    }
+
+    const chapter = await Chapter.create({
+      title,
+      order: order != null ? order : 0,
+      courseId: course.id,
+    });
+
+    res.status(201).json({
+      success: true,
+      message: 'Tạo chương mới thành công',
+      data: {
+        chapter,
+      },
+    });
+  } catch (error) {
+    console.error('Lỗi tạo chương:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Lỗi máy chủ',
+      error: error.message,
+    });
+  }
+};
+
+// Update chapter
+exports.updateChapter = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const userId = req.user.id;
+    const role = req.user.role;
+    const { title, order } = req.body;
+
+    const chapter = await Chapter.findByPk(id);
+
+    if (!chapter) {
+      return res.status(404).json({
+        success: false,
+        message: 'Không tìm thấy chương',
+      });
+    }
+
+    const course = await Course.findByPk(chapter.courseId);
+
+    if (!course) {
+      return res.status(404).json({
+        success: false,
+        message: 'Không tìm thấy khóa học của chương này',
+      });
+    }
+
+    if (role === 'teacher' && course.createdBy !== userId) {
+      return res.status(403).json({
+        success: false,
+        message: 'Bạn không có quyền chỉnh sửa chương này',
+      });
+    }
+
+    if (title != null) {
+      chapter.title = title;
+    }
+    if (order != null) {
+      chapter.order = order;
+    }
+
+    await chapter.save();
+
+    res.json({
+      success: true,
+      message: 'Cập nhật chương thành công',
+      data: {
+        chapter,
+      },
+    });
+  } catch (error) {
+    console.error('Lỗi cập nhật chương:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Lỗi máy chủ',
+      error: error.message,
+    });
+  }
+};
+
+// Delete chapter (and its lectures)
+exports.deleteChapter = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const userId = req.user.id;
+    const role = req.user.role;
+
+    const chapter = await Chapter.findByPk(id);
+
+    if (!chapter) {
+      return res.status(404).json({
+        success: false,
+        message: 'Không tìm thấy chương',
+      });
+    }
+
+    const course = await Course.findByPk(chapter.courseId);
+
+    if (!course) {
+      return res.status(404).json({
+        success: false,
+        message: 'Không tìm thấy khóa học của chương này',
+      });
+    }
+
+    if (role === 'teacher' && course.createdBy !== userId) {
+      return res.status(403).json({
+        success: false,
+        message: 'Bạn không có quyền xóa chương này',
+      });
+    }
+
+    // delete lectures first to avoid foreign key issues (if any)
+    await Lecture.destroy({ where: { chapterId: chapter.id } });
+    await chapter.destroy();
+
+    res.json({
+      success: true,
+      message: 'Xóa chương và các bài giảng liên quan thành công',
+    });
+  } catch (error) {
+    console.error('Lỗi xóa chương:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Lỗi máy chủ',
+      error: error.message,
+    });
+  }
+};
+
+// Create lecture in a chapter
+exports.createLecture = async (req, res) => {
+  try {
+    const { chapterId } = req.params;
+    const userId = req.user.id;
+    const role = req.user.role;
+    const { title, type, contentUrl, duration, order } = req.body;
+
+    if (!title || !type) {
+      return res.status(400).json({
+        success: false,
+        message: 'Tiêu đề và loại bài giảng là bắt buộc',
+      });
+    }
+
+    const chapter = await Chapter.findByPk(chapterId);
+
+    if (!chapter) {
+      return res.status(404).json({
+        success: false,
+        message: 'Không tìm thấy chương',
+      });
+    }
+
+    const course = await Course.findByPk(chapter.courseId);
+
+    if (!course) {
+      return res.status(404).json({
+        success: false,
+        message: 'Không tìm thấy khóa học của chương này',
+      });
+    }
+
+    if (role === 'teacher' && course.createdBy !== userId) {
+      return res.status(403).json({
+        success: false,
+        message: 'Bạn không có quyền thêm bài giảng cho chương này',
+      });
+    }
+
+    const lecture = await Lecture.create({
+      title,
+      type,
+      contentUrl: contentUrl || null,
+      duration: duration != null ? duration : null,
+      order: order != null ? order : 0,
+      chapterId: chapter.id,
+    });
+
+    res.status(201).json({
+      success: true,
+      message: 'Tạo bài giảng mới thành công',
+      data: {
+        lecture,
+      },
+    });
+  } catch (error) {
+    console.error('Lỗi tạo bài giảng:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Lỗi máy chủ',
+      error: error.message,
+    });
+  }
+};
+
+// Update lecture
+exports.updateLecture = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const userId = req.user.id;
+    const role = req.user.role;
+    const { title, type, contentUrl, duration, order } = req.body;
+
+    const lecture = await Lecture.findByPk(id);
+
+    if (!lecture) {
+      return res.status(404).json({
+        success: false,
+        message: 'Không tìm thấy bài giảng',
+      });
+    }
+
+    const chapter = await Chapter.findByPk(lecture.chapterId);
+
+    if (!chapter) {
+      return res.status(404).json({
+        success: false,
+        message: 'Không tìm thấy chương của bài giảng này',
+      });
+    }
+
+    const course = await Course.findByPk(chapter.courseId);
+
+    if (!course) {
+      return res.status(404).json({
+        success: false,
+        message: 'Không tìm thấy khóa học của chương này',
+      });
+    }
+
+    if (role === 'teacher' && course.createdBy !== userId) {
+      return res.status(403).json({
+        success: false,
+        message: 'Bạn không có quyền chỉnh sửa bài giảng này',
+      });
+    }
+
+    if (title != null) {
+      lecture.title = title;
+    }
+    if (type != null) {
+      lecture.type = type;
+    }
+    if (contentUrl !== undefined) {
+      lecture.contentUrl = contentUrl;
+    }
+    if (duration !== undefined) {
+      lecture.duration = duration;
+    }
+    if (order !== undefined) {
+      lecture.order = order;
+    }
+
+    await lecture.save();
+
+    res.json({
+      success: true,
+      message: 'Cập nhật bài giảng thành công',
+      data: {
+        lecture,
+      },
+    });
+  } catch (error) {
+    console.error('Lỗi cập nhật bài giảng:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Lỗi máy chủ',
+      error: error.message,
+    });
+  }
+};
+
+// Delete lecture
+exports.deleteLecture = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const userId = req.user.id;
+    const role = req.user.role;
+
+    const lecture = await Lecture.findByPk(id);
+
+    if (!lecture) {
+      return res.status(404).json({
+        success: false,
+        message: 'Không tìm thấy bài giảng',
+      });
+    }
+
+    const chapter = await Chapter.findByPk(lecture.chapterId);
+
+    if (!chapter) {
+      return res.status(404).json({
+        success: false,
+        message: 'Không tìm thấy chương của bài giảng này',
+      });
+    }
+
+    const course = await Course.findByPk(chapter.courseId);
+
+    if (!course) {
+      return res.status(404).json({
+        success: false,
+        message: 'Không tìm thấy khóa học của chương này',
+      });
+    }
+
+    if (role === 'teacher' && course.createdBy !== userId) {
+      return res.status(403).json({
+        success: false,
+        message: 'Bạn không có quyền xóa bài giảng này',
+      });
+    }
+
+    await lecture.destroy();
+
+    res.json({
+      success: true,
+      message: 'Xóa bài giảng thành công',
+    });
+  } catch (error) {
+    console.error('Lỗi xóa bài giảng:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Lỗi máy chủ',
+      error: error.message,
+    });
+  }
+};
+

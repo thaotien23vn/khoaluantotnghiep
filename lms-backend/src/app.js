@@ -2,6 +2,7 @@ const express = require('express');
 const cors = require('cors');
 const helmet = require('helmet');
 const authRoutes = require('./routes/auth.routes');
+const courseRoutes = require('./routes/course.routes');
 const protectedRoutes = require('./routes/protected.routes');
 const validateInput = require('./middlewares/validateInput');
 const { apiLimiter } = require('./middlewares/rateLimiter');
@@ -10,8 +11,11 @@ const app = express();
 
 // Security middleware
 app.use(helmet()); // Add security headers
+const allowedOrigins = (process.env.ALLOWED_ORIGINS || 'http://localhost:3000')
+  .split(',')
+  .map((o) => o.trim());
 app.use(cors({
-  origin: process.env.ALLOWED_ORIGINS || 'http://localhost:3000',
+  origin: allowedOrigins,
   credentials: true
 }));
 
@@ -35,6 +39,9 @@ app.get('/api/health', (req, res) => {
 
 // Auth routes
 app.use('/api/auth', authRoutes);
+
+// Public course routes
+app.use('/api/courses', courseRoutes);
 
 // Protected routes (require authentication and authorization)
 app.use('/api/admin', protectedRoutes);

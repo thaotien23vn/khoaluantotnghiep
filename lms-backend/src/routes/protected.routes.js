@@ -6,6 +6,7 @@
 const express = require('express');
 const authMiddleware = require('../middlewares/auth');
 const authorizeRole = require('../middlewares/authorize');
+const courseController = require('../controllers/course.controller');
 
 const router = express.Router();
 
@@ -84,18 +85,7 @@ router.get(
   '/courses',
   authMiddleware,
   authorizeRole('teacher', 'admin'),
-  (req, res) => {
-    res.json({
-      success: true,
-      message: 'Danh sách khóa học của bạn',
-      data: {
-        courses: [
-          { id: 1, name: 'JavaScript Basics', students: 45 },
-          { id: 2, name: 'React Advanced', students: 32 },
-        ],
-      },
-    });
-  }
+  courseController.getMyCourses
 );
 
 /**
@@ -107,16 +97,127 @@ router.post(
   '/courses',
   authMiddleware,
   authorizeRole('teacher', 'admin'),
-  (req, res) => {
-    res.json({
-      success: true,
-      message: 'Tạo khóa học thành công',
-      data: {
-        courseId: 3,
-        name: 'Node.js Backend',
-      },
-    });
-  }
+  courseController.createCourse
+);
+
+/**
+ * @route   GET /api/teacher/courses/:id
+ * @desc    Get a specific course (teacher's own or any for admin)
+ * @access  Private (Teacher & Admin)
+ */
+router.get(
+  '/courses/:id',
+  authMiddleware,
+  authorizeRole('teacher', 'admin'),
+  courseController.getCourseForOwner
+);
+
+/**
+ * @route   PUT /api/teacher/courses/:id
+ * @desc    Update a specific course
+ * @access  Private (Teacher & Admin)
+ */
+router.put(
+  '/courses/:id',
+  authMiddleware,
+  authorizeRole('teacher', 'admin'),
+  courseController.updateCourse
+);
+
+/**
+ * @route   DELETE /api/teacher/courses/:id
+ * @desc    Delete a specific course
+ * @access  Private (Teacher & Admin)
+ */
+router.delete(
+  '/courses/:id',
+  authMiddleware,
+  authorizeRole('teacher', 'admin'),
+  courseController.deleteCourse
+);
+
+/**
+ * @route   GET /api/teacher/courses/:courseId/chapters
+ * @desc    Get course content (chapters + lectures)
+ * @access  Private (Teacher & Admin)
+ */
+router.get(
+  '/courses/:courseId/chapters',
+  authMiddleware,
+  authorizeRole('teacher', 'admin'),
+  courseController.getCourseContentForOwner
+);
+
+/**
+ * @route   POST /api/teacher/courses/:courseId/chapters
+ * @desc    Create a chapter in a course
+ * @access  Private (Teacher & Admin)
+ */
+router.post(
+  '/courses/:courseId/chapters',
+  authMiddleware,
+  authorizeRole('teacher', 'admin'),
+  courseController.createChapter
+);
+
+/**
+ * @route   PUT /api/teacher/chapters/:id
+ * @desc    Update a chapter
+ * @access  Private (Teacher & Admin)
+ */
+router.put(
+  '/chapters/:id',
+  authMiddleware,
+  authorizeRole('teacher', 'admin'),
+  courseController.updateChapter
+);
+
+/**
+ * @route   DELETE /api/teacher/chapters/:id
+ * @desc    Delete a chapter (and its lectures)
+ * @access  Private (Teacher & Admin)
+ */
+router.delete(
+  '/chapters/:id',
+  authMiddleware,
+  authorizeRole('teacher', 'admin'),
+  courseController.deleteChapter
+);
+
+/**
+ * @route   POST /api/teacher/chapters/:chapterId/lectures
+ * @desc    Create a lecture in a chapter
+ * @access  Private (Teacher & Admin)
+ */
+router.post(
+  '/chapters/:chapterId/lectures',
+  authMiddleware,
+  authorizeRole('teacher', 'admin'),
+  courseController.createLecture
+);
+
+/**
+ * @route   PUT /api/teacher/lectures/:id
+ * @desc    Update a lecture
+ * @access  Private (Teacher & Admin)
+ */
+router.put(
+  '/lectures/:id',
+  authMiddleware,
+  authorizeRole('teacher', 'admin'),
+  courseController.updateLecture
+);
+
+/**
+ * @route   DELETE /api/teacher/lectures/:id
+ * @desc    Delete a lecture
+ * @access  Private (Teacher & Admin)
+ */
+router.delete(
+  '/lectures/:id',
+  authMiddleware,
+  authorizeRole('teacher', 'admin'),
+  courseController.deleteLecture
 );
 
 /**
