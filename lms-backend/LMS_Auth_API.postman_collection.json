@@ -226,6 +226,91 @@
       ]
     },
     {
+      "name": "Enrollments",
+      "item": [
+        {
+          "name": "Enroll in course",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "if (pm.response.code === 201) {",
+                  "  var d = pm.response.json();",
+                  "  if (d.data && d.data.enrollment) pm.environment.set('enrollment_id', d.data.enrollment.id);",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Authorization", "value": "Bearer {{auth_token}}" }],
+            "url": {
+              "raw": "{{base_url}}/api/student/courses/{{course_id}}/enroll",
+              "host": ["{{base_url}}"],
+              "path": ["api", "student", "courses", "{{course_id}}", "enroll"]
+            }
+          }
+        },
+        {
+          "name": "Get my enrollments",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{auth_token}}" }],
+            "url": {
+              "raw": "{{base_url}}/api/student/enrollments",
+              "host": ["{{base_url}}"],
+              "path": ["api", "student", "enrollments"]
+            }
+          }
+        },
+        {
+          "name": "Get enrollment by course",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{auth_token}}" }],
+            "url": {
+              "raw": "{{base_url}}/api/student/enrollments/course/{{course_id}}",
+              "host": ["{{base_url}}"],
+              "path": ["api", "student", "enrollments", "course", "{{course_id}}"]
+            }
+          }
+        },
+        {
+          "name": "Update progress",
+          "request": {
+            "method": "PUT",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{auth_token}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"progressPercent\": 75\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/student/progress/{{course_id}}",
+              "host": ["{{base_url}}"],
+              "path": ["api", "student", "progress", "{{course_id}}"]
+            }
+          }
+        },
+        {
+          "name": "Unenroll",
+          "request": {
+            "method": "DELETE",
+            "header": [{ "key": "Authorization", "value": "Bearer {{auth_token}}" }],
+            "url": {
+              "raw": "{{base_url}}/api/student/courses/{{course_id}}/enroll",
+              "host": ["{{base_url}}"],
+              "path": ["api", "student", "courses", "{{course_id}}", "enroll"]
+            }
+          }
+        }
+      ]
+    },
+    {
       "name": "Health Check",
       "request": {
         "method": "GET",
@@ -261,6 +346,11 @@
     {
       "key": "user_email",
       "value": "thai@example.com",
+      "type": "string"
+    },
+    {
+      "key": "course_id",
+      "value": "1",
       "type": "string"
     }
   ]

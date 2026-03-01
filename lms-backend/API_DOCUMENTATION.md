@@ -317,20 +317,169 @@ Authorization: Bearer <token>
 
 ---
 
+## Enrollments API (Student)
+
+Tất cả endpoint dưới đây yêu cầu **Bearer token** (đăng nhập với role `student` hoặc `admin`).  
+Header: `Authorization: Bearer {{auth_token}}`
+
+### 1. Đăng ký khóa học (Enroll)
+
+**Endpoint:** `POST /api/student/courses/:courseId/enroll`
+
+**Description:** Học viên đăng ký vào một khóa học (khóa phải đã published).
+
+**URL Parameter:** `courseId` – ID khóa học.
+
+**Response (201 Created):**
+```json
+{
+  "success": true,
+  "message": "Đăng ký khóa học thành công",
+  "data": {
+    "enrollment": {
+      "id": 1,
+      "userId": 2,
+      "courseId": 1,
+      "status": "enrolled",
+      "progressPercent": 0,
+      "enrolledAt": "2025-03-01T10:00:00.000Z",
+      "Course": { "id": 1, "title": "JavaScript Basics", "slug": "javascript-basics", "price": "0.00" }
+    }
+  }
+}
+```
+
+**Lỗi thường gặp:**
+- `404` – Không tìm thấy khóa học.
+- `400` – Khóa học chưa xuất bản.
+- `409` – Đã đăng ký khóa này rồi.
+
+---
+
+### 2. Hủy đăng ký (Unenroll)
+
+**Endpoint:** `DELETE /api/student/courses/:courseId/enroll`
+
+**Description:** Học viên hủy đăng ký khóa học.
+
+**URL Parameter:** `courseId` – ID khóa học.
+
+**Response (200 OK):**
+```json
+{
+  "success": true,
+  "message": "Đã hủy đăng ký khóa học"
+}
+```
+
+**Lỗi:** `404` – Chưa đăng ký khóa này.
+
+---
+
+### 3. Danh sách khóa đã đăng ký
+
+**Endpoint:** `GET /api/student/enrollments`
+
+**Description:** Lấy danh sách tất cả khóa học mà học viên đã đăng ký (có thông tin khóa + creator).
+
+**Response (200 OK):**
+```json
+{
+  "success": true,
+  "message": "Danh sách khóa học của bạn",
+  "data": {
+    "enrollments": [
+      {
+        "id": 1,
+        "userId": 2,
+        "courseId": 1,
+        "status": "enrolled",
+        "progressPercent": 75,
+        "enrolledAt": "2025-03-01T10:00:00.000Z",
+        "Course": {
+          "id": 1,
+          "title": "JavaScript Basics",
+          "slug": "javascript-basics",
+          "description": "...",
+          "price": "0.00",
+          "published": true,
+          "creator": { "id": 1, "name": "GV A", "username": "gva" }
+        }
+      }
+    ]
+  }
+}
+```
+
+---
+
+### 4. Chi tiết đăng ký một khóa
+
+**Endpoint:** `GET /api/student/enrollments/course/:courseId`
+
+**Description:** Xem chi tiết đăng ký (và tiến độ) của một khóa cụ thể.
+
+**URL Parameter:** `courseId` – ID khóa học.
+
+**Response (200 OK):** Trả về một `enrollment` kèm thông tin `Course` và `creator`.  
+**Lỗi:** `404` – Chưa đăng ký khóa này.
+
+---
+
+### 5. Cập nhật tiến độ
+
+**Endpoint:** `PUT /api/student/progress/:courseId`
+
+**Description:** Cập nhật phần trăm hoàn thành khóa học (0–100).
+
+**URL Parameter:** `courseId` – ID khóa học.
+
+**Request Body:**
+```json
+{
+  "progressPercent": 75
+}
+```
+
+**Response (200 OK):**
+```json
+{
+  "success": true,
+  "message": "Cập nhật tiến độ thành công",
+  "data": { "enrollment": { "id": 1, "progressPercent": 75, ... } }
+}
+```
+
+**Lỗi:** `400` – progressPercent không hợp lệ; `404` – Chưa đăng ký khóa này.
+
+---
+
 ## How to Use with Postman
 
 1. **Import Collection**: 
    - Open Postman
-   - Click "Import" -> Select `LMS_Auth_API.postman_collection.json`
+   - Click "Import" → chọn file `LMS_Auth_API.postman_collection.json`
 
-2. **Set Environment Variables**:
-   - Click "Manage Environments"
-   - Edit the environment and set:
-     - `base_url`: http://localhost:5000
-     - `auth_token`: (will be auto-filled after login)
+2. **Biến collection (Variables)**:
+   - `base_url`: `http://localhost:5000`
+   - `auth_token`: được gán tự động sau khi gọi **Login**
+   - `course_id`: ID khóa học (ví dụ `1`) – dùng cho folder **Enrollments**
 
-3. **Test Flow**:
-   - Register -> Verify Email -> Login -> Get Current User
+3. **Test Auth**:  
+   Register → Verify Email by Code → Login → Get Current User
+
+4. **Test Enrollments** (cần token student):
+   - Đăng nhập bằng tài khoản **student** (Login).
+   - (Tùy chọn) Tạo khóa học đã **published** bằng tài khoản teacher, hoặc dùng khóa có sẵn.
+   - Trong collection, mở folder **Enrollments**.
+   - Sửa biến `course_id` = ID khóa học muốn test (ví dụ `1`).
+   - Gọi lần lượt:
+     1. **Enroll in course** → 201, có `data.enrollment`.
+     2. **Get my enrollments** → danh sách có khóa vừa đăng ký.
+     3. **Get enrollment by course** → chi tiết đăng ký + tiến độ.
+     4. **Update progress** → body `{"progressPercent": 75}` → 200.
+     5. **Unenroll** → 200; gọi lại **Get my enrollments** để xác nhận đã bỏ khóa.
+   - Gọi **Enroll in course** hai lần cho cùng `course_id` → lần 2 trả về **409** (đã đăng ký rồi).
 
 ---
 

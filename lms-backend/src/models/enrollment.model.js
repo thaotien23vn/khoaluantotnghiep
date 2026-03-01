@@ -7,12 +7,22 @@ module.exports = (sequelize) => {
       autoIncrement: true,
       primaryKey: true,
     },
+    userId: {
+      type: DataTypes.INTEGER.UNSIGNED,
+      allowNull: false,
+      field: 'user_id',
+    },
+    courseId: {
+      type: DataTypes.INTEGER.UNSIGNED,
+      allowNull: false,
+      field: 'course_id',
+    },
     status: {
-      type: DataTypes.STRING,
+      type: DataTypes.STRING(32),
       defaultValue: 'enrolled',
     },
     progressPercent: {
-      type: DataTypes.DECIMAL(5,2),
+      type: DataTypes.DECIMAL(5, 2),
       field: 'progress_percent',
       defaultValue: 0.0,
     },
@@ -24,6 +34,7 @@ module.exports = (sequelize) => {
   }, {
     tableName: 'enrollments',
     timestamps: false,
+    // Optional: add unique index in DB manually: UNIQUE (user_id, course_id)
   });
 
   return Enrollment;

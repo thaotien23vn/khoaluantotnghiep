@@ -7,6 +7,7 @@ const express = require('express');
 const authMiddleware = require('../middlewares/auth');
 const authorizeRole = require('../middlewares/authorize');
 const courseController = require('../controllers/course.controller');
+const enrollmentController = require('../controllers/enrollment.controller');
 
 const router = express.Router();
 
@@ -220,51 +221,66 @@ router.delete(
   courseController.deleteLecture
 );
 
+// ---------- Enrollment (Student & Admin) ----------
+
+/**
+ * @route   POST /api/student/courses/:courseId/enroll
+ * @desc    Enroll in a course
+ * @access  Private (Student & Admin)
+ */
+router.post(
+  '/courses/:courseId/enroll',
+  authMiddleware,
+  authorizeRole('student', 'admin'),
+  enrollmentController.enroll
+);
+
+/**
+ * @route   DELETE /api/student/courses/:courseId/enroll
+ * @desc    Unenroll from a course
+ * @access  Private (Student & Admin)
+ */
+router.delete(
+  '/courses/:courseId/enroll',
+  authMiddleware,
+  authorizeRole('student', 'admin'),
+  enrollmentController.unenroll
+);
+
+/**
+ * @route   GET /api/student/enrollments/course/:courseId
+ * @desc    Get enrollment detail for one course (progress, etc.)
+ * @access  Private (Student & Admin)
+ */
+router.get(
+  '/enrollments/course/:courseId',
+  authMiddleware,
+  authorizeRole('student', 'admin'),
+  enrollmentController.getEnrollmentByCourse
+);
+
 /**
  * @route   GET /api/student/enrollments
- * @desc    Get student's enrollments
+ * @desc    Get student's enrollments (list all enrolled courses)
  * @access  Private (Student & Admin)
  */
 router.get(
   '/enrollments',
   authMiddleware,
   authorizeRole('student', 'admin'),
-  (req, res) => {
-    res.json({
-      success: true,
-      message: 'Danh sách khóa học của bạn',
-      data: {
-        enrollments: [
-          { id: 1, courseName: 'JavaScript Basics', progress: 75 },
-          { id: 2, courseName: 'React Advanced', progress: 50 },
-        ],
-      },
-    });
-  }
+  enrollmentController.getMyEnrollments
 );
 
 /**
- * @route   GET /api/student/progress/:courseId
- * @desc    Get progress for a specific course
+ * @route   PUT /api/student/progress/:courseId
+ * @desc    Update progress percent for a course (0-100)
  * @access  Private (Student & Admin)
  */
-router.get(
+router.put(
   '/progress/:courseId',
   authMiddleware,
   authorizeRole('student', 'admin'),
-  (req, res) => {
-    const { courseId } = req.params;
-    res.json({
-      success: true,
-      message: `Tiến trình khóa học ${courseId}`,
-      data: {
-        courseId,
-        completed: 12,
-        total: 20,
-        percentage: 60,
-      },
-    });
-  }
+  enrollmentController.updateProgress
 );
 
 /**
