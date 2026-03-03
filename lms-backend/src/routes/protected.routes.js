@@ -6,8 +6,10 @@
 const express = require('express');
 const authMiddleware = require('../middlewares/auth');
 const authorizeRole = require('../middlewares/authorize');
+const uploadMedia = require('../middlewares/uploadMedia');
 const courseController = require('../controllers/course.controller');
 const enrollmentController = require('../controllers/enrollment.controller');
+const adminController = require('../controllers/admin.controller');
 
 const router = express.Router();
 
@@ -20,20 +22,7 @@ router.get(
   '/dashboard',
   authMiddleware,
   authorizeRole('admin'),
-  (req, res) => {
-    res.json({
-      success: true,
-      message: 'Chào mừng Admin đến dashboard',
-      data: {
-        user: req.user,
-        stats: {
-          totalUsers: 150,
-          totalCourses: 25,
-          totalEnrollments: 500,
-        },
-      },
-    });
-  }
+  adminController.getDashboard
 );
 
 /**
@@ -45,18 +34,31 @@ router.get(
   '/users',
   authMiddleware,
   authorizeRole('admin'),
-  (req, res) => {
-    res.json({
-      success: true,
-      message: 'Danh sách tất cả người dùng',
-      data: {
-        users: [
-          { id: 1, name: 'Trịnh Ngọc Thái', role: 'teacher' },
-          { id: 2, name: 'Trần Thảo Tiên', role: 'student' },
-        ],
-      },
-    });
-  }
+  adminController.getUsers
+);
+
+/**
+ * @route   POST /api/admin/users
+ * @desc    Create a new user (Admin only)
+ * @access  Private (Admin only)
+ */
+router.post(
+  '/users',
+  authMiddleware,
+  authorizeRole('admin'),
+  adminController.createUser
+);
+
+/**
+ * @route   PUT /api/admin/users/:id
+ * @desc    Update a user (Admin only)
+ * @access  Private (Admin only)
+ */
+router.put(
+  '/users/:id',
+  authMiddleware,
+  authorizeRole('admin'),
+  adminController.updateUser
 );
 
 /**
@@ -68,13 +70,127 @@ router.delete(
   '/users/:id',
   authMiddleware,
   authorizeRole('admin'),
-  (req, res) => {
-    const { id } = req.params;
-    res.json({
-      success: true,
-      message: `Xóa người dùng id ${id} thành công`,
-    });
-  }
+  adminController.deleteUser
+);
+
+/**
+ * @route   POST /api/admin/enrollments
+ * @desc    Enroll any user to a course (Admin only)
+ * @access  Private (Admin only)
+ */
+router.post(
+  '/enrollments',
+  authMiddleware,
+  authorizeRole('admin'),
+  adminController.enrollUserToCourse
+);
+
+/**
+ * @route   DELETE /api/admin/enrollments
+ * @desc    Unenroll any user from a course (Admin only)
+ * @access  Private (Admin only)
+ */
+router.delete(
+  '/enrollments',
+  authMiddleware,
+  authorizeRole('admin'),
+  adminController.unenrollUserFromCourse
+);
+
+/**
+ * @route   GET /api/admin/courses/:courseId/enrollments
+ * @desc    Get all enrollments for a course
+ * @access  Private (Admin only)
+ */
+router.get(
+  '/courses/:courseId/enrollments-admin',
+  authMiddleware,
+  authorizeRole('admin'),
+  adminController.getCourseEnrollments
+);
+
+/**
+ * @route   GET /api/admin/users/:userId/enrollments
+ * @desc    Get all enrollments for a user
+ * @access  Private (Admin only)
+ */
+router.get(
+  '/users/:userId/enrollments',
+  authMiddleware,
+  authorizeRole('admin'),
+  adminController.getUserEnrollments
+);
+
+/**
+ * @route   GET /api/admin/reviews
+ * @desc    Get reviews (optionally by course)
+ * @access  Private (Admin only)
+ */
+router.get(
+  '/reviews',
+  authMiddleware,
+  authorizeRole('admin'),
+  adminController.getReviews
+);
+
+/**
+ * @route   DELETE /api/admin/reviews/:id
+ * @desc    Delete a review
+ * @access  Private (Admin only)
+ */
+router.delete(
+  '/reviews/:id',
+  authMiddleware,
+  authorizeRole('admin'),
+  adminController.deleteReview
+);
+
+/**
+ * @route   GET /api/admin/categories
+ * @desc    Get all categories (Admin only)
+ * @access  Private (Admin only)
+ */
+router.get(
+  '/categories',
+  authMiddleware,
+  authorizeRole('admin'),
+  adminController.getCategoriesAdmin
+);
+
+/**
+ * @route   POST /api/admin/categories
+ * @desc    Create a new category (Admin only)
+ * @access  Private (Admin only)
+ */
+router.post(
+  '/categories',
+  authMiddleware,
+  authorizeRole('admin'),
+  adminController.createCategory
+);
+
+/**
+ * @route   PUT /api/admin/categories/:id
+ * @desc    Update a category (Admin only)
+ * @access  Private (Admin only)
+ */
+router.put(
+  '/categories/:id',
+  authMiddleware,
+  authorizeRole('admin'),
+  adminController.updateCategory
+);
+
+/**
+ * @route   DELETE /api/admin/categories/:id
+ * @desc    Delete a category (Admin only)
+ * @access  Private (Admin only)
+ */
+router.delete(
+  '/categories/:id',
+  authMiddleware,
+  authorizeRole('admin'),
+  adminController.deleteCategory
 );
 
 /**
@@ -194,6 +310,7 @@ router.post(
   '/chapters/:chapterId/lectures',
   authMiddleware,
   authorizeRole('teacher', 'admin'),
+  uploadMedia.single('file'),
   courseController.createLecture
 );
 
@@ -206,6 +323,7 @@ router.put(
   '/lectures/:id',
   authMiddleware,
   authorizeRole('teacher', 'admin'),
+  uploadMedia.single('file'),
   courseController.updateLecture
 );
 

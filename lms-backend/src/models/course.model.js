@@ -19,6 +19,15 @@ module.exports = (sequelize) => {
     description: {
       type: DataTypes.TEXT,
     },
+    imageUrl: {
+      type: DataTypes.STRING,
+      allowNull: true,
+    },
+    level: {
+      type: DataTypes.STRING,
+      allowNull: true,
+      defaultValue: 'Mọi cấp độ',
+    },
     price: {
       type: DataTypes.DECIMAL(10,2),
       defaultValue: 0.0,

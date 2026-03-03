@@ -1,7 +1,8 @@
 const { Op } = require('sequelize');
 const db = require('../models');
+const mediaService = require('../services/media.service');
 
-const { Course, Chapter, Lecture, User } = db.models;
+const { Course, Chapter, Lecture, User, Category } = db.models;
 
 // Helper: build URL-friendly slug from title (basic, no extra dependency)
 const generateSlugFromTitle = (title) => {
@@ -56,6 +57,10 @@ exports.getPublishedCourses = async (req, res) => {
           as: 'creator',
           attributes: ['id', 'name', 'username'],
         },
+        {
+          model: Category,
+          attributes: ['id', 'name'],
+        },
       ],
     });
 
@@ -80,13 +85,17 @@ exports.getCourseDetail = async (req, res) => {
   try {
     const { id } = req.params;
 
-    const course = await Course.findByPk(id, {
-      where: { published: true },
+    const course = await Course.findOne({
+      where: { id, published: true },
       include: [
         {
           model: User,
           as: 'creator',
           attributes: ['id', 'name', 'username'],
+        },
+        {
+          model: Category,
+          attributes: ['id', 'name'],
         },
         {
           model: Chapter,
@@ -589,10 +598,26 @@ exports.createLecture = async (req, res) => {
       });
     }
 
+    let finalContentUrl = contentUrl || null;
+
+    if (req.file) {
+      try {
+        const uploadResult = await mediaService.uploadLectureMedia(req.file);
+        finalContentUrl = uploadResult.url;
+      } catch (uploadError) {
+        console.error('Lỗi upload media lên Cloudinary:', uploadError);
+        return res.status(500).json({
+          success: false,
+          message: 'Lỗi upload media. Vui lòng thử lại sau',
+          error: uploadError.message,
+        });
+      }
+    }
+
     const lecture = await Lecture.create({
       title,
       type,
-      contentUrl: contentUrl || null,
+      contentUrl: finalContentUrl,
       duration: duration != null ? duration : null,
       order: order != null ? order : 0,
       chapterId: chapter.id,
@@ -657,14 +682,30 @@ exports.updateLecture = async (req, res) => {
       });
     }
 
+    let finalContentUrl = contentUrl !== undefined ? contentUrl : lecture.contentUrl;
+
+    if (req.file) {
+      try {
+        const uploadResult = await mediaService.uploadLectureMedia(req.file);
+        finalContentUrl = uploadResult.url;
+      } catch (uploadError) {
+        console.error('Lỗi upload media lên Cloudinary:', uploadError);
+        return res.status(500).json({
+          success: false,
+          message: 'Lỗi upload media. Vui lòng thử lại sau',
+          error: uploadError.message,
+        });
+      }
+    }
+
     if (title != null) {
       lecture.title = title;
     }
     if (type != null) {
       lecture.type = type;
     }
-    if (contentUrl !== undefined) {
-      lecture.contentUrl = contentUrl;
+    if (finalContentUrl !== undefined) {
+      lecture.contentUrl = finalContentUrl;
     }
     if (duration !== undefined) {
       lecture.duration = duration;

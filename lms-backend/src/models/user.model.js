@@ -34,6 +34,12 @@ module.exports = (sequelize) => {
       allowNull: false,
       unique: true,
     },
+    isActive: {
+      type: DataTypes.BOOLEAN,
+      allowNull: false,
+      defaultValue: true,
+      field: 'is_active',
+    },
     phone: {
       type: DataTypes.STRING,
       allowNull: true,

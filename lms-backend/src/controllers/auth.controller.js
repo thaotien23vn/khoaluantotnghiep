@@ -29,7 +29,7 @@ exports.register = async (req, res) => {
       });
     }
 
-    const { name, username, email, phone, password, role } = req.body;
+    const { name, username, email, phone, password } = req.body;
 
     // Kiểm tra email hoặc username đã tồn tại
     const existingUser = await UserModel.findOne({
@@ -58,7 +58,7 @@ exports.register = async (req, res) => {
       email,
       phone,
       passwordHash: hashedPassword,
-      role: role || 'student',
+      role: 'student',
       isEmailVerified: false,
       emailVerificationToken,
       emailVerificationTokenExpires: new Date(Date.now() + 24 * 60 * 60 * 1000), // 24 giờ
@@ -263,6 +263,14 @@ exports.login = async (req, res) => {
       return res.status(403).json({
         success: false,
         message: 'Email chưa được xác nhận. Vui lòng kiểm tra email',
+      });
+    }
+
+    // Kiểm tra tài khoản còn hoạt động
+    if (user.isActive === false) {
+      return res.status(403).json({
+        success: false,
+        message: 'Tài khoản của bạn đã bị khóa. Vui lòng liên hệ quản trị viên.',
       });
     }
 
