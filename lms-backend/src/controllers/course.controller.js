@@ -64,10 +64,33 @@ exports.getPublishedCourses = async (req, res) => {
       ],
     });
 
+    // Format data để khớp với frontend
+    const formattedCourses = courses.map(course => ({
+      id: course.id.toString(),
+      title: course.title,
+      teacher: course.creator ? course.creator.name : 'Giảng viên',
+      teacherAvatar: `https://i.pravatar.cc/150?u=${course.creator?.username || 'teacher'}`,
+      image: course.imageUrl || '/elearning-1.jpg',
+      category: course.Category ? course.Category.name : 'Khác',
+      rating: parseFloat(course.rating) || 0,
+      reviewCount: course.reviewCount || 0,
+      students: course.students || 0,
+      level: course.level || 'Mọi cấp độ',
+      totalLessons: course.totalLessons || 0,
+      duration: course.duration || '0 giờ',
+      description: course.description || '',
+      willLearn: course.willLearn || [],
+      requirements: course.requirements || [],
+      curriculum: [], // Sẽ được populate trong course detail
+      tags: course.tags || [],
+      price: parseFloat(course.price) || 0,
+      lastUpdated: course.lastUpdated || new Date().toISOString(),
+    }));
+
     res.json({
       success: true,
       data: {
-        courses,
+        courses: formattedCourses,
       },
     });
   } catch (error) {
@@ -115,10 +138,47 @@ exports.getCourseDetail = async (req, res) => {
       });
     }
 
+    // Format curriculum để khớp với frontend
+    const curriculum = course.Chapters ? course.Chapters.map(chapter => ({
+      id: chapter.id.toString(),
+      title: chapter.title,
+      lessons: chapter.Lectures ? chapter.Lectures.map(lecture => ({
+        id: lecture.id.toString(),
+        title: lecture.title,
+        duration: lecture.duration ? `${Math.ceil(lecture.duration / 60)} phút` : '0 phút',
+        isPreview: false, // Mặc định, có thể thêm logic sau
+        videoUrl: lecture.contentUrl,
+        attachments: [], // Có thể mở rộng sau
+      })) : [],
+    })) : [];
+
+    // Format course data
+    const formattedCourse = {
+      id: course.id.toString(),
+      title: course.title,
+      teacher: course.creator ? course.creator.name : 'Giảng viên',
+      teacherAvatar: `https://i.pravatar.cc/150?u=${course.creator?.username || 'teacher'}`,
+      image: course.imageUrl || '/elearning-1.jpg',
+      category: course.Category ? course.Category.name : 'Khác',
+      rating: parseFloat(course.rating) || 0,
+      reviewCount: course.reviewCount || 0,
+      students: course.students || 0,
+      level: course.level || 'Mọi cấp độ',
+      totalLessons: course.totalLessons || curriculum.reduce((acc, ch) => acc + ch.lessons.length, 0),
+      duration: course.duration || `${Math.ceil(curriculum.reduce((acc, ch) => acc + ch.lessons.reduce((lessonAcc, lesson) => lessonAcc + (lesson.duration || 0), 0), 0) / 60)} giờ`,
+      description: course.description || '',
+      willLearn: course.willLearn || [],
+      requirements: course.requirements || [],
+      curriculum,
+      tags: course.tags || [],
+      price: parseFloat(course.price) || 0,
+      lastUpdated: course.lastUpdated || new Date().toISOString(),
+    };
+
     res.json({
       success: true,
       data: {
-        course,
+        course: formattedCourse,
       },
     });
   } catch (error) {
@@ -137,15 +197,30 @@ exports.getMyCourses = async (req, res) => {
     const userId = req.user.id;
     const role = req.user.role;
 
+    // Debug logs to track the actual user ID and role
+    console.log('DEBUG getMyCourses - User ID:', userId);
+    console.log('DEBUG getMyCourses - User Role:', role);
+    console.log('DEBUG getMyCourses - Full User Object:', JSON.stringify(req.user, null, 2));
+
     const where = {};
     if (role === 'teacher') {
       where.createdBy = userId;
+      console.log('DEBUG getMyCourses - Filtering courses for teacher ID:', userId);
+    } else if (role === 'admin') {
+      console.log('DEBUG getMyCourses - Admin user, fetching all courses');
     }
 
     const courses = await Course.findAll({
       where,
       order: [['createdAt', 'DESC']],
     });
+
+    console.log('DEBUG getMyCourses - Found courses count:', courses.length);
+    if (courses.length > 0) {
+      console.log('DEBUG getMyCourses - Course IDs and creators:', 
+        courses.map(c => ({ id: c.id, createdBy: c.createdBy, title: c.title }))
+      );
+    }
 
     res.json({
       success: true,
@@ -166,7 +241,18 @@ exports.getMyCourses = async (req, res) => {
 // ============= TEACHER/ADMIN: CREATE COURSE =============
 exports.createCourse = async (req, res) => {
   try {
-    const { title, description, price, categoryId, published } = req.body;
+    const { 
+      title, 
+      description, 
+      price, 
+      categoryId, 
+      published,
+      level,
+      duration,
+      willLearn,
+      requirements,
+      tags
+    } = req.body;
 
     if (!title) {
       return res.status(400).json({
@@ -185,13 +271,39 @@ exports.createCourse = async (req, res) => {
       published: !!published,
       categoryId: categoryId || null,
       createdBy: req.user.id,
+      // Thêm các field mới
+      level: level || 'Mọi cấp độ',
+      duration: duration || null,
+      willLearn: willLearn || [],
+      requirements: requirements || [],
+      tags: tags || [],
     });
 
     res.status(201).json({
       success: true,
       message: 'Tạo khóa học thành công',
       data: {
-        course,
+        course: {
+          id: course.id.toString(),
+          title: course.title,
+          teacher: req.user.name,
+          teacherAvatar: `https://i.pravatar.cc/150?u=${req.user.username}`,
+          image: course.imageUrl || '/elearning-1.jpg',
+          category: 'Khác', // Sẽ update khi có category
+          rating: 0,
+          reviewCount: 0,
+          students: 0,
+          level: course.level,
+          totalLessons: 0,
+          duration: course.duration,
+          description: course.description,
+          willLearn: course.willLearn,
+          requirements: course.requirements,
+          curriculum: [],
+          tags: course.tags,
+          price: parseFloat(course.price),
+          lastUpdated: course.updatedAt,
+        },
       },
     });
   } catch (error) {

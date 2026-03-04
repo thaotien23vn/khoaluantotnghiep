@@ -445,6 +445,54 @@ exports.resetPassword = async (req, res) => {
   }
 };
 
+// ============= CHECK RESET PASSWORD TOKEN (GET via email link) =============
+exports.checkResetPasswordToken = async (req, res) => {
+  try {
+    const { token } = req.params;
+
+    if (!token) {
+      return res.status(400).json({
+        success: false,
+        message: 'Token không được cung cấp',
+      });
+    }
+
+    const user = await UserModel.findOne({
+      where: { resetPasswordToken: token },
+    });
+
+    if (!user) {
+      return res.status(404).json({
+        success: false,
+        message: 'Token không hợp lệ',
+      });
+    }
+
+    if (new Date() > user.resetPasswordTokenExpires) {
+      return res.status(400).json({
+        success: false,
+        message: 'Token đã hết hạn',
+      });
+    }
+
+    return res.json({
+      success: true,
+      message: 'Token hợp lệ. Hãy gọi POST /api/auth/reset-password để đặt lại mật khẩu.',
+      data: {
+        token,
+        expiresAt: user.resetPasswordTokenExpires,
+      },
+    });
+  } catch (error) {
+    console.error('Lỗi kiểm tra reset token:', error);
+    return res.status(500).json({
+      success: false,
+      message: 'Lỗi máy chủ',
+      error: error.message,
+    });
+  }
+};
+
 // ============= GET CURRENT USER =============
 exports.getCurrentUser = async (req, res) => {
   try {

@@ -1,0 +1,1103 @@
+{
+  "info": {
+    "name": "LMS Backend - All APIs (actual mount paths)",
+    "description": "Auto-generated collection reflecting actual mounts in src/app.js. Variables: base_url (no /api), auth_token, course_id, quiz_id, attempt_id, payment_id, notification_id, user_id, review_id.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "item": [
+    {
+      "name": "Health",
+      "item": [
+        {
+          "name": "GET /api/health",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{base_url}}/api/health",
+              "host": ["{{base_url}}"],
+              "path": ["api", "health"]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Auth (/api/auth)",
+      "item": [
+        {
+          "name": "POST /api/auth/register",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "if (pm.response.code === 201) {",
+                  "  const d = pm.response.json();",
+                  "  if (d?.data?.verificationCode) pm.environment.set('verification_token', d.data.verificationCode);",
+                  "  if (d?.data?.user?.id) pm.environment.set('user_id', String(d.data.user.id));",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Nguyen Van A\",\n  \"username\": \"nguyenvana\",\n  \"email\": \"a@example.com\",\n  \"phone\": \"+84901234567\",\n  \"password\": \"password123\",\n  \"role\": \"student\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/auth/register",
+              "host": ["{{base_url}}"],
+              "path": ["api", "auth", "register"]
+            }
+          }
+        },
+        {
+          "name": "POST /api/auth/verify-email-code",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"token\": \"{{verification_token}}\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/auth/verify-email-code",
+              "host": ["{{base_url}}"],
+              "path": ["api", "auth", "verify-email-code"]
+            }
+          }
+        },
+        {
+          "name": "GET /api/auth/verify-email/:token",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{base_url}}/api/auth/verify-email/{{verification_token}}",
+              "host": ["{{base_url}}"],
+              "path": ["api", "auth", "verify-email", "{{verification_token}}"]
+            }
+          }
+        },
+        {
+          "name": "POST /api/auth/resend-verification-email",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"a@example.com\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/auth/resend-verification-email",
+              "host": ["{{base_url}}"],
+              "path": ["api", "auth", "resend-verification-email"]
+            }
+          }
+        },
+        {
+          "name": "POST /api/auth/login",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "if (pm.response.code === 200) {",
+                  "  const d = pm.response.json();",
+                  "  if (d?.data?.token) pm.environment.set('auth_token', d.data.token);",
+                  "  if (d?.data?.user?.id) pm.environment.set('user_id', String(d.data.user.id));",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"a@example.com\",\n  \"password\": \"password123\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/auth/login",
+              "host": ["{{base_url}}"],
+              "path": ["api", "auth", "login"]
+            }
+          }
+        },
+        {
+          "name": "GET /api/auth/me",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{auth_token}}" }],
+            "url": {
+              "raw": "{{base_url}}/api/auth/me",
+              "host": ["{{base_url}}"],
+              "path": ["api", "auth", "me"]
+            }
+          }
+        },
+        {
+          "name": "POST /api/auth/forgot-password",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"a@example.com\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/auth/forgot-password",
+              "host": ["{{base_url}}"],
+              "path": ["api", "auth", "forgot-password"]
+            }
+          }
+        },
+        {
+          "name": "GET /api/auth/reset-password/:token (check token)",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{base_url}}/api/auth/reset-password/{{reset_password_token}}",
+              "host": ["{{base_url}}"],
+              "path": ["api", "auth", "reset-password", "{{reset_password_token}}"]
+            }
+          }
+        },
+        {
+          "name": "POST /api/auth/reset-password",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"token\": \"{{reset_password_token}}\",\n  \"password\": \"newpassword123\",\n  \"confirmPassword\": \"newpassword123\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/auth/reset-password",
+              "host": ["{{base_url}}"],
+              "path": ["api", "auth", "reset-password"]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Public Courses & Categories",
+      "item": [
+        {
+          "name": "GET /api/courses",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{base_url}}/api/courses",
+              "host": ["{{base_url}}"],
+              "path": ["api", "courses"]
+            }
+          }
+        },
+        {
+          "name": "GET /api/courses/:id",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{base_url}}/api/courses/{{course_id}}",
+              "host": ["{{base_url}}"],
+              "path": ["api", "courses", "{{course_id}}"]
+            }
+          }
+        },
+        {
+          "name": "GET /api/categories",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{base_url}}/api/categories",
+              "host": ["{{base_url}}"],
+              "path": ["api", "categories"]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Enrollments & Progress (protected.routes mounted at /api/student)",
+      "item": [
+        {
+          "name": "POST /api/student/courses/:courseId/enroll",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Authorization", "value": "Bearer {{auth_token}}" }],
+            "url": {
+              "raw": "{{base_url}}/api/student/courses/{{course_id}}/enroll",
+              "host": ["{{base_url}}"],
+              "path": ["api", "student", "courses", "{{course_id}}", "enroll"]
+            }
+          }
+        },
+        {
+          "name": "DELETE /api/student/courses/:courseId/enroll",
+          "request": {
+            "method": "DELETE",
+            "header": [{ "key": "Authorization", "value": "Bearer {{auth_token}}" }],
+            "url": {
+              "raw": "{{base_url}}/api/student/courses/{{course_id}}/enroll",
+              "host": ["{{base_url}}"],
+              "path": ["api", "student", "courses", "{{course_id}}", "enroll"]
+            }
+          }
+        },
+        {
+          "name": "GET /api/student/enrollments",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{auth_token}}" }],
+            "url": {
+              "raw": "{{base_url}}/api/student/enrollments",
+              "host": ["{{base_url}}"],
+              "path": ["api", "student", "enrollments"]
+            }
+          }
+        },
+        {
+          "name": "GET /api/student/enrollments/course/:courseId",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{auth_token}}" }],
+            "url": {
+              "raw": "{{base_url}}/api/student/enrollments/course/{{course_id}}",
+              "host": ["{{base_url}}"],
+              "path": ["api", "student", "enrollments", "course", "{{course_id}}"]
+            }
+          }
+        },
+        {
+          "name": "PUT /api/student/progress/:courseId",
+          "request": {
+            "method": "PUT",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{auth_token}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": { "mode": "raw", "raw": "{\n  \"progressPercent\": 75\n}" },
+            "url": {
+              "raw": "{{base_url}}/api/student/progress/{{course_id}}",
+              "host": ["{{base_url}}"],
+              "path": ["api", "student", "progress", "{{course_id}}"]
+            }
+          }
+        },
+        {
+          "name": "POST /api/student/submit-assignment (demo)",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Authorization", "value": "Bearer {{auth_token}}" }],
+            "url": {
+              "raw": "{{base_url}}/api/student/submit-assignment",
+              "host": ["{{base_url}}"],
+              "path": ["api", "student", "submit-assignment"]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Teacher Course Management (protected.routes mounted at /api/teacher)",
+      "item": [
+        {
+          "name": "GET /api/teacher/courses",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{auth_token}}" }],
+            "url": {
+              "raw": "{{base_url}}/api/teacher/courses",
+              "host": ["{{base_url}}"],
+              "path": ["api", "teacher", "courses"]
+            }
+          }
+        },
+        {
+          "name": "POST /api/teacher/courses",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{auth_token}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"title\": \"NodeJS Co Ban\",\n  \"description\": \"Khoa hoc NodeJS\",\n  \"price\": 199000,\n  \"categoryId\": 1,\n  \"published\": false\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/teacher/courses",
+              "host": ["{{base_url}}"],
+              "path": ["api", "teacher", "courses"]
+            }
+          }
+        },
+        {
+          "name": "GET /api/teacher/courses/:id",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{auth_token}}" }],
+            "url": {
+              "raw": "{{base_url}}/api/teacher/courses/{{course_id}}",
+              "host": ["{{base_url}}"],
+              "path": ["api", "teacher", "courses", "{{course_id}}"]
+            }
+          }
+        },
+        {
+          "name": "PUT /api/teacher/courses/:id",
+          "request": {
+            "method": "PUT",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{auth_token}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": { "mode": "raw", "raw": "{\n  \"published\": true\n}" },
+            "url": {
+              "raw": "{{base_url}}/api/teacher/courses/{{course_id}}",
+              "host": ["{{base_url}}"],
+              "path": ["api", "teacher", "courses", "{{course_id}}"]
+            }
+          }
+        },
+        {
+          "name": "DELETE /api/teacher/courses/:id",
+          "request": {
+            "method": "DELETE",
+            "header": [{ "key": "Authorization", "value": "Bearer {{auth_token}}" }],
+            "url": {
+              "raw": "{{base_url}}/api/teacher/courses/{{course_id}}",
+              "host": ["{{base_url}}"],
+              "path": ["api", "teacher", "courses", "{{course_id}}"]
+            }
+          }
+        },
+        {
+          "name": "GET /api/teacher/courses/:courseId/chapters",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{auth_token}}" }],
+            "url": {
+              "raw": "{{base_url}}/api/teacher/courses/{{course_id}}/chapters",
+              "host": ["{{base_url}}"],
+              "path": ["api", "teacher", "courses", "{{course_id}}", "chapters"]
+            }
+          }
+        },
+        {
+          "name": "POST /api/teacher/courses/:courseId/chapters",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{auth_token}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": { "mode": "raw", "raw": "{\n  \"title\": \"Chuong 1\",\n  \"order\": 1\n}" },
+            "url": {
+              "raw": "{{base_url}}/api/teacher/courses/{{course_id}}/chapters",
+              "host": ["{{base_url}}"],
+              "path": ["api", "teacher", "courses", "{{course_id}}", "chapters"]
+            }
+          }
+        },
+        {
+          "name": "PUT /api/teacher/chapters/:id",
+          "request": {
+            "method": "PUT",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{auth_token}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": { "mode": "raw", "raw": "{\n  \"title\": \"Chuong 1 (updated)\"\n}" },
+            "url": {
+              "raw": "{{base_url}}/api/teacher/chapters/{{chapter_id}}",
+              "host": ["{{base_url}}"],
+              "path": ["api", "teacher", "chapters", "{{chapter_id}}"]
+            }
+          }
+        },
+        {
+          "name": "DELETE /api/teacher/chapters/:id",
+          "request": {
+            "method": "DELETE",
+            "header": [{ "key": "Authorization", "value": "Bearer {{auth_token}}" }],
+            "url": {
+              "raw": "{{base_url}}/api/teacher/chapters/{{chapter_id}}",
+              "host": ["{{base_url}}"],
+              "path": ["api", "teacher", "chapters", "{{chapter_id}}"]
+            }
+          }
+        },
+        {
+          "name": "POST /api/teacher/chapters/:chapterId/lectures (multipart file field: file)",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Authorization", "value": "Bearer {{auth_token}}" }],
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                { "key": "title", "value": "Bai 1", "type": "text" },
+                { "key": "type", "value": "video", "type": "text" },
+                { "key": "contentUrl", "value": "", "type": "text" },
+                { "key": "file", "type": "file", "src": "" }
+              ]
+            },
+            "url": {
+              "raw": "{{base_url}}/api/teacher/chapters/{{chapter_id}}/lectures",
+              "host": ["{{base_url}}"],
+              "path": ["api", "teacher", "chapters", "{{chapter_id}}", "lectures"]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Reviews (mounted at /api)",
+      "item": [
+        {
+          "name": "GET /api/courses/:courseId/reviews (public)",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{base_url}}/api/courses/{{course_id}}/reviews?page=1&limit=10",
+              "host": ["{{base_url}}"],
+              "path": ["api", "courses", "{{course_id}}", "reviews"],
+              "query": [
+                { "key": "page", "value": "1" },
+                { "key": "limit", "value": "10" }
+              ]
+            }
+          }
+        },
+        {
+          "name": "POST /api/courses/:courseId/reviews (requires token)",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{auth_token}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": { "mode": "raw", "raw": "{\n  \"rating\": 5,\n  \"comment\": \"Khoa hoc rat hay va de hieu.\"\n}" },
+            "url": {
+              "raw": "{{base_url}}/api/courses/{{course_id}}/reviews",
+              "host": ["{{base_url}}"],
+              "path": ["api", "courses", "{{course_id}}", "reviews"]
+            }
+          }
+        },
+        {
+          "name": "GET /api/reviews (requires token) - user reviews",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{auth_token}}" }],
+            "url": {
+              "raw": "{{base_url}}/api/reviews?page=1&limit=10",
+              "host": ["{{base_url}}"],
+              "path": ["api", "reviews"],
+              "query": [
+                { "key": "page", "value": "1" },
+                { "key": "limit", "value": "10" }
+              ]
+            }
+          }
+        },
+        {
+          "name": "GET /api/reviews/:reviewId (requires token)",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{auth_token}}" }],
+            "url": {
+              "raw": "{{base_url}}/api/reviews/{{review_id}}",
+              "host": ["{{base_url}}"],
+              "path": ["api", "reviews", "{{review_id}}"]
+            }
+          }
+        },
+        {
+          "name": "PUT /api/reviews/:reviewId (requires token)",
+          "request": {
+            "method": "PUT",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{auth_token}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": { "mode": "raw", "raw": "{\n  \"rating\": 4,\n  \"comment\": \"Update: van on.\"\n}" },
+            "url": {
+              "raw": "{{base_url}}/api/reviews/{{review_id}}",
+              "host": ["{{base_url}}"],
+              "path": ["api", "reviews", "{{review_id}}"]
+            }
+          }
+        },
+        {
+          "name": "DELETE /api/reviews/:reviewId (requires token)",
+          "request": {
+            "method": "DELETE",
+            "header": [{ "key": "Authorization", "value": "Bearer {{auth_token}}" }],
+            "url": {
+              "raw": "{{base_url}}/api/reviews/{{review_id}}",
+              "host": ["{{base_url}}"],
+              "path": ["api", "reviews", "{{review_id}}"]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Notifications (mounted at /api)",
+      "item": [
+        {
+          "name": "GET /api/notifications (requires token)",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{auth_token}}" }],
+            "url": {
+              "raw": "{{base_url}}/api/notifications?page=1&limit=20",
+              "host": ["{{base_url}}"],
+              "path": ["api", "notifications"],
+              "query": [
+                { "key": "page", "value": "1" },
+                { "key": "limit", "value": "20" }
+              ]
+            }
+          }
+        },
+        {
+          "name": "GET /api/notifications/unread-count (requires token)",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{auth_token}}" }],
+            "url": {
+              "raw": "{{base_url}}/api/notifications/unread-count",
+              "host": ["{{base_url}}"],
+              "path": ["api", "notifications", "unread-count"]
+            }
+          }
+        },
+        {
+          "name": "PUT /api/notifications/:notificationId/read (requires token)",
+          "request": {
+            "method": "PUT",
+            "header": [{ "key": "Authorization", "value": "Bearer {{auth_token}}" }],
+            "url": {
+              "raw": "{{base_url}}/api/notifications/{{notification_id}}/read",
+              "host": ["{{base_url}}"],
+              "path": ["api", "notifications", "{{notification_id}}", "read"]
+            }
+          }
+        },
+        {
+          "name": "PUT /api/notifications/read-all (requires token)",
+          "request": {
+            "method": "PUT",
+            "header": [{ "key": "Authorization", "value": "Bearer {{auth_token}}" }],
+            "url": {
+              "raw": "{{base_url}}/api/notifications/read-all",
+              "host": ["{{base_url}}"],
+              "path": ["api", "notifications", "read-all"]
+            }
+          }
+        },
+        {
+          "name": "DELETE /api/notifications/:notificationId (requires token)",
+          "request": {
+            "method": "DELETE",
+            "header": [{ "key": "Authorization", "value": "Bearer {{auth_token}}" }],
+            "url": {
+              "raw": "{{base_url}}/api/notifications/{{notification_id}}",
+              "host": ["{{base_url}}"],
+              "path": ["api", "notifications", "{{notification_id}}"]
+            }
+          }
+        },
+        {
+          "name": "POST /api/notifications/send (admin only) (requires token)",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{auth_token}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"userIds\": [{{user_id}}],\n  \"type\": \"announcement\",\n  \"title\": \"Thong bao\",\n  \"message\": \"Noi dung thong bao\",\n  \"payload\": {}\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/notifications/send",
+              "host": ["{{base_url}}"],
+              "path": ["api", "notifications", "send"]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Payments (/api/student/payments)",
+      "item": [
+        {
+          "name": "POST /api/student/payments/process",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{auth_token}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": { "mode": "raw", "raw": "{\n  \"courseId\": {{course_id}},\n  \"paymentMethod\": \"mock\",\n  \"paymentDetails\": { \"note\": \"test\" }\n}" },
+            "url": {
+              "raw": "{{base_url}}/api/student/payments/process",
+              "host": ["{{base_url}}"],
+              "path": ["api", "student", "payments", "process"]
+            }
+          }
+        },
+        {
+          "name": "POST /api/student/payments/verify",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{auth_token}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": { "mode": "raw", "raw": "{\n  \"paymentId\": {{payment_id}},\n  \"verificationData\": {}\n}" },
+            "url": {
+              "raw": "{{base_url}}/api/student/payments/verify",
+              "host": ["{{base_url}}"],
+              "path": ["api", "student", "payments", "verify"]
+            }
+          }
+        },
+        {
+          "name": "GET /api/student/payments",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{auth_token}}" }],
+            "url": {
+              "raw": "{{base_url}}/api/student/payments?page=1&limit=10",
+              "host": ["{{base_url}}"],
+              "path": ["api", "student", "payments"],
+              "query": [
+                { "key": "page", "value": "1" },
+                { "key": "limit", "value": "10" }
+              ]
+            }
+          }
+        },
+        {
+          "name": "GET /api/student/payments/:paymentId",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{auth_token}}" }],
+            "url": {
+              "raw": "{{base_url}}/api/student/payments/{{payment_id}}",
+              "host": ["{{base_url}}"],
+              "path": ["api", "student", "payments", "{{payment_id}}"]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Quizzes (mounted at /api/teacher AND /api/student)",
+      "item": [
+        {
+          "name": "POST /api/teacher/courses/:courseId/quizzes",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{auth_token}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": { "mode": "raw", "raw": "{\n  \"title\": \"Quiz 1\",\n  \"maxScore\": 100,\n  \"timeLimit\": 60,\n  \"passingScore\": 60\n}" },
+            "url": {
+              "raw": "{{base_url}}/api/teacher/courses/{{course_id}}/quizzes",
+              "host": ["{{base_url}}"],
+              "path": ["api", "teacher", "courses", "{{course_id}}", "quizzes"]
+            }
+          }
+        },
+        {
+          "name": "GET /api/teacher/courses/:courseId/quizzes",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{auth_token}}" }],
+            "url": {
+              "raw": "{{base_url}}/api/teacher/courses/{{course_id}}/quizzes",
+              "host": ["{{base_url}}"],
+              "path": ["api", "teacher", "courses", "{{course_id}}", "quizzes"]
+            }
+          }
+        },
+        {
+          "name": "GET /api/teacher/quizzes/:quizId",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{auth_token}}" }],
+            "url": {
+              "raw": "{{base_url}}/api/teacher/quizzes/{{quiz_id}}",
+              "host": ["{{base_url}}"],
+              "path": ["api", "teacher", "quizzes", "{{quiz_id}}"]
+            }
+          }
+        },
+        {
+          "name": "PUT /api/teacher/quizzes/:quizId",
+          "request": {
+            "method": "PUT",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{auth_token}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": { "mode": "raw", "raw": "{\n  \"title\": \"Quiz 1 (updated)\"\n}" },
+            "url": {
+              "raw": "{{base_url}}/api/teacher/quizzes/{{quiz_id}}",
+              "host": ["{{base_url}}"],
+              "path": ["api", "teacher", "quizzes", "{{quiz_id}}"]
+            }
+          }
+        },
+        {
+          "name": "DELETE /api/teacher/quizzes/:quizId",
+          "request": {
+            "method": "DELETE",
+            "header": [{ "key": "Authorization", "value": "Bearer {{auth_token}}" }],
+            "url": {
+              "raw": "{{base_url}}/api/teacher/quizzes/{{quiz_id}}",
+              "host": ["{{base_url}}"],
+              "path": ["api", "teacher", "quizzes", "{{quiz_id}}"]
+            }
+          }
+        },
+        {
+          "name": "POST /api/teacher/quizzes/:quizId/questions",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{auth_token}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"type\": \"multiple_choice\",\n  \"content\": \"2 + 2 = ?\",\n  \"options\": [\"3\", \"4\"],\n  \"correctAnswer\": \"4\",\n  \"points\": 1\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/teacher/quizzes/{{quiz_id}}/questions",
+              "host": ["{{base_url}}"],
+              "path": ["api", "teacher", "quizzes", "{{quiz_id}}", "questions"]
+            }
+          }
+        },
+        {
+          "name": "GET /api/teacher/quizzes/:quizId/attempts (teacher stats)",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{auth_token}}" }],
+            "url": {
+              "raw": "{{base_url}}/api/teacher/quizzes/{{quiz_id}}/attempts",
+              "host": ["{{base_url}}"],
+              "path": ["api", "teacher", "quizzes", "{{quiz_id}}", "attempts"]
+            }
+          }
+        },
+        {
+          "name": "POST /api/student/quizzes/:quizId/start",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "if (pm.response.code === 201) {",
+                  "  const d = pm.response.json();",
+                  "  if (d?.data?.attempt?.id) pm.environment.set('attempt_id', String(d.data.attempt.id));",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Authorization", "value": "Bearer {{auth_token}}" }],
+            "url": {
+              "raw": "{{base_url}}/api/student/quizzes/{{quiz_id}}/start",
+              "host": ["{{base_url}}"],
+              "path": ["api", "student", "quizzes", "{{quiz_id}}", "start"]
+            }
+          }
+        },
+        {
+          "name": "POST /api/student/attempts/:attemptId/submit",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{auth_token}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": { "mode": "raw", "raw": "{\n  \"answers\": {\n    \"1\": \"4\"\n  }\n}" },
+            "url": {
+              "raw": "{{base_url}}/api/student/attempts/{{attempt_id}}/submit",
+              "host": ["{{base_url}}"],
+              "path": ["api", "student", "attempts", "{{attempt_id}}", "submit"]
+            }
+          }
+        },
+        {
+          "name": "GET /api/student/quizzes/:quizId/attempts",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{auth_token}}" }],
+            "url": {
+              "raw": "{{base_url}}/api/student/quizzes/{{quiz_id}}/attempts",
+              "host": ["{{base_url}}"],
+              "path": ["api", "student", "quizzes", "{{quiz_id}}", "attempts"]
+            }
+          }
+        },
+        {
+          "name": "GET /api/student/attempts/:attemptId",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{auth_token}}" }],
+            "url": {
+              "raw": "{{base_url}}/api/student/attempts/{{attempt_id}}",
+              "host": ["{{base_url}}"],
+              "path": ["api", "student", "attempts", "{{attempt_id}}"]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Admin (protected.routes mounted at /api/admin)",
+      "item": [
+        {
+          "name": "GET /api/admin/dashboard",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{auth_token}}" }],
+            "url": {
+              "raw": "{{base_url}}/api/admin/dashboard",
+              "host": ["{{base_url}}"],
+              "path": ["api", "admin", "dashboard"]
+            }
+          }
+        },
+        {
+          "name": "GET /api/admin/users",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{auth_token}}" }],
+            "url": {
+              "raw": "{{base_url}}/api/admin/users",
+              "host": ["{{base_url}}"],
+              "path": ["api", "admin", "users"]
+            }
+          }
+        },
+        {
+          "name": "POST /api/admin/users",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{auth_token}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": { "mode": "raw", "raw": "{\n  \"username\": \"student01\",\n  \"email\": \"student01@example.com\",\n  \"password\": \"password123\",\n  \"role\": \"student\"\n}" },
+            "url": {
+              "raw": "{{base_url}}/api/admin/users",
+              "host": ["{{base_url}}"],
+              "path": ["api", "admin", "users"]
+            }
+          }
+        },
+        {
+          "name": "PUT /api/admin/users/:id",
+          "request": {
+            "method": "PUT",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{auth_token}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": { "mode": "raw", "raw": "{\n  \"role\": \"teacher\",\n  \"isActive\": true\n}" },
+            "url": {
+              "raw": "{{base_url}}/api/admin/users/{{user_id}}",
+              "host": ["{{base_url}}"],
+              "path": ["api", "admin", "users", "{{user_id}}"]
+            }
+          }
+        },
+        {
+          "name": "DELETE /api/admin/users/:id",
+          "request": {
+            "method": "DELETE",
+            "header": [{ "key": "Authorization", "value": "Bearer {{auth_token}}" }],
+            "url": {
+              "raw": "{{base_url}}/api/admin/users/{{user_id}}",
+              "host": ["{{base_url}}"],
+              "path": ["api", "admin", "users", "{{user_id}}"]
+            }
+          }
+        },
+        {
+          "name": "POST /api/admin/enrollments",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{auth_token}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": { "mode": "raw", "raw": "{\n  \"userId\": {{user_id}},\n  \"courseId\": {{course_id}}\n}" },
+            "url": {
+              "raw": "{{base_url}}/api/admin/enrollments",
+              "host": ["{{base_url}}"],
+              "path": ["api", "admin", "enrollments"]
+            }
+          }
+        },
+        {
+          "name": "DELETE /api/admin/enrollments",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{auth_token}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": { "mode": "raw", "raw": "{\n  \"userId\": {{user_id}},\n  \"courseId\": {{course_id}}\n}" },
+            "url": {
+              "raw": "{{base_url}}/api/admin/enrollments",
+              "host": ["{{base_url}}"],
+              "path": ["api", "admin", "enrollments"]
+            }
+          }
+        },
+        {
+          "name": "GET /api/admin/courses/:courseId/enrollments-admin",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{auth_token}}" }],
+            "url": {
+              "raw": "{{base_url}}/api/admin/courses/{{course_id}}/enrollments-admin",
+              "host": ["{{base_url}}"],
+              "path": ["api", "admin", "courses", "{{course_id}}", "enrollments-admin"]
+            }
+          }
+        },
+        {
+          "name": "GET /api/admin/users/:userId/enrollments",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{auth_token}}" }],
+            "url": {
+              "raw": "{{base_url}}/api/admin/users/{{user_id}}/enrollments",
+              "host": ["{{base_url}}"],
+              "path": ["api", "admin", "users", "{{user_id}}", "enrollments"]
+            }
+          }
+        },
+        {
+          "name": "GET /api/admin/reviews",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{auth_token}}" }],
+            "url": {
+              "raw": "{{base_url}}/api/admin/reviews?page=1&limit=10",
+              "host": ["{{base_url}}"],
+              "path": ["api", "admin", "reviews"],
+              "query": [
+                { "key": "page", "value": "1" },
+                { "key": "limit", "value": "10" }
+              ]
+            }
+          }
+        },
+        {
+          "name": "DELETE /api/admin/reviews/:id",
+          "request": {
+            "method": "DELETE",
+            "header": [{ "key": "Authorization", "value": "Bearer {{auth_token}}" }],
+            "url": {
+              "raw": "{{base_url}}/api/admin/reviews/{{review_id}}",
+              "host": ["{{base_url}}"],
+              "path": ["api", "admin", "reviews", "{{review_id}}"]
+            }
+          }
+        },
+        {
+          "name": "GET /api/admin/categories",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{auth_token}}" }],
+            "url": {
+              "raw": "{{base_url}}/api/admin/categories",
+              "host": ["{{base_url}}"],
+              "path": ["api", "admin", "categories"]
+            }
+          }
+        },
+        {
+          "name": "POST /api/admin/categories",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{auth_token}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": { "mode": "raw", "raw": "{\n  \"name\": \"Lap trinh\",\n  \"menuSection\": \"IT\"\n}" },
+            "url": {
+              "raw": "{{base_url}}/api/admin/categories",
+              "host": ["{{base_url}}"],
+              "path": ["api", "admin", "categories"]
+            }
+          }
+        },
+        {
+          "name": "PUT /api/admin/categories/:id",
+          "request": {
+            "method": "PUT",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{auth_token}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": { "mode": "raw", "raw": "{\n  \"name\": \"Lap trinh (updated)\"\n}" },
+            "url": {
+              "raw": "{{base_url}}/api/admin/categories/{{category_id}}",
+              "host": ["{{base_url}}"],
+              "path": ["api", "admin", "categories", "{{category_id}}"]
+            }
+          }
+        },
+        {
+          "name": "DELETE /api/admin/categories/:id",
+          "request": {
+            "method": "DELETE",
+            "header": [{ "key": "Authorization", "value": "Bearer {{auth_token}}" }],
+            "url": {
+              "raw": "{{base_url}}/api/admin/categories/{{category_id}}",
+              "host": ["{{base_url}}"],
+              "path": ["api", "admin", "categories", "{{category_id}}"]
+            }
+          }
+        }
+      ]
+    }
+  ],
+  "variable": [
+    { "key": "base_url", "value": "http://localhost:5000", "type": "string" },
+    { "key": "auth_token", "value": "", "type": "string" },
+    { "key": "verification_token", "value": "", "type": "string" },
+    { "key": "reset_password_token", "value": "", "type": "string" },
+    { "key": "user_id", "value": "1", "type": "string" },
+    { "key": "course_id", "value": "1", "type": "string" },
+    { "key": "category_id", "value": "1", "type": "string" },
+    { "key": "chapter_id", "value": "1", "type": "string" },
+    { "key": "quiz_id", "value": "1", "type": "string" },
+    { "key": "attempt_id", "value": "1", "type": "string" },
+    { "key": "payment_id", "value": "1", "type": "string" },
+    { "key": "notification_id", "value": "1", "type": "string" },
+    { "key": "review_id", "value": "1", "type": "string" }
+  ]
+}
+

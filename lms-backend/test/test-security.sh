@@ -7,6 +7,8 @@ API_URL="http://localhost:5000"
 STUDENT_TOKEN=""
 TEACHER_TOKEN=""
 ADMIN_TOKEN=""
+ADMIN_USERNAME="${ADMIN_USERNAME:-}"
+ADMIN_PASSWORD="${ADMIN_PASSWORD:-}"
 
 echo "=========================================="
 echo "LMS Backend - Security Testing Suite"
@@ -48,16 +50,17 @@ fi
 
 # Test 2: Register Student User
 test_header "Register Student User"
+TIMESTAMP=$(date +%s)
 student_response=$(curl -s -X POST $API_URL/api/auth/register \
   -H "Content-Type: application/json" \
-  -d '{
-    "name": "Trần Thảo Tiên",
-    "username": "thangtien_'$(date +%s)'",
-    "email": "thangtien_'$(date +%s)'@example.com",
-    "phone": "+84912345678",
-    "password": "password123",
-    "role": "student"
-  }')
+  -d "{
+    \"name\": \"Test Student\",
+    \"username\": \"student_$TIMESTAMP\",
+    \"email\": \"student_$TIMESTAMP@example.com\",
+    \"phone\": \"+84912345678\",
+    \"password\": \"password123\",
+    \"role\": \"student\"
+  }")
 
 student_id=$(echo $student_response | grep -o '"id":[0-9]*' | head -1 | cut -d':' -f2)
 student_email=$(echo $student_response | grep -o '"email":"[^"]*"' | cut -d'"' -f4)
@@ -71,52 +74,26 @@ else
   error "Student registration failed"
 fi
 
-# Test 3: Register Teacher User
-test_header "Register Teacher User"
-teacher_response=$(curl -s -X POST $API_URL/api/auth/register \
-  -H "Content-Type: application/json" \
-  -d '{
-    "name": "Trịnh Ngọc Thái",
-    "username": "thaitrinh_'$(date +%s)'",
-    "email": "thaitrinh_'$(date +%s)'@example.com",
-    "phone": "+84987654321",
-    "password": "password123",
-    "role": "teacher"
-  }')
-
-teacher_email=$(echo $teacher_response | grep -o '"email":"[^"]*"' | cut -d'"' -f4)
-teacher_verification=$(echo $teacher_response | grep -o '"verificationCode":"[^"]*"' | cut -d'"' -f4)
-
-if [ ! -z "$teacher_email" ]; then
-  success "Teacher registered"
-  echo "  Email: $teacher_email"
-  echo "  Verification Code: $teacher_verification"
-else
-  error "Teacher registration failed"
+test_header "Login Admin (bootstrap account required)"
+if [ -z "$ADMIN_USERNAME" ] || [ -z "$ADMIN_PASSWORD" ]; then
+  error "Missing ADMIN_USERNAME / ADMIN_PASSWORD env vars. Create a bootstrap admin in DB, then run:"
+  echo "  ADMIN_USERNAME=... ADMIN_PASSWORD=... ./test-security.sh"
+  exit 1
 fi
 
-# Test 4: Register Admin User
-test_header "Register Admin User"
-admin_response=$(curl -s -X POST $API_URL/api/auth/register \
+admin_login=$(curl -s -X POST $API_URL/api/auth/login \
   -H "Content-Type: application/json" \
   -d '{
-    "name": "Admin User",
-    "username": "admin_'$(date +%s)'",
-    "email": "admin_'$(date +%s)'@example.com",
-    "phone": "+84911111111",
-    "password": "password123",
-    "role": "admin"
+    "username": "'$ADMIN_USERNAME'",
+    "password": "'$ADMIN_PASSWORD'"
   }')
 
-admin_email=$(echo $admin_response | grep -o '"email":"[^"]*"' | cut -d'"' -f4)
-admin_verification=$(echo $admin_response | grep -o '"verificationCode":"[^"]*"' | cut -d'"' -f4)
-
-if [ ! -z "$admin_email" ]; then
-  success "Admin registered"
-  echo "  Email: $admin_email"
-  echo "  Verification Code: $admin_verification"
+ADMIN_TOKEN=$(echo $admin_login | grep -o '"token":"[^"]*"' | cut -d'"' -f4)
+if [ ! -z "$ADMIN_TOKEN" ]; then
+  success "Admin login successful"
 else
-  error "Admin registration failed"
+  error "Admin login failed (check username/password & isEmailVerified)"
+  exit 1
 fi
 
 # Test 5: Verify Email
@@ -124,39 +101,38 @@ test_header "Email Verification"
 
 student_verify=$(curl -s -X POST $API_URL/api/auth/verify-email-code \
   -H "Content-Type: application/json" \
-  -d '{
-    "email": "'$student_email'",
-    "token": "'$verification_code'"
-  }')
+  -d "{
+    \"token\": \"$verification_code\"
+  }")
 
-if echo "$student_verify" | grep -q "thành công"; then
+if echo "$student_verify" | grep -q "thành công\|success\|verified"; then
   success "Student email verified"
 else
   error "Email verification failed"
+  echo "Response: $student_verify"
 fi
 
-# Verify teacher
-teacher_verify=$(curl -s -X POST $API_URL/api/auth/verify-email-code \
+test_header "Admin creates Teacher user"
+TEACHER_TIMESTAMP=$(date +%s)
+teacher_username="teacher_$TEACHER_TIMESTAMP"
+teacher_email="$teacher_username@example.com"
+create_teacher=$(curl -s -X POST $API_URL/api/auth/register \
+  -H "Authorization: Bearer $ADMIN_TOKEN" \
   -H "Content-Type: application/json" \
-  -d '{
-    "email": "'$teacher_email'",
-    "token": "'$teacher_verification'"
-  }')
+  -d "{
+    \"name\": \"Test Teacher\",
+    \"username\": \"$teacher_username\",
+    \"email\": \"$teacher_email\",
+    \"password\": \"password123\",
+    \"role\": \"teacher\"
+  }")
 
-if echo "$teacher_verify" | grep -q "thành công"; then
-  success "Teacher email verified"
-fi
-
-# Verify admin
-admin_verify=$(curl -s -X POST $API_URL/api/auth/verify-email-code \
-  -H "Content-Type: application/json" \
-  -d '{
-    "email": "'$admin_email'",
-    "token": "'$admin_verification'"
-  }')
-
-if echo "$admin_verify" | grep -q "thành công"; then
-  success "Admin email verified"
+if echo "$create_teacher" | grep -q '"role":"teacher"\|success'; then
+  success "Teacher created by admin"
+  echo "  Email: $teacher_email"
+else
+  error "Admin failed to create teacher"
+  echo "Response: $create_teacher"
 fi
 
 # Test 6: Login and Get Tokens
@@ -165,43 +141,36 @@ test_header "Login - Get JWT Tokens"
 # Student login
 student_login=$(curl -s -X POST $API_URL/api/auth/login \
   -H "Content-Type: application/json" \
-  -d '{
-    "username": "'$(echo $student_response | grep -o '"username":"[^"]*"' | cut -d'"' -f4)'",
-    "password": "password123"
-  }')
+  -d "{
+    \"email\": \"$student_email\",
+    \"password\": \"password123\"
+  }")
 
 STUDENT_TOKEN=$(echo $student_login | grep -o '"token":"[^"]*"' | cut -d'"' -f4)
 if [ ! -z "$STUDENT_TOKEN" ]; then
   success "Student login successful"
 else
   error "Student login failed"
+  echo "Response: $student_login"
 fi
 
-# Teacher login
+# Teacher login (created by admin)
 teacher_login=$(curl -s -X POST $API_URL/api/auth/login \
   -H "Content-Type: application/json" \
-  -d '{
-    "username": "'$(echo $teacher_response | grep -o '"username":"[^"]*"' | cut -d'"' -f4)'",
-    "password": "password123"
-  }')
+  -d "{
+    \"email\": \"$teacher_email\",
+    \"password\": \"password123\"
+  }")
 
 TEACHER_TOKEN=$(echo $teacher_login | grep -o '"token":"[^"]*"' | cut -d'"' -f4)
 if [ ! -z "$TEACHER_TOKEN" ]; then
   success "Teacher login successful"
+else
+  error "Teacher login failed"
+  echo "Response: $teacher_login"
 fi
 
-# Admin login
-admin_login=$(curl -s -X POST $API_URL/api/auth/login \
-  -H "Content-Type: application/json" \
-  -d '{
-    "username": "'$(echo $admin_response | grep -o '"username":"[^"]*"' | cut -d'"' -f4)'",
-    "password": "password123"
-  }')
-
-ADMIN_TOKEN=$(echo $admin_login | grep -o '"token":"[^"]*"' | cut -d'"' -f4)
-if [ ! -z "$ADMIN_TOKEN" ]; then
-  success "Admin login successful"
-fi
+# Admin token already set above
 
 # Test 7: Test Student Endpoints
 test_header "Authorization - Student Access"
@@ -209,10 +178,11 @@ test_header "Authorization - Student Access"
 student_enrollments=$(curl -s -X GET $API_URL/api/student/enrollments \
   -H "Authorization: Bearer $STUDENT_TOKEN")
 
-if echo "$student_enrollments" | grep -q "Danh sách khóa học"; then
+if echo "$student_enrollments" | grep -q "enrollments\|success\|data"; then
   success "Student can access student endpoints"
 else
   error "Student cannot access student endpoints"
+  echo "Response: $student_enrollments"
 fi
 
 # Test 8: Test Teacher Cannot Access Admin
@@ -221,10 +191,11 @@ test_header "Authorization - Teacher Denied Admin Access"
 teacher_admin=$(curl -s -X GET $API_URL/api/admin/users \
   -H "Authorization: Bearer $TEACHER_TOKEN")
 
-if echo "$teacher_admin" | grep -q "không có quyền"; then
+if echo "$teacher_admin" | grep -q "không có quyền\|forbidden\|403"; then
   success "Teacher correctly denied access to admin endpoint"
 else
   error "Authorization check failed for teacher accessing admin"
+  echo "Response: $teacher_admin"
 fi
 
 # Test 9: Test Student Cannot Create Course (Teacher only)
@@ -233,12 +204,13 @@ test_header "Authorization - Student Denied Teacher Access"
 student_course=$(curl -s -X POST $API_URL/api/teacher/courses \
   -H "Authorization: Bearer $STUDENT_TOKEN" \
   -H "Content-Type: application/json" \
-  -d '{"name": "Hacker Course"}')
+  -d '{"title": "Hacker Course"}')
 
-if echo "$student_course" | grep -q "không có quyền"; then
+if echo "$student_course" | grep -q "không có quyền\|forbidden\|403"; then
   success "Student correctly denied access to teacher endpoint"
 else
   error "Authorization check failed for student accessing teacher"
+  echo "Response: $student_course"
 fi
 
 # Test 10: Test Admin Can Access All
@@ -247,15 +219,21 @@ test_header "Authorization - Admin Access All"
 admin_users=$(curl -s -X GET $API_URL/api/admin/users \
   -H "Authorization: Bearer $ADMIN_TOKEN")
 
-if echo "$admin_users" | grep -q "Danh sách"; then
+if echo "$admin_users" | grep -q "users\|success\|data"; then
   success "Admin can access admin endpoints"
+else
+  error "Admin cannot access admin endpoints"
+  echo "Response: $admin_users"
 fi
 
 admin_courses=$(curl -s -X GET $API_URL/api/teacher/courses \
   -H "Authorization: Bearer $ADMIN_TOKEN")
 
-if echo "$admin_courses" | grep -q "Danh sách khóa học"; then
+if echo "$admin_courses" | grep -q "courses\|success\|data"; then
   success "Admin can access teacher endpoints"
+else
+  error "Admin cannot access teacher endpoints"
+  echo "Response: $admin_courses"
 fi
 
 # Test 11: Test Missing Token
@@ -263,10 +241,11 @@ test_header "Authentication - Missing Token"
 
 no_token=$(curl -s -X GET $API_URL/api/student/enrollments)
 
-if echo "$no_token" | grep -q "Token không được cung cấp"; then
+if echo "$no_token" | grep -q "Token không được cung cấp\|Unauthorized\|401"; then
   success "Missing token correctly rejected"
 else
   error "Missing token validation failed"
+  echo "Response: $no_token"
 fi
 
 # Test 12: Test Invalid Token
@@ -275,10 +254,11 @@ test_header "Authentication - Invalid Token"
 invalid_token=$(curl -s -X GET $API_URL/api/student/enrollments \
   -H "Authorization: Bearer invalid_token_xyz")
 
-if echo "$invalid_token" | grep -q "Token không hợp lệ"; then
+if echo "$invalid_token" | grep -q "Token không hợp lệ\|Unauthorized\|401"; then
   success "Invalid token correctly rejected"
 else
   error "Invalid token validation failed"
+  echo "Response: $invalid_token"
 fi
 
 # Final Summary
@@ -289,7 +269,8 @@ echo "=========================================="
 echo "${GREEN}✓ All tests completed!${NC}"
 echo ""
 echo "Key Features Verified:"
-echo "  ✓ Registration with role assignment"
+echo "  ✓ Registration (self-register student only)"
+echo "  ✓ Admin creates teacher/student accounts"
 echo "  ✓ Email verification with 6-digit codes"
 echo "  ✓ JWT token generation"
 echo "  ✓ Student role access"

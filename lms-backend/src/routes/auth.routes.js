@@ -25,10 +25,12 @@ router.post(
     body('password')
       .isLength({ min: 6 })
       .withMessage('Mật khẩu phải có ít nhất 6 ký tự'),
+    // Người dùng tự đăng ký chỉ được là học viên.
+    // Nếu gửi role khác 'student' -> reject để tránh tự nâng quyền.
     body('role')
       .optional()
-      .isIn(['student', 'teacher', 'admin'])
-      .withMessage('Role không hợp lệ'),
+      .equals('student')
+      .withMessage('Role không hợp lệ. Người dùng tự đăng ký chỉ có thể là học viên (student).'),
   ],
   authController.register
 );
@@ -87,6 +89,14 @@ router.post(
     body('confirmPassword').notEmpty().withMessage('Xác nhận mật khẩu không được trống'),
   ],
   authController.resetPassword
+);
+
+// ============= Kiểm tra token đặt lại mật khẩu (qua link) =============
+// Dùng cho link trong email: GET /api/auth/reset-password/:token
+router.get(
+  '/reset-password/:token',
+  passwordResetLimiter,
+  authController.checkResetPasswordToken
 );
 
 // ============= Lấy thông tin user hiện tại (yêu cầu token) =============

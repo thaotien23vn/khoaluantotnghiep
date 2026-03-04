@@ -13,9 +13,17 @@ const authMiddleware = (req, res, next) => {
     }
 
     const decoded = jwt.verify(token, jwtConfig.secret);
+    
+    // Debug logs to track token information
+    console.log('DEBUG Auth Middleware - Token decoded successfully');
+    console.log('DEBUG Auth Middleware - User ID from token:', decoded.id);
+    console.log('DEBUG Auth Middleware - User Role from token:', decoded.role);
+    console.log('DEBUG Auth Middleware - User Email from token:', decoded.email);
+    
     req.user = decoded;
     next();
   } catch (error) {
+    console.log('DEBUG Auth Middleware - Token verification failed:', error.message);
     return res.status(401).json({
       success: false,
       message: 'Token không hợp lệ',

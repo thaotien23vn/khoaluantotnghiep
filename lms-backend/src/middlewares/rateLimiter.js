@@ -8,7 +8,7 @@ const rateLimit = require('express-rate-limit');
 // General API rate limit: 100 requests per 15 minutes
 const apiLimiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 minutes
-  max: 100,
+  max: 500,
   message: {
     success: false,
     message: 'Quá nhiều yêu cầu từ IP này, vui lòng thử lại sau 15 phút',
@@ -17,10 +17,10 @@ const apiLimiter = rateLimit({
   legacyHeaders: false,
 });
 
-// Strict limit for authentication: 5 attempts per 15 minutes
+// Strict limit for authentication: 10 attempts per 15 minutes (increased for development)
 const authLimiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 minutes
-  max: 5,
+  max: 10,
   message: {
     success: false,
     message: 'Quá nhiều lần đăng nhập không thành công, vui lòng thử lại sau 15 phút',
@@ -30,10 +30,10 @@ const authLimiter = rateLimit({
   legacyHeaders: false,
 });
 
-// Very strict limit for email verification: 3 attempts per hour
+// Very strict limit for email verification: 10 attempts per hour (increased for development)
 const emailVerificationLimiter = rateLimit({
   windowMs: 60 * 60 * 1000, // 1 hour
-  max: 3,
+  max: 10,
   message: {
     success: false,
     message: 'Quá nhiều lần xác nhận email, vui lòng thử lại sau 1 giờ',

@@ -149,6 +149,11 @@ exports.createUser = async (req, res) => {
 /**
  * PUT /api/admin/users/:id
  * Gán & thay đổi role (student / teacher), khóa/mở khóa, reset mật khẩu
+ *
+ * Policy:
+ * - User tự đăng ký luôn là student (xử lý ở /auth/register)
+ * - Admin có thể nâng user lên teacher
+ * - Không cho thay đổi role của tài khoản đã là admin (tránh tự hạ quyền / phá hệ thống)
  */
 exports.updateUser = async (req, res) => {
   try {
@@ -163,7 +168,7 @@ exports.updateUser = async (req, res) => {
       });
     }
 
-    // Không cho phép chỉnh sửa role của admin qua API (admin đầu tiên thêm thủ công)
+    // Không cho phép chỉnh sửa role của user đã là admin
     if (user.role === 'admin') {
       return res.status(400).json({
         success: false,

@@ -138,7 +138,7 @@ Content-Type: application/json
 
 | Endpoint | Method | Body | Response | Status |
 |----------|--------|------|----------|--------|
-| `/api/teacher/courses` | POST | `{ "title": string, "description"?: string, "price"?: number, "categoryId"?: number, "published"?: boolean }` | `{ "success": true, "message": string, "data": { "course": {...} } }` | 201 |
+| `/api/teacher/courses` | POST | `{ "title": string, "description"?: string, "price"?: number, "categoryId"?: number, "published"?: boolean, "level"?: string, "duration"?: string, "willLearn"?: string[], "requirements"?: string[], "tags"?: string[] }` | `{ "success": true, "message": string, "data": { "course": {...} } }` | 201 |
 | | | | `{ "success": false, "message": "Tiêu đề khóa học không được để trống" }` | 400 |
 
 ### 6.3 Chi tiết khóa học (của teacher)
@@ -263,7 +263,177 @@ Content-Type: application/json
 
 ---
 
-## 8. Lỗi chung
+## 8. Reviews API
+
+### 8.1 Lấy danh sách đánh giá của khóa học *(Public)*
+
+| Endpoint | Method | Query | Response | Status |
+|----------|--------|-------|----------|--------|
+| `/api/courses/:courseId/reviews` | GET | `page?: number`, `limit?: number`, `rating?: 1-5`, `sort?: newest|oldest|highest|lowest` | `{ "success": true, "data": { "reviews": [{ "id", "userId", "courseId", "rating", "comment", "createdAt", "User": { "id", "name", "avatar" } }], "statistics": { "averageRating", "totalReviews", "distribution": { "5": number, "4": number, "3": number, "2": number, "1": number } }, "pagination": { "total", "page", "limit", "totalPages" } } }` | 200 |
+
+### 8.2 Tạo đánh giá khóa học *(Student/Admin)*
+
+| Endpoint | Method | Body | Response | Status |
+|----------|--------|------|----------|--------|
+| `/api/student/courses/:courseId/reviews` | POST | `{ "rating": 1-5, "comment": string (10-1000 chars) }` | `{ "success": true, "message": string, "data": { "review": { "id", "userId", "courseId", "rating", "comment", "createdAt", "User": { "id", "name", "avatar" } } } }` | 201 |
+| | | | `{ "success": false, "message": "Bạn cần đăng ký khóa học này để đánh giá" }` | 403 |
+| | | | `{ "success": false, "message": "Bạn đã đánh giá khóa học này" }` | 409 |
+
+### 8.3 Cập nhật đánh giá *(Student/Admin)*
+
+| Endpoint | Method | Body | Response | Status |
+|----------|--------|------|----------|--------|
+| `/api/student/reviews/:reviewId` | PUT | `{ "rating": 1-5, "comment": string (10-1000 chars) }` | `{ "success": true, "message": string, "data": { "review": {...} } }` | 200 |
+| | | | `{ "success": false, "message": "Bạn không có quyền cập nhật đánh giá này" }` | 403 |
+
+### 8.4 Xóa đánh giá *(Student/Admin)*
+
+| Endpoint | Method | Response | Status |
+|----------|--------|----------|--------|
+| `/api/student/reviews/:reviewId` | DELETE | `{ "success": true, "message": string }` | 200 |
+| | | `{ "success": false, "message": "Bạn không có quyền xóa đánh giá này" }` | 403 |
+
+### 8.5 Lấy đánh giá của user *(Student/Admin)*
+
+| Endpoint | Method | Query | Response | Status |
+|----------|--------|-------|----------|--------|
+| `/api/student/reviews` | GET | `page?: number`, `limit?: number` | `{ "success": true, "data": { "reviews": [{ "id", "userId", "courseId", "rating", "comment", "createdAt", "Course": { "id", "title", "slug", "price" } }], "pagination": { "total", "page", "limit", "totalPages" } } }` | 200 |
+
+---
+
+## 9. Notifications API
+
+### 9.1 Lấy danh sách thông báo *(User)*
+
+| Endpoint | Method | Query | Response | Status |
+|----------|--------|-------|----------|--------|
+| `/api/notifications` | GET | `page?: number`, `limit?: number` | `{ "success": true, "data": { "notifications": [{ "id", "userId", "type", "title", "message", "isRead", "payload": {}, "createdAt" }] } }` | 200 |
+
+### 9.2 Lấy số thông báo chưa đọc *(User)*
+
+| Endpoint | Method | Response | Status |
+|----------|--------|----------|--------|
+| `/api/notifications/unread-count` | GET | `{ "success": true, "data": { "unreadCount": number } }` | 200 |
+
+### 9.3 Đánh dấu đã đọc thông báo *(User)*
+
+| Endpoint | Method | Response | Status |
+|----------|--------|----------|--------|
+| `/api/notifications/:notificationId/read` | PUT | `{ "success": true, "message": string }` | 200 |
+
+### 9.4 Đánh dấu tất cả đã đọc *(User)*
+
+| Endpoint | Method | Response | Status |
+|----------|--------|----------|--------|
+| `/api/notifications/read-all` | PUT | `{ "success": true, "message": string }` | 200 |
+
+### 9.5 Xóa thông báo *(User)*
+
+| Endpoint | Method | Response | Status |
+|----------|--------|----------|--------|
+| `/api/notifications/:notificationId` | DELETE | `{ "success": true, "message": string }` | 200 |
+
+### 9.6 Gửi thông báo *(Admin)*
+
+| Endpoint | Method | Body | Response | Status |
+|----------|--------|------|----------|--------|
+| `/api/notifications/send` | POST | `{ "userIds": number[], "type": string, "title": string, "message": string, "payload": {} }` | `{ "success": true, "message": string }` | 200 |
+
+---
+
+## 10. Payments API
+
+### 10.1 Xử lý thanh toán *(Student/Admin)*
+
+| Endpoint | Method | Body | Response | Status |
+|----------|--------|------|----------|--------|
+| `/api/student/payments/process` | POST | `{ "courseId": number, "paymentMethod": string, "paymentDetails": {} }` | `{ "success": true, "message": string, "data": { "payment": { "id", "userId", "courseId", "amount", "status", "paymentMethod", "transactionId", "createdAt" } } }` | 201 |
+
+### 10.2 Xác minh thanh toán *(Student/Admin)*
+
+| Endpoint | Method | Body | Response | Status |
+|----------|--------|------|----------|--------|
+| `/api/student/payments/verify` | POST | `{ "paymentId": number, "verificationData": {} }` | `{ "success": true, "message": string, "data": { "payment": {...} } }` | 200 |
+
+### 10.3 Lấy danh sách thanh toán *(Student/Admin)*
+
+| Endpoint | Method | Query | Response | Status |
+|----------|--------|-------|----------|--------|
+| `/api/student/payments` | GET | `page?: number`, `limit?: number` | `{ "success": true, "data": { "payments": [{ "id", "userId", "courseId", "amount", "status", "paymentMethod", "transactionId", "createdAt", "Course": { "id", "title", "slug" } }], "pagination": { "total", "page", "limit", "totalPages" } } }` | 200 |
+
+### 10.4 Chi tiết thanh toán *(Student/Admin)*
+
+| Endpoint | Method | Response | Status |
+|----------|--------|----------|--------|
+| `/api/student/payments/:paymentId` | GET | `{ "success": true, "data": { "payment": {...} } }` | 200 |
+
+---
+
+## 11. Quizzes API
+
+### 11.1 Tạo quiz *(Teacher/Admin)*
+
+| Endpoint | Method | Body | Response | Status |
+|----------|--------|------|----------|--------|
+| `/api/teacher/courses/:courseId/quizzes` | POST | `{ "title": string, "maxScore": number, "timeLimit": number, "passingScore": number }` | `{ "success": true, "message": string, "data": { "quiz": { "id", "title", "maxScore", "timeLimit", "passingScore", "courseId", "createdBy" } } }` | 201 |
+
+### 11.2 Lấy danh sách quiz của khóa học *(Teacher/Admin)*
+
+| Endpoint | Method | Response | Status |
+|----------|--------|----------|--------|
+| `/api/teacher/courses/:courseId/quizzes` | GET | `{ "success": true, "data": { "quizzes": [{ "id", "title", "maxScore", "timeLimit", "passingScore", "courseId", "createdBy", "createdAt" }] } }` | 200 |
+
+### 11.3 Chi tiết quiz *(Teacher/Admin)*
+
+| Endpoint | Method | Response | Status |
+|----------|--------|----------|--------|
+| `/api/teacher/quizzes/:quizId` | GET | `{ "success": true, "data": { "quiz": {...} } }` | 200 |
+
+### 11.4 Cập nhật quiz *(Teacher/Admin)*
+
+| Endpoint | Method | Body | Response | Status |
+|----------|--------|------|----------|--------|
+| `/api/teacher/quizzes/:quizId` | PUT | `{ "title": string, "maxScore": number, "timeLimit": number, "passingScore": number }` | `{ "success": true, "message": string, "data": { "quiz": {...} } }` | 200 |
+
+### 11.5 Xóa quiz *(Teacher/Admin)*
+
+| Endpoint | Method | Response | Status |
+|----------|--------|----------|--------|
+| `/api/teacher/quizzes/:quizId` | DELETE | `{ "success": true, "message": string }` | 200 |
+
+### 11.6 Thêm câu hỏi vào quiz *(Teacher/Admin)*
+
+| Endpoint | Method | Body | Response | Status |
+|----------|--------|------|----------|--------|
+| `/api/teacher/quizzes/:quizId/questions` | POST | `{ "type": "multiple_choice|true_false|short_answer|essay", "content": string, "points": number, "options": string[] (if multiple_choice), "correctAnswer": string (if multiple_choice) }` | `{ "success": true, "message": string, "data": { "question": { "id", "type", "content", "points", "quizId", "options", "correctAnswer" } } }` | 201 |
+
+### 11.7 Lấy thống kê attempts *(Teacher/Admin)*
+
+| Endpoint | Method | Response | Status |
+|----------|--------|----------|--------|
+| `/api/teacher/quizzes/:quizId/attempts` | GET | `{ "success": true, "data": { "attempts": [{ "id", "userId", "quizId", "score", "status", "startedAt", "submittedAt", "User": { "id", "name", "email" } }] } }` | 200 |
+
+### 11.8 Bắt đầu làm bài *(Student)*
+
+| Endpoint | Method | Response | Status |
+|----------|--------|----------|--------|
+| `/api/student/quizzes/:quizId/start` | POST | `{ "success": true, "message": string, "data": { "attempt": { "id", "userId", "quizId", "status", "startedAt", "expiresAt" } } }` | 201 |
+
+### 11.9 Nộp bài *(Student)*
+
+| Endpoint | Method | Body | Response | Status |
+|----------|--------|------|----------|--------|
+| `/api/student/attempts/:attemptId/submit` | POST | `{ "answers": { "questionId": "answer" } }` | `{ "success": true, "message": string, "data": { "attempt": { "id", "score", "status", "submittedAt" } } }` | 200 |
+
+### 11.10 Lấy lịch sử làm bài *(Student)*
+
+| Endpoint | Method | Response | Status |
+|----------|--------|----------|--------|
+| `/api/student/quizzes/:quizId/attempts` | GET | `{ "success": true, "data": { "attempts": [{ "id", "score", "status", "startedAt", "submittedAt" }] } }` | 200 |
+
+---
+
+## 12. Lỗi chung
 
 | Status | Response |
 |--------|----------|
@@ -274,9 +444,13 @@ Content-Type: application/json
 
 ---
 
-## 9. Ghi chú cho FE
+## 13. Ghi chú cho FE
 
 1. **Token:** Lưu `data.token` từ `/api/auth/login`, gửi trong header `Authorization: Bearer <token>` cho mọi API cần đăng nhập.
 2. **Role:** `student`, `teacher`, `admin` – mỗi nhóm có endpoint riêng (admin dùng chung teacher + student).
 3. **CORS:** Backend cho phép origin mặc định `http://localhost:3000`; production cần cấu hình `ALLOWED_ORIGINS`.
 4. **Rate limit:** Auth có giới hạn request; nếu vượt quá sẽ trả về 429.
+5. **Reviews:** User chỉ có thể đánh giá khóa học đã đăng ký và chỉ đánh giá được 1 lần.
+6. **Quizzes:** Hỗ trợ nhiều loại câu hỏi: multiple_choice, true_false, short_answer, essay.
+7. **Payments:** Hiện tại đang dùng mock payment method, production cần tích hợp gateway thực tế.
+8. **Notifications:** Auto-generated cho các events quan trọng (enrollment, payment, quiz completion).

@@ -67,23 +67,21 @@ Payment.belongsTo(Enrollment, { foreignKey: 'enrollmentId' });
 User.hasMany(Payment, { foreignKey: 'userId' });
 Course.hasMany(Payment, { foreignKey: 'courseId' });
 
-Course.hasMany(Quiz, { foreignKey: 'courseId' });
-Quiz.belongsTo(Course, { foreignKey: 'courseId' });
-Quiz.hasMany(Question, { foreignKey: 'quizId' });
-Question.belongsTo(Quiz, { foreignKey: 'quizId' });
+// Quiz/Question/Attempt/Review/Notification/Payment models define associations with aliases.
+// Wire them up here so controller `include: { as: ... }` works reliably.
+for (const model of [Payment, Review, Notification, Quiz, Question, Attempt]) {
+  if (model && typeof model.associate === 'function') {
+    model.associate(models);
+  }
+}
 
-User.hasMany(Attempt, { foreignKey: 'userId' });
-Attempt.belongsTo(User, { foreignKey: 'userId' });
-Quiz.hasMany(Attempt, { foreignKey: 'quizId' });
-Attempt.belongsTo(Quiz, { foreignKey: 'quizId' });
-
-User.hasMany(Review, { foreignKey: 'userId' });
-Review.belongsTo(User, { foreignKey: 'userId' });
-Course.hasMany(Review, { foreignKey: 'courseId' });
-Review.belongsTo(Course, { foreignKey: 'courseId' });
-
-User.hasMany(Notification, { foreignKey: 'userId' });
-Notification.belongsTo(User, { foreignKey: 'userId' });
+// Extra "inverse" relations (optional but useful)
+User.hasMany(Quiz, { foreignKey: 'createdBy', as: 'createdQuizzes' });
+Course.hasMany(Quiz, { foreignKey: 'courseId', as: 'quizzes' });
+User.hasMany(Attempt, { foreignKey: 'userId', as: 'attempts' });
+User.hasMany(Review, { foreignKey: 'userId', as: 'reviews' });
+Course.hasMany(Review, { foreignKey: 'courseId', as: 'reviews' });
+User.hasMany(Notification, { foreignKey: 'userId', as: 'notifications' });
 
 const connectDB = async () => {
   await sequelize.authenticate();

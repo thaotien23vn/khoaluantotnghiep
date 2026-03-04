@@ -4,6 +4,10 @@ const helmet = require('helmet');
 const authRoutes = require('./routes/auth.routes');
 const courseRoutes = require('./routes/course.routes');
 const categoryRoutes = require('./routes/category.routes');
+const quizRoutes = require('./routes/quiz.routes');
+const paymentRoutes = require('./routes/payment.routes');
+const reviewRoutes = require('./routes/review.routes');
+const notificationRoutes = require('./routes/notification.routes');
 const protectedRoutes = require('./routes/protected.routes');
 const validateInput = require('./middlewares/validateInput');
 const { apiLimiter } = require('./middlewares/rateLimiter');
@@ -44,6 +48,19 @@ app.use('/api/auth', authRoutes);
 // Public course & category routes
 app.use('/api/courses', courseRoutes);
 app.use('/api/categories', categoryRoutes);
+
+// Review routes (mixed public and protected)
+app.use('/api', reviewRoutes);
+
+// Notification routes (mixed public and protected)
+app.use('/api', notificationRoutes);
+
+// Quiz routes (mixed public and protected)
+app.use('/api/teacher', quizRoutes);
+app.use('/api/student', quizRoutes);
+
+// Payment routes
+app.use('/api/student/payments', paymentRoutes);
 
 // Protected routes (require authentication and authorization)
 app.use('/api/admin', protectedRoutes);

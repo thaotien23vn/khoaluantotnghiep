@@ -7,6 +7,16 @@ module.exports = (sequelize) => {
       autoIncrement: true,
       primaryKey: true,
     },
+    userId: {
+      type: DataTypes.INTEGER.UNSIGNED,
+      allowNull: false,
+      field: 'user_id',
+    },
+    courseId: {
+      type: DataTypes.INTEGER.UNSIGNED,
+      allowNull: false,
+      field: 'course_id',
+    },
     amount: {
       type: DataTypes.DECIMAL(10,2),
       allowNull: false,
@@ -16,21 +26,41 @@ module.exports = (sequelize) => {
       defaultValue: 'USD',
     },
     provider: {
-      type: DataTypes.STRING,
+      type: DataTypes.ENUM('stripe', 'paypal', 'bank_transfer', 'mock'),
+      allowNull: false,
     },
     providerTxn: {
       type: DataTypes.STRING,
+      allowNull: false,
       field: 'provider_txn',
     },
     status: {
-      type: DataTypes.STRING,
+      type: DataTypes.ENUM('pending', 'completed', 'failed', 'cancelled'),
       defaultValue: 'pending',
+    },
+    paymentDetails: {
+      type: DataTypes.JSON,
+      defaultValue: {},
+      field: 'payment_details',
     },
   }, {
     tableName: 'payments',
     timestamps: true,
-    updatedAt: false,
+    createdAt: 'created_at',
+    updatedAt: 'updated_at',
   });
+
+  Payment.associate = (models) => {
+    Payment.belongsTo(models.User, {
+      foreignKey: 'userId',
+      as: 'user',
+    });
+    
+    Payment.belongsTo(models.Course, {
+      foreignKey: 'courseId',
+      as: 'course',
+    });
+  };
 
   return Payment;
 };
