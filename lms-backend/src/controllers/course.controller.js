@@ -2,7 +2,7 @@ const { Op } = require('sequelize');
 const db = require('../models');
 const mediaService = require('../services/media.service');
 
-const { Course, Chapter, Lecture, User, Category } = db.models;
+const { Course, Chapter, Lecture, User, Category, Enrollment } = db.models;
 
 // Helper: build URL-friendly slug from title (basic, no extra dependency)
 const generateSlugFromTitle = (title) => {
@@ -96,6 +96,66 @@ exports.getPublishedCourses = async (req, res) => {
   } catch (error) {
     console.error('Lỗi lấy danh sách khóa học:', error);
     res.status(500).json({
+      success: false,
+      message: 'Lỗi máy chủ',
+      error: error.message,
+    });
+  }
+};
+
+// ============= TEACHER/ADMIN: COURSE ENROLLMENTS (STUDENTS + PROGRESS) =============
+
+/**
+ * @desc    Get enrollments for a course (teacher's own course or any for admin)
+ * @route   GET /api/teacher/courses/:courseId/enrollments
+ * @access  Private (Teacher & Admin)
+ */
+exports.getCourseEnrollmentsForOwner = async (req, res) => {
+  try {
+    const { courseId } = req.params;
+    const userId = req.user.id;
+    const role = req.user.role;
+
+    const course = await Course.findByPk(courseId);
+    if (!course) {
+      return res.status(404).json({
+        success: false,
+        message: 'Không tìm thấy khóa học',
+      });
+    }
+
+    if (role === 'teacher' && Number(course.createdBy) !== Number(userId)) {
+      return res.status(403).json({
+        success: false,
+        message: 'Bạn không có quyền xem danh sách học viên của khóa học này',
+      });
+    }
+
+    const enrollments = await Enrollment.findAll({
+      where: { courseId },
+      include: [
+        {
+          model: User,
+          attributes: ['id', 'name', 'username', 'email', 'role'],
+        },
+      ],
+      order: [['enrolledAt', 'DESC']],
+    });
+
+    return res.json({
+      success: true,
+      data: {
+        course: {
+          id: course.id,
+          title: course.title,
+          createdBy: course.createdBy,
+        },
+        enrollments,
+      },
+    });
+  } catch (error) {
+    console.error('Lỗi lấy danh sách học viên khóa học (teacher):', error);
+    return res.status(500).json({
       success: false,
       message: 'Lỗi máy chủ',
       error: error.message,

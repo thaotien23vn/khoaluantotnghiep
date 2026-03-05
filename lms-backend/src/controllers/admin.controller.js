@@ -1,7 +1,7 @@
 const bcrypt = require('bcryptjs');
 const db = require('../models');
 
-const { User, Course, Enrollment, Review, Category } = db.models;
+const { User, Course, Enrollment, Review, Notification, Payment } = db.models;
 
 /**
  * GET /api/admin/dashboard
@@ -281,12 +281,63 @@ exports.enrollUserToCourse = async (req, res) => {
       });
     }
 
+    // Business rule: admin can only enroll ON BEHALF of a student
+    if (user.role !== 'student') {
+      return res.status(400).json({
+        success: false,
+        message: 'Admin chỉ được ghi danh thay mặt học viên (role=student)',
+      });
+    }
+
+    // Business rule: admin/teacher cannot enroll for themselves
+    if (Number(req.user.id) === Number(userId)) {
+      return res.status(400).json({
+        success: false,
+        message: 'Admin không được tự ghi danh cho chính mình',
+      });
+    }
+
     const course = await Course.findByPk(courseId);
     if (!course) {
       return res.status(404).json({
         success: false,
         message: 'Không tìm thấy khóa học',
       });
+    }
+
+    if (!course.published) {
+      return res.status(400).json({
+        success: false,
+        message: 'Khóa học chưa được xuất bản, không thể ghi danh',
+      });
+    }
+
+    // Business rule: instructor cannot enroll their own course (applies to target student too)
+    if (course.createdBy && Number(course.createdBy) === Number(userId)) {
+      return res.status(400).json({
+        success: false,
+        message: 'Không thể ghi danh vào khóa học do chính người học tạo',
+      });
+    }
+
+    // Business rule: paid course requires valid payment BEFORE enrollment
+    const price = Number(course.price || 0);
+    if (price > 0) {
+      const completedPayment = await Payment.findOne({
+        where: {
+          userId,
+          courseId,
+          status: 'completed',
+        },
+        order: [['created_at', 'DESC']],
+      });
+
+      if (!completedPayment) {
+        return res.status(402).json({
+          success: false,
+          message: 'Khóa học có phí. Cần thanh toán hợp lệ trước khi ghi danh',
+        });
+      }
     }
 
     const existing = await Enrollment.findOne({

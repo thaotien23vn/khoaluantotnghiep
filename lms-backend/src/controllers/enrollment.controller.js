@@ -1,5 +1,5 @@
 const db = require('../models');
-const { Enrollment, Course, User } = db.models;
+const { Enrollment, Course, User, Payment } = db.models;
 
 /**
  * POST /api/student/courses/:courseId/enroll
@@ -9,6 +9,14 @@ exports.enroll = async (req, res) => {
   try {
     const { courseId } = req.params;
     const userId = req.user.id;
+
+    // Business rule: only student can self-enroll (routes should enforce, but keep defense-in-depth)
+    if (req.user.role !== 'student') {
+      return res.status(403).json({
+        success: false,
+        message: 'Chỉ học viên mới được tự ghi danh khóa học',
+      });
+    }
 
     const course = await Course.findByPk(courseId);
     if (!course) {
@@ -22,6 +30,35 @@ exports.enroll = async (req, res) => {
         success: false,
         message: 'Khóa học chưa được xuất bản, không thể đăng ký',
       });
+    }
+
+    // Business rule: instructor (creator) cannot enroll their own course
+    // (Course model uses createdBy in this project)
+    if (course.createdBy && Number(course.createdBy) === Number(userId)) {
+      return res.status(400).json({
+        success: false,
+        message: 'Bạn không thể ghi danh vào khóa học do chính bạn tạo',
+      });
+    }
+
+    // Business rule: paid course requires valid payment BEFORE enrollment is created
+    const price = Number(course.price || 0);
+    if (price > 0) {
+      const completedPayment = await Payment.findOne({
+        where: {
+          userId,
+          courseId: Number(courseId),
+          status: 'completed',
+        },
+        order: [['created_at', 'DESC']],
+      });
+
+      if (!completedPayment) {
+        return res.status(402).json({
+          success: false,
+          message: 'Khóa học có phí. Vui lòng thanh toán hợp lệ trước khi ghi danh',
+        });
+      }
     }
 
     const existing = await Enrollment.findOne({

@@ -20,7 +20,7 @@ const apiLimiter = rateLimit({
 // Strict limit for authentication: 10 attempts per 15 minutes (increased for development)
 const authLimiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 minutes
-  max: 10,
+  max: 100,
   message: {
     success: false,
     message: 'Quá nhiều lần đăng nhập không thành công, vui lòng thử lại sau 15 phút',

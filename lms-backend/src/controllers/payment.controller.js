@@ -10,6 +10,14 @@ const crypto = require('crypto');
  */
 exports.processPayment = async (req, res) => {
   try {
+    // Business rule: payment flow is for students
+    if (req.user.role !== 'student') {
+      return res.status(403).json({
+        success: false,
+        message: 'Chỉ học viên mới được thực hiện thanh toán ghi danh',
+      });
+    }
+
     const errors = validationResult(req);
     if (!errors.isEmpty()) {
       return res.status(400).json({
@@ -34,6 +42,14 @@ exports.processPayment = async (req, res) => {
       return res.status(400).json({
         success: false,
         message: 'Khóa học chưa được xuất bản'
+      });
+    }
+
+    // Business rule: instructor cannot enroll own course
+    if (course.createdBy && Number(course.createdBy) === Number(req.user.id)) {
+      return res.status(400).json({
+        success: false,
+        message: 'Bạn không thể thanh toán/ghi danh vào khóa học do chính bạn tạo',
       });
     }
 
@@ -163,6 +179,15 @@ exports.verifyPayment = async (req, res) => {
       });
     }
 
+    // Business rule: only verify payments for student enrollments
+    const paymentUser = await User.findByPk(payment.userId);
+    if (!paymentUser || paymentUser.role !== 'student') {
+      return res.status(400).json({
+        success: false,
+        message: 'Chỉ hỗ trợ thanh toán/ghi danh cho học viên (role=student)',
+      });
+    }
+
     if (payment.status !== 'pending') {
       return res.status(400).json({
         success: false,
@@ -201,6 +226,15 @@ exports.verifyPayment = async (req, res) => {
           ...verificationResult.paymentDetails
         }
       });
+
+      // Business rule: instructor cannot enroll own course
+      const course = await Course.findByPk(payment.courseId);
+      if (course?.createdBy && Number(course.createdBy) === Number(payment.userId)) {
+        return res.status(400).json({
+          success: false,
+          message: 'Không thể ghi danh vào khóa học do chính người học tạo',
+        });
+      }
 
       // Create enrollment
       const enrollment = await Enrollment.create({

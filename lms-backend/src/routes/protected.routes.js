@@ -339,65 +339,77 @@ router.delete(
   courseController.deleteLecture
 );
 
+/**
+ * @route   GET /api/teacher/courses/:courseId/enrollments
+ * @desc    Get enrollments for a course (teacher's own or any for admin)
+ * @access  Private (Teacher & Admin)
+ */
+router.get(
+  '/courses/:courseId/enrollments',
+  authMiddleware,
+  authorizeRole('teacher', 'admin'),
+  courseController.getCourseEnrollmentsForOwner
+);
+
 // ---------- Enrollment (Student & Admin) ----------
 
 /**
  * @route   POST /api/student/courses/:courseId/enroll
  * @desc    Enroll in a course
- * @access  Private (Student & Admin)
+ * @access  Private (Student)
  */
 router.post(
   '/courses/:courseId/enroll',
   authMiddleware,
-  authorizeRole('student', 'admin'),
+  authorizeRole('student'),
   enrollmentController.enroll
 );
 
 /**
  * @route   DELETE /api/student/courses/:courseId/enroll
  * @desc    Unenroll from a course
- * @access  Private (Student & Admin)
+ * @access  Private (Student)
  */
 router.delete(
   '/courses/:courseId/enroll',
   authMiddleware,
-  authorizeRole('student', 'admin'),
+  authorizeRole('student'),
   enrollmentController.unenroll
 );
 
 /**
  * @route   GET /api/student/enrollments/course/:courseId
  * @desc    Get enrollment detail for one course (progress, etc.)
- * @access  Private (Student & Admin)
+ * @access  Private (Student)
  */
 router.get(
   '/enrollments/course/:courseId',
   authMiddleware,
-  authorizeRole('student', 'admin'),
+  authorizeRole('student'),
   enrollmentController.getEnrollmentByCourse
 );
 
 /**
  * @route   GET /api/student/enrollments
  * @desc    Get student's enrollments (list all enrolled courses)
- * @access  Private (Student & Admin)
+ * @access  Private (Student)
  */
 router.get(
   '/enrollments',
   authMiddleware,
-  authorizeRole('student', 'admin'),
+  authorizeRole('student'),
   enrollmentController.getMyEnrollments
 );
 
 /**
  * @route   PUT /api/student/progress/:courseId
  * @desc    Update progress percent for a course (0-100)
- * @access  Private (Student & Admin)
+ * @access  Private (Student)
  */
 router.put(
   '/progress/:courseId',
   authMiddleware,
-  authorizeRole('student', 'admin'),
+  authorizeRole('student'),
   enrollmentController.updateProgress
 );
 
