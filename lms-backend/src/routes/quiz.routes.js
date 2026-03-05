@@ -4,6 +4,7 @@ const authorizeRole = require('../middlewares/authorize');
 const quizController = require('../controllers/quiz.controller');
 const attemptController = require('../controllers/attempt.controller');
 const { body } = require('express-validator');
+const uploadMedia = require('../middlewares/uploadMedia');
 
 const router = express.Router();
 
@@ -18,6 +19,19 @@ const quizValidation = [
 // Question validation rules are now inline in routes
 
 // ========== TEACHER/ADMIN ROUTES ==========
+
+/**
+ * @route   POST /api/teacher/media/quiz
+ * @desc    Upload quiz media (image/audio/video)
+ * @access  Private (Teacher & Admin)
+ */
+router.post(
+  '/media/quiz',
+  authMiddleware,
+  authorizeRole('teacher', 'admin'),
+  uploadMedia.single('file'),
+  quizController.uploadQuizMedia
+);
 
 /**
  * @route   POST /api/teacher/courses/:courseId/quizzes

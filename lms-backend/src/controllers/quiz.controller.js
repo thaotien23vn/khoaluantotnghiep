@@ -1,6 +1,7 @@
 const db = require('../models');
 const { Quiz, Question, Attempt, Course, User } = db.models;
 const { validationResult } = require('express-validator');
+const mediaService = require('../services/media.service');
 
 /**
  * @desc    Create a new quiz for a course
@@ -63,6 +64,42 @@ exports.createQuiz = async (req, res) => {
 };
 
 /**
+ * @desc    Upload quiz media (image/audio/video)
+ * @route   POST /api/teacher/media/quiz
+ * @access  Private (Teacher & Admin)
+ */
+exports.uploadQuizMedia = async (req, res) => {
+  try {
+    if (!req.file) {
+      return res.status(400).json({
+        success: false,
+        message: 'Vui lòng chọn file'
+      });
+    }
+
+    const uploadResult = await mediaService.uploadLectureMedia(req.file);
+
+    return res.status(201).json({
+      success: true,
+      message: 'Upload thành công',
+      data: {
+        url: uploadResult.url,
+        bytes: uploadResult.bytes,
+        format: uploadResult.format,
+        publicId: uploadResult.publicId,
+      },
+    });
+  } catch (error) {
+    console.error('Upload quiz media error:', error);
+    return res.status(500).json({
+      success: false,
+      message: 'Lỗi máy chủ',
+      error: error.message,
+    });
+  }
+};
+
+/**
  * @desc    Get all quizzes for a course
  * @route   GET /api/teacher/courses/:courseId/quizzes
  * @access  Private (Teacher & Admin of course)
@@ -95,7 +132,7 @@ exports.getCourseQuizzes = async (req, res) => {
           as: 'questions'
         }
       ],
-      order: [['createdAt', 'DESC']]
+      order: [[db.sequelize.col('Quiz.created_at'), 'DESC']]
     });
 
     res.json({

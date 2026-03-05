@@ -1,7 +1,10 @@
 const bcrypt = require('bcryptjs');
+const Sequelize = require('sequelize');
 const db = require('../models');
 
-const { User, Course, Enrollment, Review, Notification, Payment } = db.models;
+const Op = Sequelize.Op || Sequelize.Sequelize?.Op;
+
+const { User, Course, Enrollment, Review, Notification, Payment, Category, Attempt } = db.models;
 
 /**
  * GET /api/admin/dashboard
@@ -9,11 +12,87 @@ const { User, Course, Enrollment, Review, Notification, Payment } = db.models;
  */
 exports.getDashboard = async (req, res) => {
   try {
-    const [totalUsers, totalCourses, totalEnrollments] = await Promise.all([
+    const [
+      totalUsers,
+      totalCourses,
+      totalEnrollments,
+      totalCategories,
+      totalReviews,
+      publishedCourses,
+      totalPayments,
+      completedPayments,
+      failedPayments,
+      revenueRow,
+      avgRatingRow,
+      totalAttempts,
+      avgPercentageOverallRow,
+    ] = await Promise.all([
       User.count(),
       Course.count(),
       Enrollment.count(),
+      Category.count(),
+      Review.count(),
+      Course.count({ where: { published: true } }),
+      Payment.count(),
+      Payment.count({ where: { status: 'completed' } }),
+      Payment.count({ where: { status: 'failed' } }),
+      Payment.findOne({
+        attributes: [[db.sequelize.fn('SUM', db.sequelize.col('amount')), 'totalRevenue']],
+        where: { status: 'completed' },
+        raw: true,
+      }),
+      Review.findOne({
+        attributes: [[db.sequelize.fn('AVG', db.sequelize.col('rating')), 'avgRating']],
+        raw: true,
+      }),
+      Attempt.count(),
+      Attempt.findOne({
+        attributes: [[db.sequelize.fn('AVG', db.sequelize.col('percentage_score')), 'avgPercentageOverall']],
+        where: { completedAt: { [Op.ne]: null } },
+        raw: true,
+      }),
     ]);
+
+    const totalRevenue = Number(revenueRow?.totalRevenue || 0);
+    const avgRating = Number(avgRatingRow?.avgRating || 0);
+    const avgPercentageOverall = Number(avgPercentageOverallRow?.avgPercentageOverall || 0);
+
+    const sevenDaysAgo = new Date();
+    sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 6);
+    sevenDaysAgo.setHours(0, 0, 0, 0);
+
+    const last7DaysRaw = await Attempt.findAll({
+      attributes: [
+        [db.sequelize.fn('DATE', db.sequelize.col('completed_at')), 'date'],
+        [db.sequelize.fn('COUNT', db.sequelize.col('id')), 'attempts'],
+        [db.sequelize.fn('AVG', db.sequelize.col('percentage_score')), 'avgPercentage'],
+      ],
+      where: {
+        completedAt: { [Op.ne]: null, [Op.gte]: sevenDaysAgo },
+      },
+      group: [db.sequelize.fn('DATE', db.sequelize.col('completed_at'))],
+      order: [[db.sequelize.fn('DATE', db.sequelize.col('completed_at')), 'ASC']],
+      raw: true,
+    });
+
+    const byDate = new Map(
+      (last7DaysRaw || []).map((r) => [
+        String(r.date),
+        {
+          date: String(r.date),
+          attempts: Number(r.attempts || 0),
+          avgPercentage: Number(r.avgPercentage || 0),
+        },
+      ])
+    );
+
+    const last7Days = [];
+    for (let i = 0; i < 7; i++) {
+      const d = new Date(sevenDaysAgo);
+      d.setDate(d.getDate() + i);
+      const key = d.toISOString().slice(0, 10);
+      last7Days.push(byDate.get(key) || { date: key, attempts: 0, avgPercentage: 0 });
+    }
 
     res.json({
       success: true,
@@ -22,6 +101,19 @@ exports.getDashboard = async (req, res) => {
           totalUsers,
           totalCourses,
           totalEnrollments,
+          totalCategories,
+          totalReviews,
+          publishedCourses,
+          totalPayments,
+          completedPayments,
+          failedPayments,
+          totalRevenue,
+          avgRating,
+          learning: {
+            totalAttempts,
+            avgPercentageOverall,
+            last7Days,
+          },
         },
       },
     });
@@ -251,6 +343,62 @@ exports.deleteUser = async (req, res) => {
   } catch (error) {
     console.error('Lỗi xóa user:', error);
     res.status(500).json({
+      success: false,
+      message: 'Lỗi máy chủ',
+      error: error.message,
+    });
+  }
+};
+
+/**
+ * GET /api/admin/payments
+ * Lấy danh sách giao dịch toàn hệ thống (Admin)
+ */
+exports.getPayments = async (req, res) => {
+  try {
+    const { page = 1, limit = 10, status, provider, courseId, userId } = req.query;
+    const offset = (Number(page) - 1) * Number(limit);
+
+    const whereClause = {};
+    if (status) whereClause.status = status;
+    if (provider) whereClause.provider = provider;
+    if (courseId) whereClause.courseId = Number(courseId);
+    if (userId) whereClause.userId = Number(userId);
+
+    const { count, rows: payments } = await Payment.findAndCountAll({
+      where: whereClause,
+      include: [
+        {
+          model: Course,
+          as: 'course',
+          attributes: ['id', 'title', 'price', 'published'],
+        },
+        {
+          model: User,
+          as: 'user',
+          attributes: ['id', 'name', 'username', 'email', 'role'],
+        },
+      ],
+      order: [[db.sequelize.col('Payment.created_at'), 'DESC']],
+      limit: Number(limit),
+      offset,
+    });
+
+    return res.json({
+      success: true,
+      data: {
+        payments,
+        pagination: {
+          total: count,
+          page: Number(page),
+          limit: Number(limit),
+          totalPages: Math.ceil(count / Number(limit)),
+        },
+      },
+    });
+  } catch (error) {
+    console.error('Lỗi lấy danh sách payments (admin):', error);
+    return res.status(500).json({
       success: false,
       message: 'Lỗi máy chủ',
       error: error.message,
@@ -497,14 +645,16 @@ exports.getReviews = async (req, res) => {
       include: [
         {
           model: User,
+          as: 'user',
           attributes: ['id', 'username', 'email'],
         },
         {
           model: Course,
+          as: 'course',
           attributes: ['id', 'title'],
         },
       ],
-      order: [['createdAt', 'DESC']],
+      order: [[db.sequelize.col('Review.created_at'), 'DESC']],
     });
 
     res.json({

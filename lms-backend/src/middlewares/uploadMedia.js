@@ -4,8 +4,14 @@ const storage = multer.memoryStorage();
 
 const allowedMimeTypes = [
   'video/mp4',
+  'video/webm',
   'video/x-m4v',
   'video/quicktime',
+  'audio/mpeg',
+  'audio/mp3',
+  'audio/wav',
+  'audio/ogg',
+  'audio/webm',
   'application/pdf',
   'image/png',
   'image/jpeg',

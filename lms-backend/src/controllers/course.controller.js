@@ -304,6 +304,7 @@ exports.createCourse = async (req, res) => {
     const { 
       title, 
       description, 
+      imageUrl,
       price, 
       categoryId, 
       published,
@@ -327,6 +328,7 @@ exports.createCourse = async (req, res) => {
       title,
       slug,
       description: description || '',
+      imageUrl: imageUrl || null,
       price: price != null ? price : 0,
       published: !!published,
       categoryId: categoryId || null,
@@ -438,7 +440,7 @@ exports.updateCourse = async (req, res) => {
       });
     }
 
-    const { title, description, price, categoryId, published } = req.body;
+    const { title, description, imageUrl, price, categoryId, published } = req.body;
 
     if (title && title !== course.title) {
       course.slug = await generateUniqueSlug(title);
@@ -447,6 +449,9 @@ exports.updateCourse = async (req, res) => {
 
     if (description != null) {
       course.description = description;
+    }
+    if (imageUrl !== undefined) {
+      course.imageUrl = imageUrl || null;
     }
     if (price != null) {
       course.price = price;

@@ -74,6 +74,18 @@ router.delete(
 );
 
 /**
+ * @route   GET /api/admin/payments
+ * @desc    Get payments (Admin only)
+ * @access  Private (Admin only)
+ */
+router.get(
+  '/payments',
+  authMiddleware,
+  authorizeRole('admin'),
+  adminController.getPayments
+);
+
+/**
  * @route   POST /api/admin/enrollments
  * @desc    Enroll any user to a course (Admin only)
  * @access  Private (Admin only)
