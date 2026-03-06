@@ -146,7 +146,7 @@ exports.getMyEnrollments = async (req, res) => {
         {
           model: Course,
           as: 'Course',
-          attributes: ['id', 'title', 'slug', 'description', 'price', 'published'],
+          attributes: ['id', 'title', 'slug', 'price', 'published', 'imageUrl'],
           include: [
             { model: User, as: 'creator', attributes: ['id', 'name', 'username'] },
           ],
@@ -185,7 +185,7 @@ exports.getEnrollmentByCourse = async (req, res) => {
         {
           model: Course,
           as: 'Course',
-          attributes: ['id', 'title', 'slug', 'description', 'price'],
+          attributes: ['id', 'title', 'slug', 'description', 'price', 'published', 'imageUrl', 'level', 'rating', 'reviewCount', 'duration'],
           include: [
             { model: User, as: 'creator', attributes: ['id', 'name', 'username'] },
           ],

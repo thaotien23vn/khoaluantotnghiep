@@ -4,6 +4,7 @@ const crypto = require('crypto');
 const { validationResult } = require('express-validator');
 const jwtConfig = require('../config/jwt');
 const emailService = require('../services/email.service');
+const mediaService = require('../services/media.service');
 const db = require('../models');
 const { Op } = require('sequelize');
 
@@ -97,6 +98,123 @@ exports.register = async (req, res) => {
   } catch (error) {
     console.error('Lỗi đăng ký:', error);
     res.status(500).json({
+      success: false,
+      message: 'Lỗi máy chủ',
+      error: error.message,
+    });
+  }
+};
+
+// ============= UPLOAD AVATAR (CURRENT USER) =============
+exports.uploadAvatar = async (req, res) => {
+  try {
+    const user = await UserModel.findByPk(req.user.id);
+    if (!user) {
+      return res.status(404).json({
+        success: false,
+        message: 'Không tìm thấy user',
+      });
+    }
+
+    const file = req.file;
+    if (!file) {
+      return res.status(400).json({
+        success: false,
+        message: 'Vui lòng chọn file ảnh',
+      });
+    }
+
+    if (!String(file.mimetype || '').startsWith('image/')) {
+      return res.status(400).json({
+        success: false,
+        message: 'Chỉ hỗ trợ upload ảnh',
+      });
+    }
+
+    const uploaded = await mediaService.uploadLectureMedia(file);
+    user.avatar = uploaded.url;
+    await user.save();
+
+    return res.json({
+      success: true,
+      message: 'Upload avatar thành công',
+      data: {
+        uploaded,
+        user: {
+          id: user.id,
+          name: user.name,
+          username: user.username,
+          email: user.email,
+          phone: user.phone,
+          role: user.role,
+          avatar: user.avatar,
+          createdAt: user.createdAt,
+          isEmailVerified: user.isEmailVerified,
+        },
+      },
+    });
+  } catch (error) {
+    console.error('Lỗi upload avatar:', error);
+    return res.status(500).json({
+      success: false,
+      message: 'Lỗi máy chủ',
+      error: error.message,
+    });
+  }
+};
+
+// ============= UPDATE CURRENT USER =============
+exports.updateCurrentUser = async (req, res) => {
+  try {
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) {
+      return res.status(400).json({
+        success: false,
+        message: 'Dữ liệu không hợp lệ',
+        errors: errors.array(),
+      });
+    }
+
+    const user = await UserModel.findByPk(req.user.id);
+    if (!user) {
+      return res.status(404).json({
+        success: false,
+        message: 'Không tìm thấy user',
+      });
+    }
+
+    const { name, phone, avatar } = req.body;
+
+    if (name !== undefined) {
+      user.name = name;
+    }
+    if (phone !== undefined) {
+      user.phone = phone || null;
+    }
+    if (avatar !== undefined) {
+      user.avatar = avatar || null;
+    }
+
+    await user.save();
+
+    return res.json({
+      success: true,
+      message: 'Cập nhật thông tin thành công',
+      data: {
+        id: user.id,
+        name: user.name,
+        username: user.username,
+        email: user.email,
+        phone: user.phone,
+        role: user.role,
+        avatar: user.avatar,
+        createdAt: user.createdAt,
+        isEmailVerified: user.isEmailVerified,
+      },
+    });
+  } catch (error) {
+    console.error('Lỗi cập nhật user:', error);
+    return res.status(500).json({
       success: false,
       message: 'Lỗi máy chủ',
       error: error.message,
@@ -514,6 +632,7 @@ exports.getCurrentUser = async (req, res) => {
         phone: user.phone,
         role: user.role,
         avatar: user.avatar,
+        createdAt: user.createdAt,
         isEmailVerified: user.isEmailVerified,
       },
     });

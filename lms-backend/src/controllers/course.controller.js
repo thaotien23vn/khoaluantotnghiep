@@ -206,9 +206,9 @@ exports.getCourseDetail = async (req, res) => {
         id: lecture.id.toString(),
         title: lecture.title,
         duration: lecture.duration ? `${Math.ceil(lecture.duration / 60)} phút` : '0 phút',
-        isPreview: false, // Mặc định, có thể thêm logic sau
+        isPreview: !!lecture.isPreview,
         videoUrl: lecture.contentUrl,
-        attachments: [], // Có thể mở rộng sau
+        attachments: Array.isArray(lecture.attachments) ? lecture.attachments : [],
       })) : [],
     })) : [];
 
@@ -741,7 +741,7 @@ exports.createLecture = async (req, res) => {
     const { chapterId } = req.params;
     const userId = req.user.id;
     const role = req.user.role;
-    const { title, type, contentUrl, duration, order } = req.body;
+    const { title, type, contentUrl, duration, order, isPreview, attachments } = req.body;
 
     if (!title || !type) {
       return res.status(400).json({
@@ -796,6 +796,17 @@ exports.createLecture = async (req, res) => {
       type,
       contentUrl: finalContentUrl,
       duration: duration != null ? duration : null,
+      isPreview: isPreview !== undefined ? String(isPreview) === 'true' || isPreview === true : false,
+      attachments: (() => {
+        if (attachments === undefined) return null;
+        if (attachments === null || attachments === '') return null;
+        if (typeof attachments === 'object') return attachments;
+        try {
+          return JSON.parse(String(attachments));
+        } catch {
+          return null;
+        }
+      })(),
       order: order != null ? order : 0,
       chapterId: chapter.id,
     });
@@ -823,7 +834,7 @@ exports.updateLecture = async (req, res) => {
     const { id } = req.params;
     const userId = req.user.id;
     const role = req.user.role;
-    const { title, type, contentUrl, duration, order } = req.body;
+    const { title, type, contentUrl, duration, order, isPreview, attachments } = req.body;
 
     const lecture = await Lecture.findByPk(id);
 
@@ -886,6 +897,22 @@ exports.updateLecture = async (req, res) => {
     }
     if (duration !== undefined) {
       lecture.duration = duration;
+    }
+    if (isPreview !== undefined) {
+      lecture.isPreview = String(isPreview) === 'true' || isPreview === true;
+    }
+    if (attachments !== undefined) {
+      if (attachments === null || attachments === '') {
+        lecture.attachments = null;
+      } else if (typeof attachments === 'object') {
+        lecture.attachments = attachments;
+      } else {
+        try {
+          lecture.attachments = JSON.parse(String(attachments));
+        } catch {
+          lecture.attachments = lecture.attachments;
+        }
+      }
     }
     if (order !== undefined) {
       lecture.order = order;

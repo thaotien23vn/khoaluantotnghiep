@@ -23,6 +23,16 @@ module.exports = (sequelize) => {
       type: DataTypes.INTEGER,
       comment: 'Duration in seconds',
     },
+    isPreview: {
+      type: DataTypes.BOOLEAN,
+      allowNull: false,
+      defaultValue: false,
+      field: 'is_preview',
+    },
+    attachments: {
+      type: DataTypes.JSON,
+      allowNull: true,
+    },
     order: {
       type: DataTypes.INTEGER,
       defaultValue: 0,

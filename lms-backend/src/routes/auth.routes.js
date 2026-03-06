@@ -1,7 +1,9 @@
 const express = require('express');
 const { body } = require('express-validator');
+const multer = require('multer');
 const authController = require('../controllers/auth.controller');
 const authMiddleware = require('../middlewares/auth');
+const uploadMedia = require('../middlewares/uploadMedia');
 const {
   authLimiter,
   emailVerificationLimiter,
@@ -101,5 +103,37 @@ router.get(
 
 // ============= Lấy thông tin user hiện tại (yêu cầu token) =============
 router.get('/me', authMiddleware, authController.getCurrentUser);
+
+// ============= Cập nhật thông tin user hiện tại (yêu cầu token) =============
+router.put(
+  '/me',
+  authMiddleware,
+  [
+    body('name').optional().trim().notEmpty().withMessage('Tên không được trống'),
+    body('phone')
+      .optional()
+      .isMobilePhone('any')
+      .withMessage('Số điện thoại không hợp lệ'),
+    body('avatar').optional().trim().notEmpty().withMessage('Avatar không hợp lệ'),
+  ],
+  authController.updateCurrentUser
+);
+
+// ============= Upload avatar (image only) =============
+router.post(
+  '/me/avatar',
+  authMiddleware,
+  multer({
+    storage: multer.memoryStorage(),
+    limits: { fileSize: 5 * 1024 * 1024 },
+    fileFilter: (req, file, cb) => {
+      if (!String(file.mimetype || '').startsWith('image/')) {
+        return cb(new Error('Chỉ hỗ trợ upload ảnh'), false);
+      }
+      cb(null, true);
+    },
+  }).single('file'),
+  authController.uploadAvatar
+);
 
 module.exports = router;
