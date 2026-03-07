@@ -3,6 +3,7 @@ const { Payment, Enrollment, Course, User } = db.models;
 const { validationResult } = require('express-validator');
 const crypto = require('crypto');
  const notificationController = require('./notification.controller');
+ const courseAggregatesService = require('../services/courseAggregates.service');
 
 /**
  * @desc    Process payment for course enrollment
@@ -235,6 +236,12 @@ exports.verifyPayment = async (req, res) => {
         progressPercent: 0,
         enrolledAt: new Date()
       }, { transaction: t });
+
+        try {
+          await courseAggregatesService.recomputeCourseStudents(payment.courseId, { transaction: t });
+        } catch (aggErr) {
+          console.error('Recompute course students (silent) error:', aggErr);
+        }
 
         enrollmentCreated = enrollment;
         notifyUserId = payment.userId;
@@ -484,6 +491,12 @@ async function processMockPayment(payment, course) {
     progressPercent: 0,
     enrolledAt: new Date()
   });
+
+  try {
+    await courseAggregatesService.recomputeCourseStudents(payment.courseId);
+  } catch (aggErr) {
+    console.error('Recompute course students (silent) error:', aggErr);
+  }
 
   try {
     await notificationController.createPaymentNotification(payment.userId, payment.courseId, payment.amount);

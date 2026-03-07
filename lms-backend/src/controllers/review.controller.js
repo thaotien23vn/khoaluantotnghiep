@@ -3,6 +3,7 @@ const { Review, Course, User, Enrollment } = db.models;
 const { validationResult } = require('express-validator');
 const { Op } = require('sequelize');
  const notificationController = require('./notification.controller');
+ const courseAggregatesService = require('../services/courseAggregates.service');
 
 /**
  * @desc    Create a review for a course
@@ -77,6 +78,12 @@ exports.createReview = async (req, res) => {
       rating,
       comment
     });
+
+    try {
+      await courseAggregatesService.recomputeCourseRating(courseId);
+    } catch (aggErr) {
+      console.error('Recompute course rating/reviewCount (silent) error:', aggErr);
+    }
 
     // Fetch review with user info
     const createdReview = await Review.findByPk(review.id, {
@@ -160,6 +167,12 @@ exports.updateReview = async (req, res) => {
       comment
     });
 
+    try {
+      await courseAggregatesService.recomputeCourseRating(review.courseId);
+    } catch (aggErr) {
+      console.error('Recompute course rating/reviewCount (silent) error:', aggErr);
+    }
+
     // Fetch updated review with user info
     const updatedReview = await Review.findByPk(reviewId, {
       include: [
@@ -212,6 +225,12 @@ exports.deleteReview = async (req, res) => {
     }
 
     await review.destroy();
+
+    try {
+      await courseAggregatesService.recomputeCourseRating(review.courseId);
+    } catch (aggErr) {
+      console.error('Recompute course rating/reviewCount (silent) error:', aggErr);
+    }
 
     res.json({
       success: true,

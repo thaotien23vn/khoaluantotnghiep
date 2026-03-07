@@ -1,6 +1,7 @@
 const db = require('../models');
 const { Enrollment, Course, User, Payment } = db.models;
  const notificationController = require('./notification.controller');
+ const courseAggregatesService = require('../services/courseAggregates.service');
 
 /**
  * POST /api/student/courses/:courseId/enroll
@@ -80,6 +81,12 @@ exports.enroll = async (req, res) => {
       progressPercent: 0,
     });
 
+    try {
+      await courseAggregatesService.recomputeCourseStudents(courseId);
+    } catch (aggErr) {
+      console.error('Recompute course students (silent) error:', aggErr);
+    }
+
     const enrollmentWithCourse = await Enrollment.findByPk(enrollment.id, {
       include: [{ model: Course, as: 'Course', attributes: ['id', 'title', 'slug', 'price'] }],
     });
@@ -125,6 +132,12 @@ exports.unenroll = async (req, res) => {
     }
 
     await enrollment.destroy();
+
+    try {
+      await courseAggregatesService.recomputeCourseStudents(courseId);
+    } catch (aggErr) {
+      console.error('Recompute course students (silent) error:', aggErr);
+    }
     res.json({
       success: true,
       message: 'Đã hủy đăng ký khóa học',

@@ -1,6 +1,7 @@
 const { Op } = require('sequelize');
 const db = require('../models');
 const mediaService = require('../services/media.service');
+const courseAggregatesService = require('../services/courseAggregates.service');
 
 const { Course, Chapter, Lecture, User, Category, Enrollment } = db.models;
 
@@ -721,6 +722,12 @@ exports.deleteChapter = async (req, res) => {
     await Lecture.destroy({ where: { chapterId: chapter.id } });
     await chapter.destroy();
 
+    try {
+      await courseAggregatesService.recomputeCourseTotalLessons(course.id);
+    } catch (aggErr) {
+      console.error('Recompute course totalLessons (silent) error:', aggErr);
+    }
+
     res.json({
       success: true,
       message: 'Xóa chương và các bài giảng liên quan thành công',
@@ -810,6 +817,12 @@ exports.createLecture = async (req, res) => {
       order: order != null ? order : 0,
       chapterId: chapter.id,
     });
+
+    try {
+      await courseAggregatesService.recomputeCourseTotalLessons(course.id);
+    } catch (aggErr) {
+      console.error('Recompute course totalLessons (silent) error:', aggErr);
+    }
 
     res.status(201).json({
       success: true,
@@ -979,6 +992,12 @@ exports.deleteLecture = async (req, res) => {
     }
 
     await lecture.destroy();
+
+    try {
+      await courseAggregatesService.recomputeCourseTotalLessons(course.id);
+    } catch (aggErr) {
+      console.error('Recompute course totalLessons (silent) error:', aggErr);
+    }
 
     res.json({
       success: true,
