@@ -1,6 +1,7 @@
 const db = require('../models');
 const { Attempt, Quiz, Question, Course, User, Enrollment } = db.models;
 const { validationResult } = require('express-validator');
+ const notificationController = require('./notification.controller');
 
 /**
  * @desc    Start a quiz attempt
@@ -217,6 +218,17 @@ exports.submitAttempt = async (req, res) => {
       passed,
       completedAt: new Date()
     });
+
+     try {
+       await notificationController.createQuizCompletionNotification(
+         attempt.userId,
+         attempt.quizId,
+         totalScore,
+         passed,
+       );
+     } catch (notifyErr) {
+       console.error('Create quiz completion notification (silent) error:', notifyErr);
+     }
 
     res.json({
       success: true,

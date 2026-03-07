@@ -2,6 +2,7 @@ const db = require('../models');
 const { Payment, Enrollment, Course, User } = db.models;
 const { validationResult } = require('express-validator');
 const crypto = require('crypto');
+ const notificationController = require('./notification.controller');
 
 /**
  * @desc    Process payment for course enrollment
@@ -155,49 +156,45 @@ exports.verifyPayment = async (req, res) => {
   try {
     const { paymentId, verificationData } = req.body;
 
-    const payment = await Payment.findByPk(paymentId, {
-      include: [
-        {
-          model: Course,
-          as: 'course',
-          attributes: ['id', 'title', 'price']
-        }
-      ]
-    });
+    let enrollmentCreated = null;
+    let notifyUserId = null;
+    let notifyCourseId = null;
+    let notifyAmount = null;
 
-    if (!payment) {
-      return res.status(404).json({
-        success: false,
-        message: 'Không tìm thấy giao dịch'
+    const result = await db.sequelize.transaction(async (t) => {
+      const payment = await Payment.findByPk(paymentId, {
+        include: [
+          {
+            model: Course,
+            as: 'course',
+            attributes: ['id', 'title', 'price']
+          }
+        ],
+        transaction: t,
+        lock: t.LOCK.UPDATE,
       });
-    }
 
-    if (payment.userId !== req.user.id && req.user.role !== 'admin') {
-      return res.status(403).json({
-        success: false,
-        message: 'Bạn không có quyền xác thực giao dịch này'
-      });
-    }
+      if (!payment) {
+        return { kind: 'error', status: 404, body: { success: false, message: 'Không tìm thấy giao dịch' } };
+      }
+
+      if (payment.userId !== req.user.id && req.user.role !== 'admin') {
+        return { kind: 'error', status: 403, body: { success: false, message: 'Bạn không có quyền xác thực giao dịch này' } };
+      }
 
     // Business rule: only verify payments for student enrollments
-    const paymentUser = await User.findByPk(payment.userId);
-    if (!paymentUser || paymentUser.role !== 'student') {
-      return res.status(400).json({
-        success: false,
-        message: 'Chỉ hỗ trợ thanh toán/ghi danh cho học viên (role=student)',
-      });
-    }
+      const paymentUser = await User.findByPk(payment.userId, { transaction: t, lock: t.LOCK.SHARE });
+      if (!paymentUser || paymentUser.role !== 'student') {
+        return { kind: 'error', status: 400, body: { success: false, message: 'Chỉ hỗ trợ thanh toán/ghi danh cho học viên (role=student)' } };
+      }
 
-    if (payment.status !== 'pending') {
-      return res.status(400).json({
-        success: false,
-        message: 'Giao dịch đã được xử lý'
-      });
-    }
+      if (payment.status !== 'pending') {
+        return { kind: 'error', status: 400, body: { success: false, message: 'Giao dịch đã được xử lý' } };
+      }
 
     // Verify payment based on provider
     let verificationResult;
-    switch (payment.provider) {
+      switch (payment.provider) {
       case 'stripe':
         verificationResult = await verifyStripePayment(payment, verificationData);
         break;
@@ -211,13 +208,10 @@ exports.verifyPayment = async (req, res) => {
         verificationResult = await verifyMockPayment(payment, verificationData);
         break;
       default:
-        return res.status(400).json({
-          success: false,
-          message: 'Phương thức thanh toán không được hỗ trợ'
-        });
+        return { kind: 'error', status: 400, body: { success: false, message: 'Phương thức thanh toán không được hỗ trợ' } };
     }
 
-    if (verificationResult.success) {
+      if (verificationResult.success) {
       // Update payment status
       await payment.update({
         status: 'completed',
@@ -225,49 +219,77 @@ exports.verifyPayment = async (req, res) => {
           ...payment.paymentDetails,
           ...verificationResult.paymentDetails
         }
-      });
+      }, { transaction: t });
 
       // Business rule: instructor cannot enroll own course
-      const course = await Course.findByPk(payment.courseId);
-      if (course?.createdBy && Number(course.createdBy) === Number(payment.userId)) {
-        return res.status(400).json({
-          success: false,
-          message: 'Không thể ghi danh vào khóa học do chính người học tạo',
-        });
-      }
+        const course = await Course.findByPk(payment.courseId, { transaction: t, lock: t.LOCK.SHARE });
+        if (course?.createdBy && Number(course.createdBy) === Number(payment.userId)) {
+          return { kind: 'error', status: 400, body: { success: false, message: 'Không thể ghi danh vào khóa học do chính người học tạo' } };
+        }
 
       // Create enrollment
-      const enrollment = await Enrollment.create({
+        const enrollment = await Enrollment.create({
         userId: payment.userId,
         courseId: payment.courseId,
         status: 'enrolled',
         progressPercent: 0,
         enrolledAt: new Date()
-      });
+      }, { transaction: t });
 
-      res.json({
-        success: true,
-        message: 'Thanh toán thành công. Bạn đã được đăng ký khóa học.',
-        data: {
-          payment,
-          enrollment
-        }
-      });
-    } else {
+        enrollmentCreated = enrollment;
+        notifyUserId = payment.userId;
+        notifyCourseId = payment.courseId;
+        notifyAmount = payment.amount;
+
+        return {
+          kind: 'success',
+          body: {
+            success: true,
+            message: 'Thanh toán thành công. Bạn đã được đăng ký khóa học.',
+            data: {
+              payment,
+              enrollment: enrollmentCreated,
+            },
+          },
+        };
+      } else {
       await payment.update({
         status: 'failed',
         paymentDetails: {
           ...payment.paymentDetails,
           error: verificationResult.error
         }
-      });
+      }, { transaction: t });
 
-      res.status(400).json({
-        success: false,
-        message: 'Thanh toán thất bại',
-        error: verificationResult.error
-      });
+        return {
+          kind: 'error',
+          status: 400,
+          body: {
+            success: false,
+            message: 'Thanh toán thất bại',
+            error: verificationResult.error,
+          },
+        };
+      }
+    });
+
+    if (result.kind === 'error') {
+      return res.status(result.status).json(result.body);
     }
+
+    try {
+      await notificationController.createPaymentNotification(notifyUserId, notifyCourseId, notifyAmount);
+    } catch (notifyErr) {
+      console.error('Create payment notification (silent) error:', notifyErr);
+    }
+
+    try {
+      await notificationController.createEnrollmentNotification(notifyUserId, notifyCourseId);
+    } catch (notifyErr) {
+      console.error('Create enrollment notification (silent) error:', notifyErr);
+    }
+
+    return res.json(result.body);
   } catch (error) {
     console.error('Verify payment error:', error);
     res.status(500).json({
@@ -462,6 +484,18 @@ async function processMockPayment(payment, course) {
     progressPercent: 0,
     enrolledAt: new Date()
   });
+
+  try {
+    await notificationController.createPaymentNotification(payment.userId, payment.courseId, payment.amount);
+  } catch (notifyErr) {
+    console.error('Create payment notification (silent) error:', notifyErr);
+  }
+
+  try {
+    await notificationController.createEnrollmentNotification(payment.userId, payment.courseId);
+  } catch (notifyErr) {
+    console.error('Create enrollment notification (silent) error:', notifyErr);
+  }
 
   return {
     success: true,

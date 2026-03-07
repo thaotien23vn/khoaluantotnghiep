@@ -1,5 +1,6 @@
 const db = require('../models');
 const { Enrollment, Course, User, Payment } = db.models;
+ const notificationController = require('./notification.controller');
 
 /**
  * POST /api/student/courses/:courseId/enroll
@@ -82,6 +83,12 @@ exports.enroll = async (req, res) => {
     const enrollmentWithCourse = await Enrollment.findByPk(enrollment.id, {
       include: [{ model: Course, as: 'Course', attributes: ['id', 'title', 'slug', 'price'] }],
     });
+
+     try {
+       await notificationController.createEnrollmentNotification(userId, course.id);
+     } catch (notifyErr) {
+       console.error('Create enrollment notification (silent) error:', notifyErr);
+     }
 
     res.status(201).json({
       success: true,

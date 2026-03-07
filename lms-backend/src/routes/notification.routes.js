@@ -36,6 +36,19 @@ router.get(
   notificationController.getUserNotifications
 );
 
+router.get(
+  '/student/notifications',
+  authMiddleware,
+  authorizeRole('student', 'admin'),
+  [
+    query('page').optional().isInt({ min: 1 }).withMessage('Trang phải là số nguyên dương'),
+    query('limit').optional().isInt({ min: 1, max: 100 }).withMessage('Giới hạn phải là số nguyên từ 1-100'),
+    query('type').optional().isIn(['enrollment', 'quiz', 'review', 'payment', 'course_update', 'certificate', 'announcement']).withMessage('Loại thông báo không hợp lệ'),
+    query('read').optional().isBoolean().withMessage('Read phải là boolean')
+  ],
+  notificationController.getUserNotifications
+);
+
 /**
  * @route   GET /api/student/notifications/unread-count
  * @desc    Get unread notifications count
@@ -43,6 +56,13 @@ router.get(
  */
 router.get(
   '/notifications/unread-count',
+  authMiddleware,
+  authorizeRole('student', 'admin'),
+  notificationController.getUnreadCount
+);
+
+router.get(
+  '/student/notifications/unread-count',
   authMiddleware,
   authorizeRole('student', 'admin'),
   notificationController.getUnreadCount
@@ -60,6 +80,13 @@ router.put(
   notificationController.markAsRead
 );
 
+router.put(
+  '/student/notifications/:notificationId/read',
+  authMiddleware,
+  authorizeRole('student', 'admin'),
+  notificationController.markAsRead
+);
+
 /**
  * @route   PUT /api/student/notifications/read-all
  * @desc    Mark all notifications as read
@@ -72,6 +99,13 @@ router.put(
   notificationController.markAllAsRead
 );
 
+router.put(
+  '/student/notifications/read-all',
+  authMiddleware,
+  authorizeRole('student', 'admin'),
+  notificationController.markAllAsRead
+);
+
 /**
  * @route   DELETE /api/student/notifications/:notificationId
  * @desc    Delete notification
@@ -79,6 +113,13 @@ router.put(
  */
 router.delete(
   '/notifications/:notificationId',
+  authMiddleware,
+  authorizeRole('student', 'admin'),
+  notificationController.deleteNotification
+);
+
+router.delete(
+  '/student/notifications/:notificationId',
   authMiddleware,
   authorizeRole('student', 'admin'),
   notificationController.deleteNotification
@@ -140,6 +181,14 @@ router.post(
   notificationController.sendNotification
 );
 
+router.post(
+  '/admin/notifications/send',
+  authMiddleware,
+  authorizeRole('admin'),
+  sendNotificationValidation,
+  notificationController.sendNotification
+);
+
 /**
  * @route   GET /api/admin/notifications
  * @desc    Get all notifications (Admin)
@@ -147,6 +196,20 @@ router.post(
  */
 router.get(
   '/notifications',
+  authMiddleware,
+  authorizeRole('admin'),
+  [
+    query('page').optional().isInt({ min: 1 }).withMessage('Trang phải là số nguyên dương'),
+    query('limit').optional().isInt({ min: 1, max: 100 }).withMessage('Giới hạn phải là số nguyên từ 1-100'),
+    query('userId').optional().isInt().withMessage('ID người dùng phải là số nguyên'),
+    query('type').optional().isIn(['enrollment', 'quiz', 'review', 'payment', 'course_update', 'certificate', 'announcement']).withMessage('Loại thông báo không hợp lệ'),
+    query('read').optional().isBoolean().withMessage('Read phải là boolean')
+  ],
+  notificationController.getAllNotifications
+);
+
+router.get(
+  '/admin/notifications',
   authMiddleware,
   authorizeRole('admin'),
   [

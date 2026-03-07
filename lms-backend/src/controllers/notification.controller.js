@@ -24,7 +24,7 @@ exports.getUserNotifications = async (req, res) => {
 
     const { count, rows: notifications } = await Notification.findAndCountAll({
       where: whereClause,
-      order: [['createdAt', 'DESC']],
+      order: [['created_at', 'DESC'], ['id', 'DESC']],
       limit: parseInt(limit),
       offset: parseInt(offset)
     });

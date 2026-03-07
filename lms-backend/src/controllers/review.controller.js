@@ -2,6 +2,7 @@ const db = require('../models');
 const { Review, Course, User, Enrollment } = db.models;
 const { validationResult } = require('express-validator');
 const { Op } = require('sequelize');
+ const notificationController = require('./notification.controller');
 
 /**
  * @desc    Create a review for a course
@@ -87,6 +88,22 @@ exports.createReview = async (req, res) => {
         }
       ]
     });
+
+     try {
+       const teacherId = course.createdBy;
+       const reviewerName = createdReview?.user?.name || req.user?.name || 'Học viên';
+       if (teacherId) {
+         await notificationController.createReviewNotification(
+           teacherId,
+           course.id,
+           review.id,
+           rating,
+           reviewerName,
+         );
+       }
+     } catch (notifyErr) {
+       console.error('Create review notification (silent) error:', notifyErr);
+     }
 
     res.status(201).json({
       success: true,
