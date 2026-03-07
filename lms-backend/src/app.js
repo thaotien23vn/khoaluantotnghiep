@@ -11,6 +11,7 @@ const notificationRoutes = require('./routes/notification.routes');
 const protectedRoutes = require('./routes/protected.routes');
 const validateInput = require('./middlewares/validateInput');
 const { apiLimiter } = require('./middlewares/rateLimiter');
+const { randomUUID } = require('crypto');
 
 const app = express();
 
@@ -34,6 +35,41 @@ app.use(cors({
 // Body parsing middleware
 app.use(express.json({ limit: process.env.JSON_BODY_LIMIT || '1mb' }));
 app.use(express.urlencoded({ extended: true, limit: process.env.URLENCODED_BODY_LIMIT || '1mb' }));
+
+// Request correlation ID
+app.use((req, res, next) => {
+  const headerId = req.headers['x-correlation-id'] || req.headers['x-request-id'];
+  const correlationId = (typeof headerId === 'string' && headerId.trim()) ? headerId.trim() : randomUUID();
+  req.correlationId = correlationId;
+  res.setHeader('x-correlation-id', correlationId);
+  next();
+});
+
+// Minimal structured request logging
+app.use((req, res, next) => {
+  const start = Date.now();
+  res.on('finish', () => {
+    const durationMs = Date.now() - start;
+    const isProd = String(process.env.NODE_ENV || '').toLowerCase() === 'production';
+    const level = res.statusCode >= 500 ? 'error' : res.statusCode >= 400 ? 'warn' : 'info';
+    const log = {
+      level,
+      msg: 'http_request',
+      correlationId: req.correlationId,
+      method: req.method,
+      path: req.originalUrl,
+      status: res.statusCode,
+      durationMs,
+      ip: req.ip,
+      userId: req.user?.id,
+      role: req.user?.role,
+    };
+    if (!isProd || level !== 'info') {
+      console.log(JSON.stringify(log));
+    }
+  });
+  next();
+});
 
 // Input validation and sanitization
 app.use(validateInput);
@@ -94,10 +130,29 @@ app.use((err, req, res, next) => {
     });
   }
 
-  console.error(err.stack);
-  return res.status(500).json({
+  const statusCode = err && Number.isInteger(err.statusCode) ? err.statusCode : 500;
+
+  const log = {
+    level: 'error',
+    msg: 'unhandled_error',
+    correlationId: req.correlationId,
+    method: req.method,
+    path: req.originalUrl,
+    status: statusCode,
+    error: {
+      name: err?.name,
+      message: err?.message,
+    },
+  };
+  if (!isProd && err?.stack) {
+    log.error.stack = err.stack;
+  }
+  console.error(JSON.stringify(log));
+
+  return res.status(statusCode).json({
     success: false,
-    message: 'Lỗi máy chủ',
+    message: statusCode === 500 ? 'Lỗi máy chủ' : (err.message || 'Lỗi'),
+    correlationId: req.correlationId,
     ...(isProd ? {} : { error: err.message }),
   });
 });
