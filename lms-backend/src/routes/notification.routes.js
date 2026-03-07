@@ -84,6 +84,47 @@ router.delete(
   notificationController.deleteNotification
 );
 
+ router.get(
+   '/teacher/notifications',
+   authMiddleware,
+   authorizeRole('teacher', 'admin'),
+   [
+     query('page').optional().isInt({ min: 1 }).withMessage('Trang phải là số nguyên dương'),
+     query('limit').optional().isInt({ min: 1, max: 100 }).withMessage('Giới hạn phải là số nguyên từ 1-100'),
+     query('type').optional().isIn(['enrollment', 'quiz', 'review', 'payment', 'course_update', 'certificate', 'announcement']).withMessage('Loại thông báo không hợp lệ'),
+     query('read').optional().isBoolean().withMessage('Read phải là boolean')
+   ],
+   notificationController.getUserNotifications
+ );
+
+ router.get(
+   '/teacher/notifications/unread-count',
+   authMiddleware,
+   authorizeRole('teacher', 'admin'),
+   notificationController.getUnreadCount
+ );
+
+ router.put(
+   '/teacher/notifications/:notificationId/read',
+   authMiddleware,
+   authorizeRole('teacher', 'admin'),
+   notificationController.markAsRead
+ );
+
+ router.put(
+   '/teacher/notifications/read-all',
+   authMiddleware,
+   authorizeRole('teacher', 'admin'),
+   notificationController.markAllAsRead
+ );
+
+ router.delete(
+   '/teacher/notifications/:notificationId',
+   authMiddleware,
+   authorizeRole('teacher', 'admin'),
+   notificationController.deleteNotification
+ );
+
 // ========== ADMIN ROUTES ==========
 
 /**
