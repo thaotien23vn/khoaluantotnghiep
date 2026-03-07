@@ -372,6 +372,7 @@ router.post(
   authMiddleware,
   authorizeRole('teacher', 'admin'),
   uploadMedia.single('file'),
+  uploadMedia.handleUploadError,
   courseController.createLecture
 );
 
@@ -385,6 +386,7 @@ router.put(
   authMiddleware,
   authorizeRole('teacher', 'admin'),
   uploadMedia.single('file'),
+  uploadMedia.handleUploadError,
   courseController.updateLecture
 );
 

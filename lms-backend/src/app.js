@@ -14,19 +14,26 @@ const { apiLimiter } = require('./middlewares/rateLimiter');
 
 const app = express();
 
+app.disable('x-powered-by');
+
 // Security middleware
 app.use(helmet()); // Add security headers
 const allowedOrigins = (process.env.ALLOWED_ORIGINS || 'http://localhost:3000,http://localhost:5173')
   .split(',')
   .map((o) => o.trim());
 app.use(cors({
-  origin: allowedOrigins,
-  credentials: true
+  origin: (origin, callback) => {
+    // Allow non-browser clients (Postman, curl) with no Origin header
+    if (!origin) return callback(null, true);
+    if (allowedOrigins.includes(origin)) return callback(null, true);
+    return callback(new Error('Not allowed by CORS'));
+  },
+  credentials: true,
 }));
 
 // Body parsing middleware
-app.use(express.json());
-app.use(express.urlencoded({ extended: true }));
+app.use(express.json({ limit: process.env.JSON_BODY_LIMIT || '1mb' }));
+app.use(express.urlencoded({ extended: true, limit: process.env.URLENCODED_BODY_LIMIT || '1mb' }));
 
 // Input validation and sanitization
 app.use(validateInput);
@@ -77,11 +84,21 @@ app.use((req, res) => {
 
 // Error handler
 app.use((err, req, res, next) => {
+  const isProd = String(process.env.NODE_ENV || '').toLowerCase() === 'production';
+
+  // Normalize CORS rejection
+  if (err && err.message === 'Not allowed by CORS') {
+    return res.status(403).json({
+      success: false,
+      message: 'Not allowed by CORS',
+    });
+  }
+
   console.error(err.stack);
-  res.status(500).json({
+  return res.status(500).json({
     success: false,
     message: 'Lỗi máy chủ',
-    error: err.message,
+    ...(isProd ? {} : { error: err.message }),
   });
 });
 

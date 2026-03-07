@@ -30,6 +30,7 @@ router.post(
   authMiddleware,
   authorizeRole('teacher', 'admin'),
   uploadMedia.single('file'),
+  uploadMedia.handleUploadError,
   quizController.uploadQuizMedia
 );
 
