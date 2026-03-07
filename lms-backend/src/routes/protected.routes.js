@@ -10,6 +10,7 @@ const uploadMedia = require('../middlewares/uploadMedia');
 const courseController = require('../controllers/course.controller');
 const enrollmentController = require('../controllers/enrollment.controller');
 const adminController = require('../controllers/admin.controller');
+const scheduleController = require('../controllers/schedule.controller');
 
 const router = express.Router();
 
@@ -278,6 +279,30 @@ router.get(
 );
 
 /**
+ * @route   GET /api/teacher/courses/:courseId/schedule-events
+ * @desc    List schedule events for a course
+ * @access  Private (Teacher & Admin)
+ */
+router.get(
+  '/courses/:courseId/schedule-events',
+  authMiddleware,
+  authorizeRole('teacher', 'admin'),
+  scheduleController.listCourseScheduleEvents
+);
+
+/**
+ * @route   POST /api/teacher/courses/:courseId/schedule-events
+ * @desc    Create schedule event for a course
+ * @access  Private (Teacher & Admin)
+ */
+router.post(
+  '/courses/:courseId/schedule-events',
+  authMiddleware,
+  authorizeRole('teacher', 'admin'),
+  scheduleController.createCourseScheduleEvent
+);
+
+/**
  * @route   POST /api/teacher/courses/:courseId/chapters
  * @desc    Create a chapter in a course
  * @access  Private (Teacher & Admin)
@@ -411,6 +436,18 @@ router.get(
   authMiddleware,
   authorizeRole('student'),
   enrollmentController.getMyEnrollments
+);
+
+/**
+ * @route   GET /api/student/schedule
+ * @desc    Get student's learning schedule
+ * @access  Private (Student)
+ */
+router.get(
+  '/schedule',
+  authMiddleware,
+  authorizeRole('student'),
+  scheduleController.getMySchedule
 );
 
 /**

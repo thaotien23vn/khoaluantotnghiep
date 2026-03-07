@@ -468,7 +468,8 @@ exports.forgotPassword = async (req, res) => {
     });
 
     // Gửi email reset password
-    const resetLink = `http://localhost:5000/api/auth/reset-password/${resetPasswordToken}`;
+    const feBaseUrl = process.env.FRONTEND_URL || 'http://localhost:5173';
+    const resetLink = `${String(feBaseUrl).replace(/\/+$/, '')}/reset-password?token=${encodeURIComponent(resetPasswordToken)}`;
     try {
       await emailService.sendResetPasswordEmail(email, user.name, resetPasswordToken, resetLink);
     } catch (emailError) {

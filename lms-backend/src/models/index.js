@@ -26,6 +26,7 @@ const models = {};
   'attempt',
   'review',
   'notification',
+  'scheduleEvent',
 ].forEach((name) => {
   models[name.charAt(0).toUpperCase() + name.slice(1)] = require(`./${name}.model`)(sequelize);
 });
@@ -44,6 +45,7 @@ const {
   Attempt,
   Review,
   Notification,
+  ScheduleEvent,
 } = models;
 
 User.hasMany(Course, { foreignKey: 'createdBy', as: 'createdCourses' });
@@ -61,6 +63,9 @@ User.hasMany(Enrollment, { foreignKey: 'userId' });
 Enrollment.belongsTo(User, { foreignKey: 'userId' });
 Course.hasMany(Enrollment, { foreignKey: 'courseId' });
 Enrollment.belongsTo(Course, { foreignKey: 'courseId' });
+
+Course.hasMany(ScheduleEvent, { foreignKey: 'courseId', as: 'scheduleEvents' });
+ScheduleEvent.belongsTo(Course, { foreignKey: 'courseId', as: 'course' });
 
 Enrollment.hasOne(Payment, { foreignKey: 'enrollmentId' });
 Payment.belongsTo(Enrollment, { foreignKey: 'enrollmentId' });
