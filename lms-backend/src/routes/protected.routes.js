@@ -303,6 +303,30 @@ router.post(
 );
 
 /**
+ * @route   PUT /api/teacher/schedule-events/:eventId
+ * @desc    Update schedule event
+ * @access  Private (Teacher & Admin)
+ */
+router.put(
+  '/schedule-events/:eventId',
+  authMiddleware,
+  authorizeRole('teacher', 'admin'),
+  scheduleController.updateScheduleEvent
+);
+
+/**
+ * @route   DELETE /api/teacher/schedule-events/:eventId
+ * @desc    Delete schedule event
+ * @access  Private (Teacher & Admin)
+ */
+router.delete(
+  '/schedule-events/:eventId',
+  authMiddleware,
+  authorizeRole('teacher', 'admin'),
+  scheduleController.deleteScheduleEvent
+);
+
+/**
  * @route   POST /api/teacher/courses/:courseId/chapters
  * @desc    Create a chapter in a course
  * @access  Private (Teacher & Admin)
@@ -448,6 +472,18 @@ router.get(
   authMiddleware,
   authorizeRole('student'),
   scheduleController.getMySchedule
+);
+
+/**
+ * @route   GET /api/student/schedule/next
+ * @desc    Get student's next upcoming schedule event
+ * @access  Private (Student)
+ */
+router.get(
+  '/schedule/next',
+  authMiddleware,
+  authorizeRole('student'),
+  scheduleController.getNextScheduleEvent
 );
 
 /**
