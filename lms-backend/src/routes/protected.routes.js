@@ -11,6 +11,7 @@ const courseController = require('../controllers/course.controller');
 const enrollmentController = require('../controllers/enrollment.controller');
 const adminController = require('../controllers/admin.controller');
 const scheduleController = require('../controllers/schedule.controller');
+const { body } = require('express-validator');
 
 const router = express.Router();
 
@@ -252,6 +253,19 @@ router.put(
   authMiddleware,
   authorizeRole('teacher', 'admin'),
   courseController.updateCourse
+);
+
+/**
+ * @route   PUT /api/teacher/courses/:id/publish
+ * @desc    Publish or unpublish a course
+ * @access  Private (Teacher & Admin)
+ */
+router.put(
+  '/courses/:id/publish',
+  authMiddleware,
+  authorizeRole('teacher', 'admin'),
+  [body('published').isBoolean().withMessage('published phải là boolean')],
+  courseController.setCoursePublished
 );
 
 /**

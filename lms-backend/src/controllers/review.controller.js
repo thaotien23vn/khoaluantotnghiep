@@ -2,8 +2,8 @@ const db = require('../models');
 const { Review, Course, User, Enrollment } = db.models;
 const { validationResult } = require('express-validator');
 const { Op } = require('sequelize');
- const notificationController = require('./notification.controller');
- const courseAggregatesService = require('../services/courseAggregates.service');
+const notificationController = require('./notification.controller');
+const courseAggregatesService = require('../services/courseAggregates.service');
 
 /**
  * @desc    Create a review for a course
@@ -92,6 +92,11 @@ exports.createReview = async (req, res) => {
           model: User,
           as: 'user',
           attributes: ['id', 'name', 'avatar']
+        },
+        {
+          model: Course,
+          as: 'course',
+          attributes: ['id', 'title', 'slug']
         }
       ]
     });
@@ -180,6 +185,11 @@ exports.updateReview = async (req, res) => {
           model: User,
           as: 'user',
           attributes: ['id', 'name', 'avatar']
+        },
+        {
+          model: Course,
+          as: 'course',
+          attributes: ['id', 'title', 'slug']
         }
       ]
     });
@@ -298,6 +308,11 @@ exports.getCourseReviews = async (req, res) => {
           model: User,
           as: 'user',
           attributes: ['id', 'name', 'avatar']
+        },
+        {
+          model: Course,
+          as: 'course',
+          attributes: ['id', 'title', 'slug']
         }
       ],
       order: orderClause,
@@ -481,7 +496,7 @@ exports.getAllReviews = async (req, res) => {
         {
           model: User,
           as: 'user',
-          attributes: ['id', 'name', 'email']
+          attributes: ['id', 'name', 'avatar', 'email']
         },
         {
           model: Course,

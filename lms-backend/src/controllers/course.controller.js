@@ -39,19 +39,115 @@ const generateUniqueSlug = async (title) => {
   }
 };
 
+// ============= TEACHER/ADMIN: PUBLISH / UNPUBLISH COURSE =============
+exports.setCoursePublished = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const userId = req.user.id;
+    const role = req.user.role;
+    const { published } = req.body;
+
+    if (typeof published !== 'boolean') {
+      return res.status(400).json({
+        success: false,
+        message: 'Trường published phải là boolean',
+      });
+    }
+
+    const course = await Course.findByPk(id);
+    if (!course) {
+      return res.status(404).json({
+        success: false,
+        message: 'Không tìm thấy khóa học',
+      });
+    }
+
+    if (role === 'teacher' && Number(course.createdBy) !== Number(userId)) {
+      return res.status(403).json({
+        success: false,
+        message: 'Bạn không có quyền thay đổi trạng thái khóa học này',
+      });
+    }
+
+    await course.update({
+      published,
+      lastUpdated: new Date(),
+    });
+
+    return res.json({
+      success: true,
+      message: published ? 'Đã publish khóa học' : 'Đã chuyển khóa học về draft',
+      data: { course },
+    });
+  } catch (error) {
+    console.error('Lỗi cập nhật trạng thái publish/draft:', error);
+    return res.status(500).json({
+      success: false,
+      message: 'Lỗi máy chủ',
+      error: error.message,
+    });
+  }
+};
+
 // ============= PUBLIC: LIST PUBLISHED COURSES =============
 exports.getPublishedCourses = async (req, res) => {
   try {
-    const { q } = req.query;
+    const {
+      q,
+      categoryId,
+      level,
+      minPrice,
+      maxPrice,
+      sort = 'newest',
+      page = 1,
+      limit = 20,
+    } = req.query;
+
+    const pageNum = Math.max(parseInt(page, 10) || 1, 1);
+    const limitNum = Math.min(Math.max(parseInt(limit, 10) || 20, 1), 100);
+    const offset = (pageNum - 1) * limitNum;
 
     const where = { published: true };
     if (q) {
       where.title = { [Op.like]: `%${q}%` };
     }
+    if (categoryId) {
+      where.categoryId = Number(categoryId);
+    }
+    if (level) {
+      where.level = level;
+    }
+    if (minPrice != null || maxPrice != null) {
+      where.price = {};
+      if (minPrice != null && minPrice !== '') {
+        where.price[Op.gte] = Number(minPrice);
+      }
+      if (maxPrice != null && maxPrice !== '') {
+        where.price[Op.lte] = Number(maxPrice);
+      }
+    }
 
-    const courses = await Course.findAll({
+    const order = (() => {
+      switch (sort) {
+        case 'oldest':
+          return [['createdAt', 'ASC'], ['id', 'ASC']];
+        case 'price_asc':
+          return [['price', 'ASC'], ['id', 'ASC']];
+        case 'price_desc':
+          return [['price', 'DESC'], ['id', 'DESC']];
+        case 'rating_desc':
+          return [['rating', 'DESC'], ['id', 'DESC']];
+        case 'students_desc':
+          return [['students', 'DESC'], ['id', 'DESC']];
+        case 'newest':
+        default:
+          return [['createdAt', 'DESC'], ['id', 'DESC']];
+      }
+    })();
+
+    const { rows: courses, count: total } = await Course.findAndCountAll({
       where,
-      order: [['createdAt', 'DESC']],
+      order,
       include: [
         {
           model: User,
@@ -63,6 +159,8 @@ exports.getPublishedCourses = async (req, res) => {
           attributes: ['id', 'name'],
         },
       ],
+      limit: limitNum,
+      offset,
     });
 
     // Format data để khớp với frontend
@@ -92,6 +190,12 @@ exports.getPublishedCourses = async (req, res) => {
       success: true,
       data: {
         courses: formattedCourses,
+        pagination: {
+          total,
+          page: pageNum,
+          limit: limitNum,
+          totalPages: Math.ceil(total / limitNum),
+        },
       },
     });
   } catch (error) {
@@ -258,35 +362,63 @@ exports.getMyCourses = async (req, res) => {
     const userId = req.user.id;
     const role = req.user.role;
 
-    // Debug logs to track the actual user ID and role
-    console.log('DEBUG getMyCourses - User ID:', userId);
-    console.log('DEBUG getMyCourses - User Role:', role);
-    console.log('DEBUG getMyCourses - Full User Object:', JSON.stringify(req.user, null, 2));
+    const {
+      q,
+      status = 'all',
+      sort = 'newest',
+      page = 1,
+      limit = 50,
+    } = req.query;
+
+    const pageNum = Math.max(parseInt(page, 10) || 1, 1);
+    const limitNum = Math.min(Math.max(parseInt(limit, 10) || 50, 1), 100);
+    const offset = (pageNum - 1) * limitNum;
 
     const where = {};
     if (role === 'teacher') {
       where.createdBy = userId;
-      console.log('DEBUG getMyCourses - Filtering courses for teacher ID:', userId);
-    } else if (role === 'admin') {
-      console.log('DEBUG getMyCourses - Admin user, fetching all courses');
     }
 
-    const courses = await Course.findAll({
+    if (q) {
+      where.title = { [Op.like]: `%${q}%` };
+    }
+
+    if (status === 'published') {
+      where.published = true;
+    }
+    if (status === 'draft') {
+      where.published = false;
+    }
+
+    const order = (() => {
+      switch (sort) {
+        case 'oldest':
+          return [['createdAt', 'ASC'], ['id', 'ASC']];
+        case 'updated_desc':
+          return [['updatedAt', 'DESC'], ['id', 'DESC']];
+        case 'newest':
+        default:
+          return [['createdAt', 'DESC'], ['id', 'DESC']];
+      }
+    })();
+
+    const { rows: courses, count: total } = await Course.findAndCountAll({
       where,
-      order: [['createdAt', 'DESC']],
+      order,
+      limit: limitNum,
+      offset,
     });
-
-    console.log('DEBUG getMyCourses - Found courses count:', courses.length);
-    if (courses.length > 0) {
-      console.log('DEBUG getMyCourses - Course IDs and creators:', 
-        courses.map(c => ({ id: c.id, createdBy: c.createdBy, title: c.title }))
-      );
-    }
 
     res.json({
       success: true,
       data: {
         courses,
+        pagination: {
+          total,
+          page: pageNum,
+          limit: limitNum,
+          totalPages: Math.ceil(total / limitNum),
+        },
       },
     });
   } catch (error) {
@@ -331,7 +463,7 @@ exports.createCourse = async (req, res) => {
       description: description || '',
       imageUrl: imageUrl || null,
       price: price != null ? price : 0,
-      published: !!published,
+      published: req.user.role === 'admin' ? !!published : false,
       categoryId: categoryId || null,
       createdBy: req.user.id,
       // Thêm các field mới

@@ -637,7 +637,7 @@ exports.getReviews = async (req, res) => {
 
     const where = {};
     if (courseId) {
-      where.courseId = courseId;
+      where.courseId = Number(courseId);
     }
 
     const reviews = await Review.findAll({
@@ -646,12 +646,12 @@ exports.getReviews = async (req, res) => {
         {
           model: User,
           as: 'user',
-          attributes: ['id', 'username', 'email'],
+          attributes: ['id', 'name', 'avatar', 'username', 'email'],
         },
         {
           model: Course,
           as: 'course',
-          attributes: ['id', 'title'],
+          attributes: ['id', 'title', 'slug'],
         },
       ],
       order: [[db.sequelize.col('Review.created_at'), 'DESC']],

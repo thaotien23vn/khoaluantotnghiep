@@ -176,6 +176,8 @@ Note: The following short paths also exist because `review.routes.js` is mounted
 - **POST** `/api/teacher/courses`
 - **GET** `/api/teacher/courses/:id`
 - **PUT** `/api/teacher/courses/:id`
+- **PUT** `/api/teacher/courses/:id/publish`  
+  Body: `{ "published": boolean }`
 - **DELETE** `/api/teacher/courses/:id`
 
 Course content
