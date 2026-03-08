@@ -53,19 +53,21 @@ async function recomputeCourseStudents(courseId, options = {}) {
 async function recomputeCourseTotalLessons(courseId, options = {}) {
   const courseIdNum = Number(courseId);
 
-  const totalLessons = await Lecture.count({
-    include: [
-      {
-        model: Chapter,
-        required: true,
-        where: { courseId: courseIdNum },
-        attributes: [],
-      },
-    ],
-    distinct: true,
-    col: 'Lecture.id',
+  const chapters = await Chapter.findAll({
+    where: { courseId: courseIdNum },
+    attributes: ['id'],
+    raw: true,
     transaction: options.transaction,
   });
+
+  const chapterIds = (chapters || []).map((c) => Number(c.id)).filter((id) => Number.isFinite(id));
+
+  const totalLessons = chapterIds.length
+    ? await Lecture.count({
+        where: { chapterId: chapterIds },
+        transaction: options.transaction,
+      })
+    : 0;
 
   await Course.update(
     { totalLessons: Number(totalLessons) || 0 },

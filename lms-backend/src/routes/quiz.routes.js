@@ -26,7 +26,7 @@ const quizValidation = [
  * @access  Private (Teacher & Admin)
  */
 router.post(
-  '/media/quiz',
+  '/teacher/media/quiz',
   authMiddleware,
   authorizeRole('teacher', 'admin'),
   uploadMedia.single('file'),
@@ -40,7 +40,7 @@ router.post(
  * @access  Private (Teacher & Admin)
  */
 router.post(
-  '/courses/:courseId/quizzes',
+  '/teacher/courses/:courseId/quizzes',
   authMiddleware,
   authorizeRole('teacher', 'admin'),
   quizValidation,
@@ -53,7 +53,7 @@ router.post(
  * @access  Private (Teacher & Admin)
  */
 router.get(
-  '/courses/:courseId/quizzes',
+  '/teacher/courses/:courseId/quizzes',
   authMiddleware,
   authorizeRole('teacher', 'admin'),
   quizController.getCourseQuizzes
@@ -65,7 +65,7 @@ router.get(
  * @access  Private (Teacher & Admin)
  */
 router.get(
-  '/quizzes/:quizId',
+  '/teacher/quizzes/:quizId',
   authMiddleware,
   authorizeRole('teacher', 'admin'),
   quizController.getQuiz
@@ -77,7 +77,7 @@ router.get(
  * @access  Private (Teacher & Admin)
  */
 router.put(
-  '/quizzes/:quizId',
+  '/teacher/quizzes/:quizId',
   authMiddleware,
   authorizeRole('teacher', 'admin'),
   quizValidation,
@@ -90,7 +90,7 @@ router.put(
  * @access  Private (Teacher & Admin)
  */
 router.delete(
-  '/quizzes/:quizId',
+  '/teacher/quizzes/:quizId',
   authMiddleware,
   authorizeRole('teacher', 'admin'),
   quizController.deleteQuiz
@@ -104,7 +104,7 @@ router.delete(
  * @access  Private (Teacher & Admin)
  */
 router.post(
-  '/quizzes/:quizId/questions',
+  '/teacher/quizzes/:quizId/questions',
   authMiddleware,
   authorizeRole('teacher', 'admin'),
   // Use combined validation for all question types
@@ -125,7 +125,7 @@ router.post(
  * @access  Private (Teacher & Admin)
  */
 router.put(
-  '/questions/:questionId',
+  '/teacher/questions/:questionId',
   authMiddleware,
   authorizeRole('teacher', 'admin'),
   // Use combined validation for all question types
@@ -146,7 +146,7 @@ router.put(
  * @access  Private (Teacher & Admin)
  */
 router.delete(
-  '/questions/:questionId',
+  '/teacher/questions/:questionId',
   authMiddleware,
   authorizeRole('teacher', 'admin'),
   quizController.deleteQuestion
@@ -158,7 +158,7 @@ router.delete(
  * @access  Private (Teacher & Admin)
  */
 router.get(
-  '/quizzes/:quizId/attempts',
+  '/teacher/quizzes/:quizId/attempts',
   authMiddleware,
   authorizeRole('teacher', 'admin'),
   attemptController.getQuizAttemptsForTeacher
@@ -172,7 +172,7 @@ router.get(
  * @access  Private (Student & Admin)
  */
 router.post(
-  '/quizzes/:quizId/start',
+  '/student/quizzes/:quizId/start',
   authMiddleware,
   authorizeRole('student', 'admin'),
   attemptController.startAttempt
@@ -184,7 +184,7 @@ router.post(
  * @access  Private (Student & Admin)
  */
 router.post(
-  '/attempts/:attemptId/submit',
+  '/student/attempts/:attemptId/submit',
   authMiddleware,
   authorizeRole('student', 'admin'),
   body('answers').isObject().withMessage('Đáp án phải là object'),
@@ -197,7 +197,7 @@ router.post(
  * @access  Private (Student & Admin)
  */
 router.get(
-  '/quizzes/:quizId/attempts',
+  '/student/quizzes/:quizId/attempts',
   authMiddleware,
   authorizeRole('student', 'admin'),
   attemptController.getQuizAttempts
@@ -209,7 +209,7 @@ router.get(
  * @access  Private (Student & Admin)
  */
 router.get(
-  '/attempts/:attemptId',
+  '/student/attempts/:attemptId',
   authMiddleware,
   authorizeRole('student', 'admin'),
   attemptController.getAttempt

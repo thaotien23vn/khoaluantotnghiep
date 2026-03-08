@@ -38,14 +38,6 @@ router.get(
  * @access  Private (Student & Admin)
  */
 router.post(
-  '/courses/:courseId/reviews',
-  authMiddleware,
-  authorizeRole('student', 'admin'),
-  reviewValidation,
-  reviewController.createReview
-);
-
-router.post(
   '/student/courses/:courseId/reviews',
   authMiddleware,
   authorizeRole('student', 'admin'),
@@ -58,14 +50,6 @@ router.post(
  * @desc    Update a review
  * @access  Private (Student & Admin)
  */
-router.put(
-  '/reviews/:reviewId',
-  authMiddleware,
-  authorizeRole('student', 'admin'),
-  reviewValidation,
-  reviewController.updateReview
-);
-
 router.put(
   '/student/reviews/:reviewId',
   authMiddleware,
@@ -80,13 +64,6 @@ router.put(
  * @access  Private (Student & Admin)
  */
 router.delete(
-  '/reviews/:reviewId',
-  authMiddleware,
-  authorizeRole('student', 'admin'),
-  reviewController.deleteReview
-);
-
-router.delete(
   '/student/reviews/:reviewId',
   authMiddleware,
   authorizeRole('student', 'admin'),
@@ -98,17 +75,6 @@ router.delete(
  * @desc    Get user's reviews
  * @access  Private (Student & Admin)
  */
-router.get(
-  '/reviews',
-  authMiddleware,
-  authorizeRole('student', 'admin'),
-  [
-    query('page').optional().isInt({ min: 1 }).withMessage('Trang phải là số nguyên dương'),
-    query('limit').optional().isInt({ min: 1, max: 100 }).withMessage('Giới hạn phải là số nguyên từ 1-100')
-  ],
-  reviewController.getUserReviews
-);
-
 router.get(
   '/student/reviews',
   authMiddleware,
@@ -126,13 +92,6 @@ router.get(
  * @access  Private (Student & Admin)
  */
 router.get(
-  '/reviews/:reviewId',
-  authMiddleware,
-  authorizeRole('student', 'admin'),
-  reviewController.getReview
-);
-
-router.get(
   '/student/reviews/:reviewId',
   authMiddleware,
   authorizeRole('student', 'admin'),
@@ -146,20 +105,6 @@ router.get(
  * @desc    Get all reviews (admin)
  * @access  Private (Admin)
  */
-router.get(
-  '/reviews',
-  authMiddleware,
-  authorizeRole('admin'),
-  [
-    query('page').optional().isInt({ min: 1 }).withMessage('Trang phải là số nguyên dương'),
-    query('limit').optional().isInt({ min: 1, max: 100 }).withMessage('Giới hạn phải là số nguyên từ 1-100'),
-    query('courseId').optional().isInt().withMessage('ID khóa học phải là số nguyên'),
-    query('userId').optional().isInt().withMessage('ID người dùng phải là số nguyên'),
-    query('rating').optional().isInt({ min: 1, max: 5 }).withMessage('Đánh giá phải từ 1-5')
-  ],
-  reviewController.getAllReviews
-);
-
 router.get(
   '/admin/reviews',
   authMiddleware,

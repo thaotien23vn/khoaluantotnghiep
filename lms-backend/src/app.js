@@ -99,8 +99,7 @@ app.use('/api', reviewRoutes);
 app.use('/api', notificationRoutes);
 
 // Quiz routes (mixed public and protected)
-app.use('/api/teacher', quizRoutes);
-app.use('/api/student', quizRoutes);
+app.use('/api', quizRoutes);
 
 // Payment routes
 app.use('/api/student/payments', paymentRoutes);
