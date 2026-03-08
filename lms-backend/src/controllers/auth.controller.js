@@ -155,6 +155,19 @@ exports.uploadAvatar = async (req, res) => {
     });
   } catch (error) {
     console.error('Lỗi upload avatar:', error);
+
+    if (
+      error &&
+      (error.http_code === 400 || error.http_code === '400') &&
+      String(error.message || '').toLowerCase().includes('invalid image file')
+    ) {
+      return res.status(400).json({
+        success: false,
+        message: 'File ảnh không hợp lệ',
+        error: error.message,
+      });
+    }
+
     return res.status(500).json({
       success: false,
       message: 'Lỗi máy chủ',

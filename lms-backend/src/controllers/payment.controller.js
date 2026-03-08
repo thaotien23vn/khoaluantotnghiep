@@ -334,7 +334,7 @@ exports.getPaymentHistory = async (req, res) => {
           attributes: ['id', 'title', 'price']
         }
       ],
-      order: [['createdAt', 'DESC']],
+      order: [[db.sequelize.col('Payment.created_at'), 'DESC']],
       limit: parseInt(limit),
       offset: parseInt(offset)
     });

@@ -8,7 +8,8 @@
     "start": "node src/server.js",
     "db:sync": "node src/models/sync.js",
     "security-test": "bash test-security.sh",
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "test": "jest --runInBand",
+    "test:watch": "jest --watch --runInBand"
   },
   "keywords": [],
   "author": "",
@@ -32,6 +33,8 @@
     "uuid": "^13.0.0"
   },
   "devDependencies": {
-    "nodemon": "^3.1.14"
+    "jest": "^30.1.3",
+    "nodemon": "^3.1.14",
+    "supertest": "^7.1.1"
   }
 }
