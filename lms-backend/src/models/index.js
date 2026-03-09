@@ -19,6 +19,14 @@ const models = {};
   'category',
   'chapter',
   'lecture',
+  'aiSetting',
+  'aiRolePolicy',
+  'aiPromptTemplate',
+  'aiDocument',
+  'aiChunk',
+  'aiConversation',
+  'aiMessage',
+  'aiAuditLog',
   'enrollment',
   'payment',
   'quiz',
@@ -38,6 +46,14 @@ const {
   Category,
   Chapter,
   Lecture,
+  AiSetting,
+  AiRolePolicy,
+  AiPromptTemplate,
+  AiDocument,
+  AiChunk,
+  AiConversation,
+  AiMessage,
+  AiAuditLog,
   Enrollment,
   Payment,
   Quiz,
@@ -58,6 +74,26 @@ Course.hasMany(Chapter, { foreignKey: 'courseId' });
 Chapter.belongsTo(Course, { foreignKey: 'courseId' });
 Chapter.hasMany(Lecture, { foreignKey: 'chapterId' });
 Lecture.belongsTo(Chapter, { foreignKey: 'chapterId' });
+
+User.hasMany(AiConversation, { foreignKey: 'userId', as: 'aiConversations' });
+AiConversation.belongsTo(User, { foreignKey: 'userId', as: 'user' });
+AiConversation.hasMany(AiMessage, { foreignKey: 'conversationId', as: 'messages' });
+AiMessage.belongsTo(AiConversation, { foreignKey: 'conversationId', as: 'conversation' });
+
+Course.hasMany(AiConversation, { foreignKey: 'courseId', as: 'aiConversations' });
+AiConversation.belongsTo(Course, { foreignKey: 'courseId', as: 'course' });
+
+Lecture.hasMany(AiConversation, { foreignKey: 'lectureId', as: 'aiConversations' });
+AiConversation.belongsTo(Lecture, { foreignKey: 'lectureId', as: 'lecture' });
+
+AiDocument.hasMany(AiChunk, { foreignKey: 'documentId', as: 'chunks' });
+AiChunk.belongsTo(AiDocument, { foreignKey: 'documentId', as: 'document' });
+
+User.hasMany(AiPromptTemplate, { foreignKey: 'createdByAdminId', as: 'aiPromptTemplates' });
+AiPromptTemplate.belongsTo(User, { foreignKey: 'createdByAdminId', as: 'createdByAdmin' });
+
+User.hasMany(AiAuditLog, { foreignKey: 'userId', as: 'aiAuditLogs' });
+AiAuditLog.belongsTo(User, { foreignKey: 'userId', as: 'user' });
 
 User.hasMany(Enrollment, { foreignKey: 'userId' });
 Enrollment.belongsTo(User, { foreignKey: 'userId' });

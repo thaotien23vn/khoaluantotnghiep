@@ -19,6 +19,11 @@ module.exports = (sequelize) => {
       type: DataTypes.STRING,
       field: 'content_url',
     },
+    aiNotes: {
+      type: DataTypes.TEXT,
+      allowNull: true,
+      field: 'ai_notes',
+    },
     duration: {
       type: DataTypes.INTEGER,
       comment: 'Duration in seconds',
