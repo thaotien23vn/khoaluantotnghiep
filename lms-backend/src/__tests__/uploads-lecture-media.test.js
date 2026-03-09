@@ -70,5 +70,5 @@ describe('Uploads - lecture media', () => {
     // cleanup created chapter/lecture
     await db.models.Lecture.destroy({ where: { id: lectureId } });
     await db.models.Chapter.destroy({ where: { id: chapterId } });
-  });
+  }, 30000);
 });

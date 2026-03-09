@@ -8,6 +8,7 @@ const quizRoutes = require('./routes/quiz.routes');
 const paymentRoutes = require('./routes/payment.routes');
 const reviewRoutes = require('./routes/review.routes');
 const notificationRoutes = require('./routes/notification.routes');
+const aiRoutes = require('./routes/ai.routes');
 const protectedRoutes = require('./routes/protected.routes');
 const validateInput = require('./middlewares/validateInput');
 const { apiLimiter } = require('./middlewares/rateLimiter');
@@ -100,6 +101,9 @@ app.use('/api', notificationRoutes);
 
 // Quiz routes (mixed public and protected)
 app.use('/api', quizRoutes);
+
+// AI routes (mixed public and protected)
+app.use('/api', aiRoutes);
 
 // Payment routes
 app.use('/api/student/payments', paymentRoutes);

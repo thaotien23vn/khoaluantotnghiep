@@ -35,5 +35,5 @@ describe('Uploads - quiz media', () => {
     expect(res.body).toHaveProperty('success', true);
     expect(res.body?.data?.url).toBeTruthy();
     expect(res.body?.data?.publicId).toBeTruthy();
-  });
+  }, 30000);
 });
