@@ -70,6 +70,10 @@ Base URL: `/api`
 ### Assignment (placeholder)
 - `POST /student/submit-assignment`
 
+### AI Tutor
+- `POST /student/ai/conversations`
+- `POST /student/ai/conversations/:id/messages`
+
 ## Teacher
 ### Courses
 - `GET /teacher/courses`
@@ -120,6 +124,10 @@ Base URL: `/api`
 ### Quiz attempts (teacher stats)
 - `GET /teacher/quizzes/:quizId/attempts`
 
+### AI (RAG ingestion)
+- `PUT /teacher/lectures/:id/ai-notes`
+- `POST /teacher/ai/ingest/lecture/:lectureId`
+
 ## Admin
 ### Dashboard
 - `GET /admin/dashboard`
@@ -152,3 +160,12 @@ Base URL: `/api`
 ### Notifications
 - `POST /admin/notifications/send`
 - `GET /admin/notifications`
+
+### AI Governance
+- `GET /admin/ai/settings`
+- `PUT /admin/ai/settings`
+- `GET /admin/ai/policies`
+- `POST /admin/ai/policies`
+- `GET /admin/ai/prompt-templates`
+- `POST /admin/ai/prompt-templates`
+- `GET /admin/ai/audit-logs`

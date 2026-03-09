@@ -18,16 +18,21 @@ function getGeminiApiKey() {
 }
 
 function getModel() {
-  return process.env.AI_MODEL || 'gemini-1.5-flash';
+  return process.env.AI_MODEL || 'gemini-flash-latest';
 }
 
 function getEmbeddingModel() {
-  return process.env.AI_EMBEDDING_MODEL || 'text-embedding-004';
+  return process.env.AI_EMBEDDING_MODEL || 'gemini-embedding-001';
 }
 
 function buildGeminiUrl(model, action) {
   // action: generateContent | embedContent
-  return `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:${action}`;
+  let normalized = String(model || '');
+  if (normalized.startsWith('models/')) normalized = normalized.slice('models/'.length);
+  if (normalized === 'gemini-1.5-flash') normalized = 'gemini-flash-latest';
+  if (normalized === 'gemini-1.5-flash-latest') normalized = 'gemini-flash-latest';
+  if (normalized === 'text-embedding-004') normalized = 'gemini-embedding-001';
+  return `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(normalized)}:${action}`;
 }
 
 async function geminiGenerate({ system, prompt, maxOutputTokens }) {
@@ -41,24 +46,33 @@ async function geminiGenerate({ system, prompt, maxOutputTokens }) {
   const model = getModel();
   const url = buildGeminiUrl(model, 'generateContent');
 
-  const res = await axios.post(
-    url,
-    {
-      contents: [
-        {
-          role: 'user',
-          parts: [{ text: system ? `${system}\n\n${prompt}` : prompt }],
+  let res;
+  try {
+    res = await axios.post(
+      url,
+      {
+        contents: [
+          {
+            role: 'user',
+            parts: [{ text: system ? `${system}\n\n${prompt}` : prompt }],
+          },
+        ],
+        generationConfig: {
+          maxOutputTokens: Number.isFinite(maxOutputTokens) ? maxOutputTokens : getEnvInt('AI_MAX_OUTPUT_TOKENS', 1024),
         },
-      ],
-      generationConfig: {
-        maxOutputTokens: Number.isFinite(maxOutputTokens) ? maxOutputTokens : getEnvInt('AI_MAX_OUTPUT_TOKENS', 1024),
       },
-    },
-    {
-      params: { key: apiKey },
-      timeout: getEnvInt('AI_HTTP_TIMEOUT_MS', 30000),
-    }
-  );
+      {
+        params: { key: apiKey },
+        timeout: getEnvInt('AI_HTTP_TIMEOUT_MS', 30000),
+      }
+    );
+  } catch (e) {
+    const status = e?.response?.status;
+    const detail = e?.response?.data;
+    const err = new Error(`Gemini generateContent failed status=${status || 'unknown'} url=${url} detail=${detail ? JSON.stringify(detail) : ''}`);
+    err.statusCode = Number.isInteger(status) ? status : 502;
+    throw err;
+  }
 
   const text = res?.data?.candidates?.[0]?.content?.parts?.map((p) => p?.text).filter(Boolean).join('') || '';
 
@@ -79,18 +93,27 @@ async function geminiEmbed({ text }) {
   const model = getEmbeddingModel();
   const url = buildGeminiUrl(model, 'embedContent');
 
-  const res = await axios.post(
-    url,
-    {
-      content: {
-        parts: [{ text: String(text || '') }],
+  let res;
+  try {
+    res = await axios.post(
+      url,
+      {
+        content: {
+          parts: [{ text: String(text || '') }],
+        },
       },
-    },
-    {
-      params: { key: apiKey },
-      timeout: getEnvInt('AI_HTTP_TIMEOUT_MS', 30000),
-    }
-  );
+      {
+        params: { key: apiKey },
+        timeout: getEnvInt('AI_HTTP_TIMEOUT_MS', 30000),
+      }
+    );
+  } catch (e) {
+    const status = e?.response?.status;
+    const detail = e?.response?.data;
+    const err = new Error(`Gemini embedContent failed status=${status || 'unknown'} url=${url} detail=${detail ? JSON.stringify(detail) : ''}`);
+    err.statusCode = Number.isInteger(status) ? status : 502;
+    throw err;
+  }
 
   const embedding = res?.data?.embedding?.values;
   if (!Array.isArray(embedding)) {
