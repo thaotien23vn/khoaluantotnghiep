@@ -4,18 +4,30 @@
  */
 
 const validateInput = (req, res, next) => {
-  const skipKeys = new Set(['password', 'confirmPassword', 'token', 'resetToken', 'verificationToken']);
+  const skipKeys = new Set([
+    "password",
+    "confirmPassword",
+    "token",
+    "resetToken",
+    "verificationToken",
+    "content",
+    "description",
+    "aiNotes",
+    "comment",
+    "willLearn",
+    "requirements",
+  ]);
 
   // Recursive function to sanitize string values
   const sanitizeValue = (value, key) => {
     if (key && skipKeys.has(key)) {
       return value;
     }
-    if (typeof value === 'string') {
+    if (typeof value === "string") {
       // Remove potentially dangerous characters
-      return value.replace(/[<>\"\'`]/g, '');
+      return value.replace(/[<>\"\'`]/g, "");
     }
-    if (typeof value === 'object' && value !== null) {
+    if (typeof value === "object" && value !== null) {
       if (Array.isArray(value)) {
         return value.map((v) => sanitizeValue(v));
       }

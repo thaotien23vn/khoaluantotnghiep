@@ -12,7 +12,6 @@ exports.startAttempt = async (req, res) => {
   try {
     const { quizId } = req.params;
 
-    // Check if quiz exists and is accessible
     const quiz = await Quiz.findByPk(quizId, {
       include: [
         {
@@ -25,7 +24,8 @@ exports.startAttempt = async (req, res) => {
           as: 'questions',
           attributes: ['id', 'type', 'content', 'options', 'points']
         }
-      ]
+      ],
+      attributes: ['id', 'title', 'description', 'timeLimit', 'maxScore', 'startTime', 'endTime', 'courseId']
     });
 
     if (!quiz) {
@@ -39,6 +39,24 @@ exports.startAttempt = async (req, res) => {
       return res.status(400).json({
         success: false,
         message: 'Khóa học chưa được xuất bản'
+      });
+    }
+
+    // Check scheduled time
+    const now = new Date();
+    if (quiz.startTime && now < new Date(quiz.startTime)) {
+      return res.status(403).json({
+        success: false,
+        message: 'Bài thi chưa đến thời gian bắt đầu',
+        data: { startTime: quiz.startTime }
+      });
+    }
+
+    if (quiz.endTime && now > new Date(quiz.endTime)) {
+      return res.status(403).json({
+        success: false,
+        message: 'Bài thi đã hết thời gian thực hiện',
+        data: { endTime: quiz.endTime }
       });
     }
 
@@ -68,10 +86,25 @@ exports.startAttempt = async (req, res) => {
     });
 
     if (activeAttempt) {
-      return res.status(409).json({
-        success: false,
-        message: 'Bạn đang có một lần làm bài chưa hoàn thành',
-        data: { attempt: activeAttempt }
+      return res.status(200).json({
+        success: true,
+        message: 'Bạn đang tiếp tục bài làm chưa hoàn thành',
+        data: {
+          attempt: {
+            id: activeAttempt.id,
+            quizId: activeAttempt.quizId,
+            startedAt: activeAttempt.startedAt,
+            timeLimit: quiz.timeLimit
+          },
+          quiz: {
+            id: quiz.id,
+            title: quiz.title,
+            description: quiz.description,
+            timeLimit: quiz.timeLimit,
+            maxScore: quiz.maxScore,
+            questions: quiz.questions
+          }
+        }
       });
     }
 
@@ -138,6 +171,7 @@ exports.submitAttempt = async (req, res) => {
         {
           model: Quiz,
           as: 'quiz',
+          attributes: ['id', 'title', 'description', 'passingScore', 'showResults'],
           include: [
             {
               model: Question,
@@ -173,6 +207,9 @@ exports.submitAttempt = async (req, res) => {
     // Calculate score
     let totalScore = 0;
     let maxScore = 0;
+    let correctCount = 0;
+    let incorrectCount = 0;
+    let manualGradingCount = 0;
     const results = [];
 
     for (const question of attempt.quiz.questions) {
@@ -182,15 +219,38 @@ exports.submitAttempt = async (req, res) => {
       let pointsEarned = 0;
 
       if (question.type === 'multiple_choice' || question.type === 'true_false') {
-        isCorrect = JSON.stringify(userAnswer) === JSON.stringify(question.correctAnswer);
+        // So sánh linh hoạt hơn (ép kiểu về string và trim để tránh lỗi format)
+        const userVal = userAnswer !== undefined && userAnswer !== null ? String(userAnswer).trim() : '';
+        let correctVal = question.correctAnswer !== undefined && question.correctAnswer !== null ? String(question.correctAnswer).trim() : '';
+        
+        // Xử lý triệt để trường hợp đáp án bị bao bởi dấu ngoặc kép (thường gặp khi lưu JSON)
+        while (correctVal.startsWith('"') && correctVal.endsWith('"') && correctVal.length >= 2) {
+          correctVal = correctVal.substring(1, correctVal.length - 1);
+        }
+        
+        isCorrect = userVal === correctVal;
         pointsEarned = isCorrect ? question.points : 0;
       } else if (question.type === 'short_answer') {
         // Case-insensitive comparison for short answers
-        isCorrect = userAnswer && userAnswer.toLowerCase().trim() === question.correctAnswer.toLowerCase().trim();
+        const userStr = userAnswer ? String(userAnswer).toLowerCase().trim() : '';
+        let correctStr = question.correctAnswer ? String(question.correctAnswer).toLowerCase().trim() : '';
+        
+        // Xử lý dấu ngoặc kép cho short_answer
+        while (correctStr.startsWith('"') && correctStr.endsWith('"') && correctStr.length >= 2) {
+          correctStr = correctStr.substring(1, correctStr.length - 1).trim();
+        }
+        
+        isCorrect = userStr === correctStr;
         pointsEarned = isCorrect ? question.points : 0;
       } else if (question.type === 'essay') {
         // Essay questions need manual grading
         pointsEarned = 0; // Will be graded by teacher
+        manualGradingCount++;
+      }
+
+      if (question.type !== 'essay') {
+        if (isCorrect) correctCount++;
+        else incorrectCount++;
       }
 
       totalScore += pointsEarned;
@@ -198,11 +258,11 @@ exports.submitAttempt = async (req, res) => {
       results.push({
         questionId: question.id,
         userAnswer,
-        correctAnswer: question.correctAnswer,
+        correctAnswer: attempt.quiz.showResults ? question.correctAnswer : undefined,
         isCorrect,
         pointsEarned,
         maxPoints: question.points,
-        explanation: question.explanation
+        explanation: attempt.quiz.showResults ? question.explanation : undefined
       });
     }
 
@@ -240,7 +300,18 @@ exports.submitAttempt = async (req, res) => {
           percentageScore,
           maxScore,
           passed,
-          completedAt: attempt.completedAt
+          completedAt: attempt.completedAt,
+          summary: {
+            totalQuestions: attempt.quiz.questions.length,
+            correctCount,
+            incorrectCount,
+            manualGradingCount
+          }
+        },
+        quiz: {
+          id: attempt.quiz.id,
+          title: attempt.quiz.title,
+          description: attempt.quiz.description
         },
         results
       }
@@ -350,6 +421,7 @@ exports.getAttempt = async (req, res) => {
         {
           model: Quiz,
           as: 'quiz',
+          attributes: ['id', 'title', 'description', 'showResults', 'maxScore', 'passingScore'],
           include: [
             {
               model: Question,
@@ -380,15 +452,66 @@ exports.getAttempt = async (req, res) => {
       });
     }
 
-    // If attempt is not completed, don't show correct answers
+    // Parse answers if stored as string (handle double-stringified cases)
+    let userAnswers = attempt.answers || {};
+    while (typeof userAnswers === 'string' && userAnswers.length > 0) {
+      try {
+        const parsed = JSON.parse(userAnswers);
+        if (typeof parsed === 'object' || typeof parsed === 'string') {
+          userAnswers = parsed;
+        } else {
+          break;
+        }
+      } catch (e) {
+        break;
+      }
+    }
+
+    // Hide details if teacher disabled results view
     let questions = attempt.quiz.questions;
-    if (!attempt.completedAt) {
+    const hideDetails = !attempt.completedAt || (!attempt.quiz.showResults && req.user.role !== 'admin');
+    
+    if (hideDetails) {
       questions = questions.map(q => ({
         ...q.toJSON(),
         correctAnswer: undefined,
         explanation: undefined
       }));
     }
+
+    // Map answers to results array for easier display
+    const results = questions.map(question => {
+      const qId = question.id || (question.toJSON ? question.toJSON().id : undefined);
+      const userAnswer = (typeof userAnswers === 'object' && userAnswers !== null) ? userAnswers[qId] : undefined;
+      let isCorrect = false;
+
+      // Logic so sánh tương tự submitAttempt
+      if (question.type === 'multiple_choice' || question.type === 'true_false') {
+        const userVal = userAnswer !== undefined && userAnswer !== null ? String(userAnswer).trim() : '';
+        let correctVal = question.correctAnswer !== undefined && question.correctAnswer !== null ? String(question.correctAnswer).trim() : '';
+        while (correctVal.startsWith('"') && correctVal.endsWith('"') && correctVal.length >= 2) {
+          correctVal = correctVal.substring(1, correctVal.length - 1);
+        }
+        isCorrect = userVal === correctVal;
+      } else if (question.type === 'short_answer') {
+        const userStr = userAnswer ? String(userAnswer).toLowerCase().trim() : '';
+        let correctStr = question.correctAnswer ? String(question.correctAnswer).toLowerCase().trim() : '';
+        while (correctStr.startsWith('"') && correctStr.endsWith('"') && correctStr.length >= 2) {
+          correctStr = correctStr.substring(1, correctStr.length - 1).trim();
+        }
+        isCorrect = userStr === correctStr;
+      }
+
+      return {
+        questionId: question.id,
+        userAnswer,
+        correctAnswer: !hideDetails ? question.correctAnswer : undefined,
+        isCorrect: attempt.completedAt ? isCorrect : undefined,
+        pointsEarned: isCorrect ? question.points : 0,
+        maxPoints: question.points,
+        explanation: !hideDetails ? question.explanation : undefined
+      };
+    });
 
     res.json({
       success: true,
@@ -405,7 +528,8 @@ exports.getAttempt = async (req, res) => {
         quiz: {
           ...attempt.quiz.toJSON(),
           questions
-        }
+        },
+        results
       }
     });
   } catch (error) {
@@ -471,27 +595,235 @@ exports.getQuizAttemptsForTeacher = async (req, res) => {
 
     // Calculate statistics
     const totalAttempts = attempts.length;
-    const completedAttempts = attempts.filter(a => a.completedAt).length;
-    const passedAttempts = attempts.filter(a => a.passed).length;
-    const averageScore = completedAttempts > 0 
-      ? attempts.filter(a => a.completedAt).reduce((sum, a) => sum + a.percentageScore, 0) / completedAttempts 
+    const completedAttempts = attempts.filter(a => a.completedAt);
+    const completedCount = completedAttempts.length;
+    const passedAttempts = completedAttempts.filter(a => a.passed).length;
+    const averageScore = completedCount > 0 
+      ? completedAttempts.reduce((sum, a) => sum + Number(a.percentageScore), 0) / completedCount 
       : 0;
+
+    // Calculate ranking (Highest score per student)
+    const rankingMap = {};
+    completedAttempts.forEach(a => {
+      const uId = a.userId;
+      if (!rankingMap[uId] || Number(a.percentageScore) > Number(rankingMap[uId].highestScore)) {
+        rankingMap[uId] = {
+          userId: uId,
+          userName: a.user?.name,
+          userEmail: a.user?.email,
+          highestScore: Number(a.percentageScore),
+          passed: a.passed,
+          completedAt: a.completedAt
+        };
+      }
+    });
+
+    const ranking = Object.values(rankingMap)
+      .sort((a, b) => b.highestScore - a.highestScore)
+      .map((item, index) => ({
+        rank: index + 1,
+        ...item
+      }));
 
     res.json({
       success: true,
       data: {
         attempts,
+        ranking,
         statistics: {
           totalAttempts,
-          completedAttempts,
+          completedAttempts: completedCount,
           passedAttempts,
-          passRate: completedAttempts > 0 ? (passedAttempts / completedAttempts) * 100 : 0,
+          passRate: completedCount > 0 ? (passedAttempts / completedCount) * 100 : 0,
           averageScore: Math.round(averageScore * 100) / 100
         }
       }
     });
   } catch (error) {
     console.error('Get quiz attempts for teacher error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Lỗi máy chủ',
+      error: error.message
+    });
+  }
+};
+
+/**
+ * @desc    Delete/Reset student attempt (Allow retake)
+ * @route   DELETE /api/teacher/attempts/:attemptId
+ * @access  Private (Teacher & Admin)
+ */
+exports.deleteAttempt = async (req, res) => {
+  try {
+    const { attemptId } = req.params;
+
+    const attempt = await Attempt.findByPk(attemptId, {
+      include: [
+        {
+          model: Quiz,
+          as: 'quiz',
+          include: [{ model: Course, as: 'course' }]
+        }
+      ]
+    });
+
+    if (!attempt) {
+      return res.status(404).json({
+        success: false,
+        message: 'Không tìm thấy bài nộp'
+      });
+    }
+
+    // Check ownership (Teacher of the course or Admin)
+    const isOwner = attempt.quiz?.course?.createdBy === req.user.id;
+    if (!isOwner && req.user.role !== 'admin') {
+      return res.status(403).json({
+        success: false,
+        message: 'Bạn không có quyền xóa bài nộp này'
+      });
+    }
+
+    await attempt.destroy();
+
+    res.json({
+      success: true,
+      message: 'Đã xóa bài nộp thành công. Học viên có thể thực hiện lại bài thi.'
+    });
+  } catch (error) {
+    console.error('Delete attempt error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Lỗi máy chủ',
+      error: error.message
+    });
+  }
+};
+
+/**
+ * @desc    Get specific attempt detail for teacher
+ * @route   GET /api/teacher/attempts/:attemptId
+ * @access  Private (Teacher & Admin)
+ */
+exports.getAttemptForTeacher = async (req, res) => {
+  try {
+    const { attemptId } = req.params;
+
+    const attempt = await Attempt.findByPk(attemptId, {
+      include: [
+        {
+          model: User,
+          as: 'user',
+          attributes: ['id', 'name', 'email']
+        },
+        {
+          model: Quiz,
+          as: 'quiz',
+          attributes: ['id', 'title', 'description', 'showResults', 'maxScore', 'passingScore'],
+          include: [
+            {
+              model: Question,
+              as: 'questions'
+            },
+            {
+              model: Course,
+              as: 'course',
+              attributes: ['id', 'title', 'createdBy']
+            }
+          ]
+        }
+      ]
+    });
+
+    if (!attempt) {
+      return res.status(404).json({
+        success: false,
+        message: 'Không tìm thấy lần làm bài'
+      });
+    }
+
+    // Check ownership (Teacher of the course or Admin)
+    const isOwner = attempt.quiz?.course?.createdBy === req.user.id;
+    if (!isOwner && req.user.role !== 'admin') {
+      return res.status(403).json({
+        success: false,
+        message: 'Bạn không có quyền xem bài làm này'
+      });
+    }
+
+    // Parse answers if stored as string (handle double-stringified cases)
+    let userAnswers = attempt.answers || {};
+    while (typeof userAnswers === 'string' && userAnswers.length > 0) {
+      try {
+        const parsed = JSON.parse(userAnswers);
+        if (typeof parsed === 'object' || typeof parsed === 'string') {
+          userAnswers = parsed;
+        } else {
+          break;
+        }
+      } catch (e) {
+        break;
+      }
+    }
+
+    // Teachers ALWAYS see full details
+    let questions = attempt.quiz.questions;
+    
+    // Map answers to results array for easier display
+    const results = questions.map(question => {
+      const qId = question.id || (question.toJSON ? question.toJSON().id : undefined);
+      const userAnswer = (typeof userAnswers === 'object' && userAnswers !== null) ? userAnswers[qId] : undefined;
+      let isCorrect = false;
+
+      // Comparison logic
+      if (question.type === 'multiple_choice' || question.type === 'true_false') {
+        const userVal = userAnswer !== undefined && userAnswer !== null ? String(userAnswer).trim() : '';
+        let correctVal = question.correctAnswer !== undefined && question.correctAnswer !== null ? String(question.correctAnswer).trim() : '';
+        while (correctVal.startsWith('"') && correctVal.endsWith('"') && correctVal.length >= 2) {
+          correctVal = correctVal.substring(1, correctVal.length - 1);
+        }
+        isCorrect = userVal === correctVal;
+      } else if (question.type === 'short_answer') {
+        const userStr = userAnswer ? String(userAnswer).toLowerCase().trim() : '';
+        let correctStr = question.correctAnswer ? String(question.correctAnswer).toLowerCase().trim() : '';
+        while (correctStr.startsWith('"') && correctStr.endsWith('"') && correctStr.length >= 2) {
+          correctStr = correctStr.substring(1, correctStr.length - 1).trim();
+        }
+        isCorrect = userStr === correctStr;
+      }
+
+      return {
+        questionId: question.id,
+        userAnswer,
+        correctAnswer: question.correctAnswer,
+        isCorrect: attempt.completedAt ? isCorrect : undefined,
+        pointsEarned: isCorrect ? question.points : 0,
+        maxPoints: question.points,
+        explanation: question.explanation
+      };
+    });
+
+    res.json({
+      success: true,
+      data: {
+        attempt: {
+          id: attempt.id,
+          user: attempt.user,
+          score: attempt.score,
+          percentageScore: attempt.percentageScore,
+          passed: attempt.passed,
+          startedAt: attempt.startedAt,
+          completedAt: attempt.completedAt,
+        },
+        quiz: {
+          ...attempt.quiz.toJSON(),
+          questions
+        },
+        results
+      }
+    });
+  } catch (error) {
+    console.error('Get teacher attempt detail error:', error);
     res.status(500).json({
       success: false,
       message: 'Lỗi máy chủ',

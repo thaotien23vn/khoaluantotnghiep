@@ -136,4 +136,8 @@ router.post(
   authController.uploadAvatar
 );
 
+// ============= Google OAuth =============
+router.get('/google', authController.googleAuth);
+router.get('/google/callback', authController.googleAuthCallback);
+
 module.exports = router;

@@ -1,6 +1,7 @@
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const crypto = require('crypto');
+const passport = require('passport');
 const { validationResult } = require('express-validator');
 const jwtConfig = require('../config/jwt');
 const emailService = require('../services/email.service');
@@ -721,4 +722,68 @@ exports.resendVerificationEmail = async (req, res) => {
       error: error.message,
     });
   }
+};
+
+// ============= GOOGLE OAUTH =============
+exports.googleAuth = (req, res, next) => {
+  // Check if Google OAuth is configured
+  if (!process.env.GOOGLE_CLIENT_ID || 
+      !process.env.GOOGLE_CLIENT_SECRET || 
+      process.env.GOOGLE_CLIENT_ID === 'your_google_client_id_here' ||
+      process.env.GOOGLE_CLIENT_SECRET === 'your_google_client_secret_here') {
+    
+    return res.status(503).json({
+      success: false,
+      message: 'Google OAuth chưa được cấu hình. Vui lòng liên hệ quản trị viên.',
+    });
+  }
+  
+  passport.authenticate('google', {
+    scope: ['profile', 'email'],
+  })(req, res, next);
+};
+
+exports.googleAuthCallback = (req, res, next) => {
+  // Check if Google OAuth is configured
+  if (!process.env.GOOGLE_CLIENT_ID || 
+      !process.env.GOOGLE_CLIENT_SECRET || 
+      process.env.GOOGLE_CLIENT_ID === 'your_google_client_id_here' ||
+      process.env.GOOGLE_CLIENT_SECRET === 'your_google_client_secret_here') {
+    
+    return res.redirect(`${process.env.FRONTEND_URL || 'http://localhost:5173'}/login?error=google_not_configured`);
+  }
+  
+  passport.authenticate('google', (err, user, info) => {
+    if (err) {
+      console.error('Google OAuth error:', err);
+      return res.redirect(`${process.env.FRONTEND_URL || 'http://localhost:5173'}/login?error=auth_failed`);
+    }
+
+    if (!user) {
+      return res.redirect(`${process.env.FRONTEND_URL || 'http://localhost:5173'}/login?error=no_user`);
+    }
+
+    // Create JWT token
+    const token = jwt.sign(
+      {
+        id: user.id,
+        email: user.email,
+        role: user.role,
+      },
+      jwtConfig.secret,
+      { expiresIn: jwtConfig.expiresIn }
+    );
+
+    // Redirect to frontend with token
+    const redirectUrl = `${process.env.FRONTEND_URL || 'http://localhost:5173'}/auth/callback?token=${token}&user=${encodeURIComponent(JSON.stringify({
+      id: user.id,
+      name: user.name,
+      username: user.username,
+      email: user.email,
+      role: user.role,
+      avatar: user.avatar,
+    }))}`;
+    
+    res.redirect(redirectUrl);
+  })(req, res, next);
 };

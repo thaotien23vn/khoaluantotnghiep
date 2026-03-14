@@ -19,6 +19,9 @@ const models = {};
   'category',
   'chapter',
   'lecture',
+  'forumTopic',
+  'forumPost',
+  'forumReport',
   'aiSetting',
   'aiRolePolicy',
   'aiPromptTemplate',
@@ -46,6 +49,9 @@ const {
   Category,
   Chapter,
   Lecture,
+  ForumTopic,
+  ForumPost,
+  ForumReport,
   AiSetting,
   AiRolePolicy,
   AiPromptTemplate,
@@ -85,6 +91,36 @@ AiConversation.belongsTo(Course, { foreignKey: 'courseId', as: 'course' });
 
 Lecture.hasMany(AiConversation, { foreignKey: 'lectureId', as: 'aiConversations' });
 AiConversation.belongsTo(Lecture, { foreignKey: 'lectureId', as: 'lecture' });
+
+// Forum Associations
+User.hasMany(ForumTopic, { foreignKey: 'userId', as: 'forumTopics' });
+ForumTopic.belongsTo(User, { foreignKey: 'userId', as: 'author' });
+
+ForumTopic.hasMany(ForumPost, { foreignKey: 'topicId', as: 'posts' });
+ForumPost.belongsTo(ForumTopic, { foreignKey: 'topicId', as: 'topic' });
+
+User.hasMany(ForumPost, { foreignKey: 'userId', as: 'forumPosts' });
+ForumPost.belongsTo(User, { foreignKey: 'userId', as: 'author' });
+
+ForumPost.hasMany(ForumPost, { foreignKey: 'parentId', as: 'replies' });
+ForumPost.belongsTo(ForumPost, { foreignKey: 'parentId', as: 'parent' });
+
+User.hasMany(ForumReport, { foreignKey: 'reporterId', as: 'forumReports' });
+ForumReport.belongsTo(User, { foreignKey: 'reporterId', as: 'reporter' });
+
+ForumTopic.hasMany(ForumReport, { foreignKey: 'topicId', as: 'reports' });
+ForumReport.belongsTo(ForumTopic, { foreignKey: 'topicId', as: 'topic' });
+
+ForumPost.hasMany(ForumReport, { foreignKey: 'postId', as: 'reports' });
+ForumReport.belongsTo(ForumPost, { foreignKey: 'postId', as: 'post' });
+
+// Course associations for forum
+Course.hasMany(ForumTopic, { foreignKey: 'courseId', as: 'forumTopics' });
+ForumTopic.belongsTo(Course, { foreignKey: 'courseId', as: 'course' });
+
+// Lecture associations for forum
+Lecture.hasMany(ForumTopic, { foreignKey: 'lectureId', as: 'forumTopics' });
+ForumTopic.belongsTo(Lecture, { foreignKey: 'lectureId', as: 'lecture' });
 
 AiDocument.hasMany(AiChunk, { foreignKey: 'documentId', as: 'chunks' });
 AiChunk.belongsTo(AiDocument, { foreignKey: 'documentId', as: 'document' });

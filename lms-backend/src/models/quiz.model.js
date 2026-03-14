@@ -40,6 +40,21 @@ module.exports = (sequelize) => {
       allowNull: false,
       field: 'created_by',
     },
+    startTime: {
+      type: DataTypes.DATE,
+      allowNull: true,
+      field: 'start_time',
+    },
+    endTime: {
+      type: DataTypes.DATE,
+      allowNull: true,
+      field: 'end_time',
+    },
+    showResults: {
+      type: DataTypes.BOOLEAN,
+      defaultValue: true,
+      field: 'show_results',
+    },
   }, {
     tableName: 'quizzes',
     timestamps: true,

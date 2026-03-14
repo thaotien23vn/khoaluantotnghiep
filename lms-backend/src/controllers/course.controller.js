@@ -1,28 +1,28 @@
-const { Op } = require('sequelize');
-const db = require('../models');
-const mediaService = require('../services/media.service');
-const courseAggregatesService = require('../services/courseAggregates.service');
+const { Op } = require("sequelize");
+const db = require("../models");
+const mediaService = require("../services/media.service");
+const courseAggregatesService = require("../services/courseAggregates.service");
 
 const { Course, Chapter, Lecture, User, Category, Enrollment } = db.models;
 
 // Helper: build URL-friendly slug from title (basic, no extra dependency)
 const generateSlugFromTitle = (title) => {
-  if (!title) return '';
+  if (!title) return "";
 
   return title
     .toString()
-    .normalize('NFD')
-    .replace(/[\u0300-\u036f]/g, '') // remove accents
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "") // remove accents
     .toLowerCase()
     .trim()
-    .replace(/[^a-z0-9\s-]/g, '') // remove invalid chars
-    .replace(/\s+/g, '-') // spaces to dashes
-    .replace(/-+/g, '-'); // collapse dashes
+    .replace(/[^a-z0-9\s-]/g, "") // remove invalid chars
+    .replace(/\s+/g, "-") // spaces to dashes
+    .replace(/-+/g, "-"); // collapse dashes
 };
 
 // Ensure slug is unique by appending -1, -2, ...
 const generateUniqueSlug = async (title) => {
-  const baseSlug = generateSlugFromTitle(title) || 'course';
+  const baseSlug = generateSlugFromTitle(title) || "course";
   let slug = baseSlug;
   let suffix = 1;
 
@@ -47,10 +47,10 @@ exports.setCoursePublished = async (req, res) => {
     const role = req.user.role;
     const { published } = req.body;
 
-    if (typeof published !== 'boolean') {
+    if (typeof published !== "boolean") {
       return res.status(400).json({
         success: false,
-        message: 'Trường published phải là boolean',
+        message: "Trường published phải là boolean",
       });
     }
 
@@ -58,14 +58,14 @@ exports.setCoursePublished = async (req, res) => {
     if (!course) {
       return res.status(404).json({
         success: false,
-        message: 'Không tìm thấy khóa học',
+        message: "Không tìm thấy khóa học",
       });
     }
 
-    if (role === 'teacher' && Number(course.createdBy) !== Number(userId)) {
+    if (role === "teacher" && Number(course.createdBy) !== Number(userId)) {
       return res.status(403).json({
         success: false,
-        message: 'Bạn không có quyền thay đổi trạng thái khóa học này',
+        message: "Bạn không có quyền thay đổi trạng thái khóa học này",
       });
     }
 
@@ -76,14 +76,16 @@ exports.setCoursePublished = async (req, res) => {
 
     return res.json({
       success: true,
-      message: published ? 'Đã publish khóa học' : 'Đã chuyển khóa học về draft',
+      message: published
+        ? "Đã publish khóa học"
+        : "Đã chuyển khóa học về draft",
       data: { course },
     });
   } catch (error) {
-    console.error('Lỗi cập nhật trạng thái publish/draft:', error);
+    console.error("Lỗi cập nhật trạng thái publish/draft:", error);
     return res.status(500).json({
       success: false,
-      message: 'Lỗi máy chủ',
+      message: "Lỗi máy chủ",
       error: error.message,
     });
   }
@@ -98,7 +100,7 @@ exports.getPublishedCourses = async (req, res) => {
       level,
       minPrice,
       maxPrice,
-      sort = 'newest',
+      sort = "newest",
       page = 1,
       limit = 20,
     } = req.query;
@@ -119,29 +121,47 @@ exports.getPublishedCourses = async (req, res) => {
     }
     if (minPrice != null || maxPrice != null) {
       where.price = {};
-      if (minPrice != null && minPrice !== '') {
+      if (minPrice != null && minPrice !== "") {
         where.price[Op.gte] = Number(minPrice);
       }
-      if (maxPrice != null && maxPrice !== '') {
+      if (maxPrice != null && maxPrice !== "") {
         where.price[Op.lte] = Number(maxPrice);
       }
     }
 
     const order = (() => {
       switch (sort) {
-        case 'oldest':
-          return [['createdAt', 'ASC'], ['id', 'ASC']];
-        case 'price_asc':
-          return [['price', 'ASC'], ['id', 'ASC']];
-        case 'price_desc':
-          return [['price', 'DESC'], ['id', 'DESC']];
-        case 'rating_desc':
-          return [['rating', 'DESC'], ['id', 'DESC']];
-        case 'students_desc':
-          return [['students', 'DESC'], ['id', 'DESC']];
-        case 'newest':
+        case "oldest":
+          return [
+            ["createdAt", "ASC"],
+            ["id", "ASC"],
+          ];
+        case "price_asc":
+          return [
+            ["price", "ASC"],
+            ["id", "ASC"],
+          ];
+        case "price_desc":
+          return [
+            ["price", "DESC"],
+            ["id", "DESC"],
+          ];
+        case "rating_desc":
+          return [
+            ["rating", "DESC"],
+            ["id", "DESC"],
+          ];
+        case "students_desc":
+          return [
+            ["students", "DESC"],
+            ["id", "DESC"],
+          ];
+        case "newest":
         default:
-          return [['createdAt', 'DESC'], ['id', 'DESC']];
+          return [
+            ["createdAt", "DESC"],
+            ["id", "DESC"],
+          ];
       }
     })();
 
@@ -151,12 +171,12 @@ exports.getPublishedCourses = async (req, res) => {
       include: [
         {
           model: User,
-          as: 'creator',
-          attributes: ['id', 'name', 'username'],
+          as: "creator",
+          attributes: ["id", "name", "username"],
         },
         {
           model: Category,
-          attributes: ['id', 'name'],
+          attributes: ["id", "name"],
         },
       ],
       limit: limitNum,
@@ -164,20 +184,20 @@ exports.getPublishedCourses = async (req, res) => {
     });
 
     // Format data để khớp với frontend
-    const formattedCourses = courses.map(course => ({
+    const formattedCourses = courses.map((course) => ({
       id: course.id.toString(),
       title: course.title,
-      teacher: course.creator ? course.creator.name : 'Giảng viên',
-      teacherAvatar: `https://i.pravatar.cc/150?u=${course.creator?.username || 'teacher'}`,
-      image: course.imageUrl || '/elearning-1.jpg',
-      category: course.Category ? course.Category.name : 'Khác',
+      teacher: course.creator ? course.creator.name : "Giảng viên",
+      teacherAvatar: `https://i.pravatar.cc/150?u=${course.creator?.username || "teacher"}`,
+      image: course.imageUrl || "/elearning-1.jpg",
+      category: course.Category ? course.Category.name : "Khác",
       rating: parseFloat(course.rating) || 0,
       reviewCount: course.reviewCount || 0,
       students: course.students || 0,
-      level: course.level || 'Mọi cấp độ',
+      level: course.level || "Mọi cấp độ",
       totalLessons: course.totalLessons || 0,
-      duration: course.duration || '0 giờ',
-      description: course.description || '',
+      duration: course.duration || "0 giờ",
+      description: course.description || "",
       willLearn: course.willLearn || [],
       requirements: course.requirements || [],
       curriculum: [], // Sẽ được populate trong course detail
@@ -199,10 +219,10 @@ exports.getPublishedCourses = async (req, res) => {
       },
     });
   } catch (error) {
-    console.error('Lỗi lấy danh sách khóa học:', error);
+    console.error("Lỗi lấy danh sách khóa học:", error);
     res.status(500).json({
       success: false,
-      message: 'Lỗi máy chủ',
+      message: "Lỗi máy chủ",
       error: error.message,
     });
   }
@@ -225,14 +245,14 @@ exports.getCourseEnrollmentsForOwner = async (req, res) => {
     if (!course) {
       return res.status(404).json({
         success: false,
-        message: 'Không tìm thấy khóa học',
+        message: "Không tìm thấy khóa học",
       });
     }
 
-    if (role === 'teacher' && Number(course.createdBy) !== Number(userId)) {
+    if (role === "teacher" && Number(course.createdBy) !== Number(userId)) {
       return res.status(403).json({
         success: false,
-        message: 'Bạn không có quyền xem danh sách học viên của khóa học này',
+        message: "Bạn không có quyền xem danh sách học viên của khóa học này",
       });
     }
 
@@ -241,10 +261,10 @@ exports.getCourseEnrollmentsForOwner = async (req, res) => {
       include: [
         {
           model: User,
-          attributes: ['id', 'name', 'username', 'email', 'role'],
+          attributes: ["id", "name", "username", "email", "role"],
         },
       ],
-      order: [['enrolledAt', 'DESC']],
+      order: [["enrolledAt", "DESC"]],
     });
 
     return res.json({
@@ -259,10 +279,10 @@ exports.getCourseEnrollmentsForOwner = async (req, res) => {
       },
     });
   } catch (error) {
-    console.error('Lỗi lấy danh sách học viên khóa học (teacher):', error);
+    console.error("Lỗi lấy danh sách học viên khóa học (teacher):", error);
     return res.status(500).json({
       success: false,
-      message: 'Lỗi máy chủ',
+      message: "Lỗi máy chủ",
       error: error.message,
     });
   }
@@ -278,12 +298,12 @@ exports.getCourseDetail = async (req, res) => {
       include: [
         {
           model: User,
-          as: 'creator',
-          attributes: ['id', 'name', 'username'],
+          as: "creator",
+          attributes: ["id", "name", "username"],
         },
         {
           model: Category,
-          attributes: ['id', 'name'],
+          attributes: ["id", "name"],
         },
         {
           model: Chapter,
@@ -291,51 +311,99 @@ exports.getCourseDetail = async (req, res) => {
         },
       ],
       order: [
-        [Chapter, 'order', 'ASC'],
-        [Chapter, Lecture, 'order', 'ASC'],
+        [Chapter, "order", "ASC"],
+        [Chapter, Lecture, "order", "ASC"],
       ],
     });
 
     if (!course) {
       return res.status(404).json({
         success: false,
-        message: 'Không tìm thấy khóa học',
+        message: "Không tìm thấy khóa học",
       });
     }
 
     // Format curriculum để khớp với frontend
-    const curriculum = course.Chapters ? course.Chapters.map(chapter => ({
-      id: chapter.id.toString(),
-      title: chapter.title,
-      lessons: chapter.Lectures ? chapter.Lectures.map(lecture => ({
-        id: lecture.id.toString(),
-        title: lecture.title,
-        duration: lecture.duration ? `${Math.ceil(lecture.duration / 60)} phút` : '0 phút',
-        isPreview: !!lecture.isPreview,
-        videoUrl: lecture.contentUrl,
-        attachments: Array.isArray(lecture.attachments) ? lecture.attachments : [],
-      })) : [],
-    })) : [];
+    const curriculum = course.Chapters
+      ? course.Chapters.map((chapter) => ({
+          id: chapter.id.toString(),
+          title: chapter.title,
+          lessons: chapter.Lectures
+            ? chapter.Lectures.map((lecture) => ({
+                id: lecture.id.toString(),
+                title: lecture.title,
+                duration: lecture.duration
+                  ? `${Math.ceil(lecture.duration / 60)} phút`
+                  : "0 phút",
+                isPreview: !!lecture.isPreview,
+                videoUrl: lecture.contentUrl,
+                content: lecture.content || "",
+                attachments: (() => {
+                  if (!lecture.attachments) return [];
+                  if (Array.isArray(lecture.attachments))
+                    return lecture.attachments;
+                  try {
+                    const parsed = JSON.parse(String(lecture.attachments));
+                    return Array.isArray(parsed) ? parsed : [];
+                  } catch {
+                    return [];
+                  }
+                })(),
+              }))
+            : [],
+        }))
+      : [];
 
     // Format course data
     const formattedCourse = {
       id: course.id.toString(),
       title: course.title,
-      teacher: course.creator ? course.creator.name : 'Giảng viên',
-      teacherAvatar: `https://i.pravatar.cc/150?u=${course.creator?.username || 'teacher'}`,
-      image: course.imageUrl || '/elearning-1.jpg',
-      category: course.Category ? course.Category.name : 'Khác',
+      teacher: course.creator ? course.creator.name : "Giảng viên",
+      teacherAvatar: `https://i.pravatar.cc/150?u=${course.creator?.username || "teacher"}`,
+      image: course.imageUrl || "/elearning-1.jpg",
+      category: course.Category ? course.Category.name : "Khác",
       rating: parseFloat(course.rating) || 0,
       reviewCount: course.reviewCount || 0,
       students: course.students || 0,
-      level: course.level || 'Mọi cấp độ',
-      totalLessons: course.totalLessons || curriculum.reduce((acc, ch) => acc + ch.lessons.length, 0),
-      duration: course.duration || `${Math.ceil(curriculum.reduce((acc, ch) => acc + ch.lessons.reduce((lessonAcc, lesson) => lessonAcc + (lesson.duration || 0), 0), 0) / 60)} giờ`,
-      description: course.description || '',
-      willLearn: course.willLearn || [],
-      requirements: course.requirements || [],
+      level: course.level || "Mọi cấp độ",
+      totalLessons:
+        course.totalLessons ||
+        curriculum.reduce((acc, ch) => acc + ch.lessons.length, 0),
+      duration:
+        course.duration ||
+        `${Math.ceil(curriculum.reduce((acc, ch) => acc + ch.lessons.reduce((lessonAcc, lesson) => lessonAcc + (lesson.duration || 0), 0), 0) / 60)} giờ`,
+      description: course.description || "",
+      willLearn: (() => {
+        if (!course.willLearn) return [];
+        if (Array.isArray(course.willLearn)) return course.willLearn;
+        try {
+          const parsed = JSON.parse(String(course.willLearn));
+          return Array.isArray(parsed) ? parsed : [];
+        } catch {
+          return [];
+        }
+      })(),
+      requirements: (() => {
+        if (!course.requirements) return [];
+        if (Array.isArray(course.requirements)) return course.requirements;
+        try {
+          const parsed = JSON.parse(String(course.requirements));
+          return Array.isArray(parsed) ? parsed : [];
+        } catch {
+          return [];
+        }
+      })(),
       curriculum,
-      tags: course.tags || [],
+      tags: (() => {
+        if (!course.tags) return [];
+        if (Array.isArray(course.tags)) return course.tags;
+        try {
+          const parsed = JSON.parse(String(course.tags));
+          return Array.isArray(parsed) ? parsed : [];
+        } catch {
+          return [];
+        }
+      })(),
       price: parseFloat(course.price) || 0,
       lastUpdated: course.lastUpdated || new Date().toISOString(),
     };
@@ -347,10 +415,10 @@ exports.getCourseDetail = async (req, res) => {
       },
     });
   } catch (error) {
-    console.error('Lỗi lấy chi tiết khóa học:', error);
+    console.error("Lỗi lấy chi tiết khóa học:", error);
     res.status(500).json({
       success: false,
-      message: 'Lỗi máy chủ',
+      message: "Lỗi máy chủ",
       error: error.message,
     });
   }
@@ -364,8 +432,8 @@ exports.getMyCourses = async (req, res) => {
 
     const {
       q,
-      status = 'all',
-      sort = 'newest',
+      status = "all",
+      sort = "newest",
       page = 1,
       limit = 50,
     } = req.query;
@@ -375,7 +443,7 @@ exports.getMyCourses = async (req, res) => {
     const offset = (pageNum - 1) * limitNum;
 
     const where = {};
-    if (role === 'teacher') {
+    if (role === "teacher") {
       where.createdBy = userId;
     }
 
@@ -383,22 +451,31 @@ exports.getMyCourses = async (req, res) => {
       where.title = { [Op.like]: `%${q}%` };
     }
 
-    if (status === 'published') {
+    if (status === "published") {
       where.published = true;
     }
-    if (status === 'draft') {
+    if (status === "draft") {
       where.published = false;
     }
 
     const order = (() => {
       switch (sort) {
-        case 'oldest':
-          return [['createdAt', 'ASC'], ['id', 'ASC']];
-        case 'updated_desc':
-          return [['updatedAt', 'DESC'], ['id', 'DESC']];
-        case 'newest':
+        case "oldest":
+          return [
+            ["createdAt", "ASC"],
+            ["id", "ASC"],
+          ];
+        case "updated_desc":
+          return [
+            ["updatedAt", "DESC"],
+            ["id", "DESC"],
+          ];
+        case "newest":
         default:
-          return [['createdAt', 'DESC'], ['id', 'DESC']];
+          return [
+            ["createdAt", "DESC"],
+            ["id", "DESC"],
+          ];
       }
     })();
 
@@ -422,10 +499,10 @@ exports.getMyCourses = async (req, res) => {
       },
     });
   } catch (error) {
-    console.error('Lỗi lấy khóa học của giảng viên:', error);
+    console.error("Lỗi lấy khóa học của giảng viên:", error);
     res.status(500).json({
       success: false,
-      message: 'Lỗi máy chủ',
+      message: "Lỗi máy chủ",
       error: error.message,
     });
   }
@@ -434,24 +511,24 @@ exports.getMyCourses = async (req, res) => {
 // ============= TEACHER/ADMIN: CREATE COURSE =============
 exports.createCourse = async (req, res) => {
   try {
-    const { 
-      title, 
-      description, 
+    const {
+      title,
+      description,
       imageUrl,
-      price, 
-      categoryId, 
+      price,
+      categoryId,
       published,
       level,
       duration,
       willLearn,
       requirements,
-      tags
+      tags,
     } = req.body;
 
     if (!title) {
       return res.status(400).json({
         success: false,
-        message: 'Tiêu đề khóa học không được để trống',
+        message: "Tiêu đề khóa học không được để trống",
       });
     }
 
@@ -460,14 +537,14 @@ exports.createCourse = async (req, res) => {
     const course = await Course.create({
       title,
       slug,
-      description: description || '',
+      description: description || "",
       imageUrl: imageUrl || null,
       price: price != null ? price : 0,
-      published: req.user.role === 'admin' ? !!published : false,
+      published: req.user.role === "admin" ? !!published : false,
       categoryId: categoryId || null,
       createdBy: req.user.id,
       // Thêm các field mới
-      level: level || 'Mọi cấp độ',
+      level: level || "Mọi cấp độ",
       duration: duration || null,
       willLearn: willLearn || [],
       requirements: requirements || [],
@@ -476,15 +553,15 @@ exports.createCourse = async (req, res) => {
 
     res.status(201).json({
       success: true,
-      message: 'Tạo khóa học thành công',
+      message: "Tạo khóa học thành công",
       data: {
         course: {
           id: course.id.toString(),
           title: course.title,
           teacher: req.user.name,
           teacherAvatar: `https://i.pravatar.cc/150?u=${req.user.username}`,
-          image: course.imageUrl || '/elearning-1.jpg',
-          category: 'Khác', // Sẽ update khi có category
+          image: course.imageUrl || "/elearning-1.jpg",
+          category: "Khác", // Sẽ update khi có category
           rating: 0,
           reviewCount: 0,
           students: 0,
@@ -502,10 +579,10 @@ exports.createCourse = async (req, res) => {
       },
     });
   } catch (error) {
-    console.error('Lỗi tạo khóa học:', error);
+    console.error("Lỗi tạo khóa học:", error);
     res.status(500).json({
       success: false,
-      message: 'Lỗi máy chủ',
+      message: "Lỗi máy chủ",
       error: error.message,
     });
   }
@@ -523,14 +600,14 @@ exports.getCourseForOwner = async (req, res) => {
     if (!course) {
       return res.status(404).json({
         success: false,
-        message: 'Không tìm thấy khóa học',
+        message: "Không tìm thấy khóa học",
       });
     }
 
-    if (role === 'teacher' && course.createdBy !== userId) {
+    if (role === "teacher" && course.createdBy !== userId) {
       return res.status(403).json({
         success: false,
-        message: 'Bạn không có quyền truy cập khóa học này',
+        message: "Bạn không có quyền truy cập khóa học này",
       });
     }
 
@@ -541,10 +618,10 @@ exports.getCourseForOwner = async (req, res) => {
       },
     });
   } catch (error) {
-    console.error('Lỗi lấy khóa học:', error);
+    console.error("Lỗi lấy khóa học:", error);
     res.status(500).json({
       success: false,
-      message: 'Lỗi máy chủ',
+      message: "Lỗi máy chủ",
       error: error.message,
     });
   }
@@ -562,18 +639,19 @@ exports.updateCourse = async (req, res) => {
     if (!course) {
       return res.status(404).json({
         success: false,
-        message: 'Không tìm thấy khóa học',
+        message: "Không tìm thấy khóa học",
       });
     }
 
-    if (role === 'teacher' && course.createdBy !== userId) {
+    if (role === "teacher" && course.createdBy !== userId) {
       return res.status(403).json({
         success: false,
-        message: 'Bạn không có quyền cập nhật khóa học này',
+        message: "Bạn không có quyền cập nhật khóa học này",
       });
     }
 
-    const { title, description, imageUrl, price, categoryId, published } = req.body;
+    const { title, description, imageUrl, price, categoryId, published } =
+      req.body;
 
     if (title && title !== course.title) {
       course.slug = await generateUniqueSlug(title);
@@ -600,16 +678,16 @@ exports.updateCourse = async (req, res) => {
 
     res.json({
       success: true,
-      message: 'Cập nhật khóa học thành công',
+      message: "Cập nhật khóa học thành công",
       data: {
         course,
       },
     });
   } catch (error) {
-    console.error('Lỗi cập nhật khóa học:', error);
+    console.error("Lỗi cập nhật khóa học:", error);
     res.status(500).json({
       success: false,
-      message: 'Lỗi máy chủ',
+      message: "Lỗi máy chủ",
       error: error.message,
     });
   }
@@ -627,14 +705,14 @@ exports.deleteCourse = async (req, res) => {
     if (!course) {
       return res.status(404).json({
         success: false,
-        message: 'Không tìm thấy khóa học',
+        message: "Không tìm thấy khóa học",
       });
     }
 
-    if (role === 'teacher' && course.createdBy !== userId) {
+    if (role === "teacher" && course.createdBy !== userId) {
       return res.status(403).json({
         success: false,
-        message: 'Bạn không có quyền xóa khóa học này',
+        message: "Bạn không có quyền xóa khóa học này",
       });
     }
 
@@ -642,13 +720,13 @@ exports.deleteCourse = async (req, res) => {
 
     res.json({
       success: true,
-      message: 'Xóa khóa học thành công',
+      message: "Xóa khóa học thành công",
     });
   } catch (error) {
-    console.error('Lỗi xóa khóa học:', error);
+    console.error("Lỗi xóa khóa học:", error);
     res.status(500).json({
       success: false,
-      message: 'Lỗi máy chủ',
+      message: "Lỗi máy chủ",
       error: error.message,
     });
   }
@@ -668,14 +746,14 @@ exports.getCourseContentForOwner = async (req, res) => {
     if (!course) {
       return res.status(404).json({
         success: false,
-        message: 'Không tìm thấy khóa học',
+        message: "Không tìm thấy khóa học",
       });
     }
 
-    if (role === 'teacher' && course.createdBy !== userId) {
+    if (role === "teacher" && course.createdBy !== userId) {
       return res.status(403).json({
         success: false,
-        message: 'Bạn không có quyền truy cập khóa học này',
+        message: "Bạn không có quyền truy cập khóa học này",
       });
     }
 
@@ -683,23 +761,43 @@ exports.getCourseContentForOwner = async (req, res) => {
       where: { courseId: course.id },
       include: [Lecture],
       order: [
-        ['order', 'ASC'],
-        [Lecture, 'order', 'ASC'],
+        ["order", "ASC"],
+        [Lecture, "order", "ASC"],
       ],
+    });
+
+    const formattedChapters = chapters.map((chapter) => {
+      const chapterData = chapter.get({ plain: true });
+      if (chapterData.Lectures) {
+        chapterData.Lectures = chapterData.Lectures.map((lecture) => ({
+          ...lecture,
+          attachments: (() => {
+            if (!lecture.attachments) return [];
+            if (Array.isArray(lecture.attachments)) return lecture.attachments;
+            try {
+              const parsed = JSON.parse(String(lecture.attachments));
+              return Array.isArray(parsed) ? parsed : [];
+            } catch {
+              return [];
+            }
+          })(),
+        }));
+      }
+      return chapterData;
     });
 
     res.json({
       success: true,
       data: {
         course,
-        chapters,
+        chapters: formattedChapters,
       },
     });
   } catch (error) {
-    console.error('Lỗi lấy nội dung khóa học:', error);
+    console.error("Lỗi lấy nội dung khóa học:", error);
     res.status(500).json({
       success: false,
-      message: 'Lỗi máy chủ',
+      message: "Lỗi máy chủ",
       error: error.message,
     });
   }
@@ -716,7 +814,7 @@ exports.createChapter = async (req, res) => {
     if (!title) {
       return res.status(400).json({
         success: false,
-        message: 'Tiêu đề chương không được để trống',
+        message: "Tiêu đề chương không được để trống",
       });
     }
 
@@ -725,14 +823,14 @@ exports.createChapter = async (req, res) => {
     if (!course) {
       return res.status(404).json({
         success: false,
-        message: 'Không tìm thấy khóa học',
+        message: "Không tìm thấy khóa học",
       });
     }
 
-    if (role === 'teacher' && course.createdBy !== userId) {
+    if (role === "teacher" && course.createdBy !== userId) {
       return res.status(403).json({
         success: false,
-        message: 'Bạn không có quyền chỉnh sửa khóa học này',
+        message: "Bạn không có quyền chỉnh sửa khóa học này",
       });
     }
 
@@ -744,16 +842,16 @@ exports.createChapter = async (req, res) => {
 
     res.status(201).json({
       success: true,
-      message: 'Tạo chương mới thành công',
+      message: "Tạo chương mới thành công",
       data: {
         chapter,
       },
     });
   } catch (error) {
-    console.error('Lỗi tạo chương:', error);
+    console.error("Lỗi tạo chương:", error);
     res.status(500).json({
       success: false,
-      message: 'Lỗi máy chủ',
+      message: "Lỗi máy chủ",
       error: error.message,
     });
   }
@@ -772,7 +870,7 @@ exports.updateChapter = async (req, res) => {
     if (!chapter) {
       return res.status(404).json({
         success: false,
-        message: 'Không tìm thấy chương',
+        message: "Không tìm thấy chương",
       });
     }
 
@@ -781,14 +879,14 @@ exports.updateChapter = async (req, res) => {
     if (!course) {
       return res.status(404).json({
         success: false,
-        message: 'Không tìm thấy khóa học của chương này',
+        message: "Không tìm thấy khóa học của chương này",
       });
     }
 
-    if (role === 'teacher' && course.createdBy !== userId) {
+    if (role === "teacher" && course.createdBy !== userId) {
       return res.status(403).json({
         success: false,
-        message: 'Bạn không có quyền chỉnh sửa chương này',
+        message: "Bạn không có quyền chỉnh sửa chương này",
       });
     }
 
@@ -803,16 +901,16 @@ exports.updateChapter = async (req, res) => {
 
     res.json({
       success: true,
-      message: 'Cập nhật chương thành công',
+      message: "Cập nhật chương thành công",
       data: {
         chapter,
       },
     });
   } catch (error) {
-    console.error('Lỗi cập nhật chương:', error);
+    console.error("Lỗi cập nhật chương:", error);
     res.status(500).json({
       success: false,
-      message: 'Lỗi máy chủ',
+      message: "Lỗi máy chủ",
       error: error.message,
     });
   }
@@ -830,7 +928,7 @@ exports.deleteChapter = async (req, res) => {
     if (!chapter) {
       return res.status(404).json({
         success: false,
-        message: 'Không tìm thấy chương',
+        message: "Không tìm thấy chương",
       });
     }
 
@@ -839,14 +937,14 @@ exports.deleteChapter = async (req, res) => {
     if (!course) {
       return res.status(404).json({
         success: false,
-        message: 'Không tìm thấy khóa học của chương này',
+        message: "Không tìm thấy khóa học của chương này",
       });
     }
 
-    if (role === 'teacher' && course.createdBy !== userId) {
+    if (role === "teacher" && course.createdBy !== userId) {
       return res.status(403).json({
         success: false,
-        message: 'Bạn không có quyền xóa chương này',
+        message: "Bạn không có quyền xóa chương này",
       });
     }
 
@@ -857,18 +955,18 @@ exports.deleteChapter = async (req, res) => {
     try {
       await courseAggregatesService.recomputeCourseTotalLessons(course.id);
     } catch (aggErr) {
-      console.error('Recompute course totalLessons (silent) error:', aggErr);
+      console.error("Recompute course totalLessons (silent) error:", aggErr);
     }
 
     res.json({
       success: true,
-      message: 'Xóa chương và các bài giảng liên quan thành công',
+      message: "Xóa chương và các bài giảng liên quan thành công",
     });
   } catch (error) {
-    console.error('Lỗi xóa chương:', error);
+    console.error("Lỗi xóa chương:", error);
     res.status(500).json({
       success: false,
-      message: 'Lỗi máy chủ',
+      message: "Lỗi máy chủ",
       error: error.message,
     });
   }
@@ -880,12 +978,21 @@ exports.createLecture = async (req, res) => {
     const { chapterId } = req.params;
     const userId = req.user.id;
     const role = req.user.role;
-    const { title, type, contentUrl, duration, order, isPreview, attachments } = req.body;
+    const {
+      title,
+      type,
+      content,
+      contentUrl,
+      duration,
+      order,
+      isPreview,
+      attachments,
+    } = req.body;
 
     if (!title || !type) {
       return res.status(400).json({
         success: false,
-        message: 'Tiêu đề và loại bài giảng là bắt buộc',
+        message: "Tiêu đề và loại bài giảng là bắt buộc",
       });
     }
 
@@ -894,7 +1001,7 @@ exports.createLecture = async (req, res) => {
     if (!chapter) {
       return res.status(404).json({
         success: false,
-        message: 'Không tìm thấy chương',
+        message: "Không tìm thấy chương",
       });
     }
 
@@ -903,14 +1010,14 @@ exports.createLecture = async (req, res) => {
     if (!course) {
       return res.status(404).json({
         success: false,
-        message: 'Không tìm thấy khóa học của chương này',
+        message: "Không tìm thấy khóa học của chương này",
       });
     }
 
-    if (role === 'teacher' && course.createdBy !== userId) {
+    if (role === "teacher" && course.createdBy !== userId) {
       return res.status(403).json({
         success: false,
-        message: 'Bạn không có quyền thêm bài giảng cho chương này',
+        message: "Bạn không có quyền thêm bài giảng cho chương này",
       });
     }
 
@@ -921,10 +1028,10 @@ exports.createLecture = async (req, res) => {
         const uploadResult = await mediaService.uploadLectureMedia(req.file);
         finalContentUrl = uploadResult.url;
       } catch (uploadError) {
-        console.error('Lỗi upload media lên Cloudinary:', uploadError);
+        console.error("Lỗi upload media lên Cloudinary:", uploadError);
         return res.status(500).json({
           success: false,
-          message: 'Lỗi upload media. Vui lòng thử lại sau',
+          message: "Lỗi upload media. Vui lòng thử lại sau",
           error: uploadError.message,
         });
       }
@@ -935,17 +1042,21 @@ exports.createLecture = async (req, res) => {
       type,
       contentUrl: finalContentUrl,
       duration: duration != null ? duration : null,
-      isPreview: isPreview !== undefined ? String(isPreview) === 'true' || isPreview === true : false,
+      isPreview:
+        isPreview !== undefined
+          ? String(isPreview) === "true" || isPreview === true
+          : false,
       attachments: (() => {
         if (attachments === undefined) return null;
-        if (attachments === null || attachments === '') return null;
-        if (typeof attachments === 'object') return attachments;
+        if (attachments === null || attachments === "") return null;
+        if (typeof attachments === "object") return attachments;
         try {
           return JSON.parse(String(attachments));
         } catch {
           return null;
         }
       })(),
+      content: content || null,
       order: order != null ? order : 0,
       chapterId: chapter.id,
     });
@@ -953,21 +1064,21 @@ exports.createLecture = async (req, res) => {
     try {
       await courseAggregatesService.recomputeCourseTotalLessons(course.id);
     } catch (aggErr) {
-      console.error('Recompute course totalLessons (silent) error:', aggErr);
+      console.error("Recompute course totalLessons (silent) error:", aggErr);
     }
 
     res.status(201).json({
       success: true,
-      message: 'Tạo bài giảng mới thành công',
+      message: "Tạo bài giảng mới thành công",
       data: {
         lecture,
       },
     });
   } catch (error) {
-    console.error('Lỗi tạo bài giảng:', error);
+    console.error("Lỗi tạo bài giảng:", error);
     res.status(500).json({
       success: false,
-      message: 'Lỗi máy chủ',
+      message: "Lỗi máy chủ",
       error: error.message,
     });
   }
@@ -979,14 +1090,23 @@ exports.updateLecture = async (req, res) => {
     const { id } = req.params;
     const userId = req.user.id;
     const role = req.user.role;
-    const { title, type, contentUrl, duration, order, isPreview, attachments } = req.body;
+    const {
+      title,
+      type,
+      content,
+      contentUrl,
+      duration,
+      order,
+      isPreview,
+      attachments,
+    } = req.body;
 
     const lecture = await Lecture.findByPk(id);
 
     if (!lecture) {
       return res.status(404).json({
         success: false,
-        message: 'Không tìm thấy bài giảng',
+        message: "Không tìm thấy bài giảng",
       });
     }
 
@@ -995,7 +1115,7 @@ exports.updateLecture = async (req, res) => {
     if (!chapter) {
       return res.status(404).json({
         success: false,
-        message: 'Không tìm thấy chương của bài giảng này',
+        message: "Không tìm thấy chương của bài giảng này",
       });
     }
 
@@ -1004,28 +1124,29 @@ exports.updateLecture = async (req, res) => {
     if (!course) {
       return res.status(404).json({
         success: false,
-        message: 'Không tìm thấy khóa học của chương này',
+        message: "Không tìm thấy khóa học của chương này",
       });
     }
 
-    if (role === 'teacher' && course.createdBy !== userId) {
+    if (role === "teacher" && course.createdBy !== userId) {
       return res.status(403).json({
         success: false,
-        message: 'Bạn không có quyền chỉnh sửa bài giảng này',
+        message: "Bạn không có quyền chỉnh sửa bài giảng này",
       });
     }
 
-    let finalContentUrl = contentUrl !== undefined ? contentUrl : lecture.contentUrl;
+    let finalContentUrl =
+      contentUrl !== undefined ? contentUrl : lecture.contentUrl;
 
     if (req.file) {
       try {
         const uploadResult = await mediaService.uploadLectureMedia(req.file);
         finalContentUrl = uploadResult.url;
       } catch (uploadError) {
-        console.error('Lỗi upload media lên Cloudinary:', uploadError);
+        console.error("Lỗi upload media lên Cloudinary:", uploadError);
         return res.status(500).json({
           success: false,
-          message: 'Lỗi upload media. Vui lòng thử lại sau',
+          message: "Lỗi upload media. Vui lòng thử lại sau",
           error: uploadError.message,
         });
       }
@@ -1037,6 +1158,9 @@ exports.updateLecture = async (req, res) => {
     if (type != null) {
       lecture.type = type;
     }
+    if (content !== undefined) {
+      lecture.content = content;
+    }
     if (finalContentUrl !== undefined) {
       lecture.contentUrl = finalContentUrl;
     }
@@ -1044,12 +1168,12 @@ exports.updateLecture = async (req, res) => {
       lecture.duration = duration;
     }
     if (isPreview !== undefined) {
-      lecture.isPreview = String(isPreview) === 'true' || isPreview === true;
+      lecture.isPreview = String(isPreview) === "true" || isPreview === true;
     }
     if (attachments !== undefined) {
-      if (attachments === null || attachments === '') {
+      if (attachments === null || attachments === "") {
         lecture.attachments = null;
-      } else if (typeof attachments === 'object') {
+      } else if (typeof attachments === "object") {
         lecture.attachments = attachments;
       } else {
         try {
@@ -1067,16 +1191,16 @@ exports.updateLecture = async (req, res) => {
 
     res.json({
       success: true,
-      message: 'Cập nhật bài giảng thành công',
+      message: "Cập nhật bài giảng thành công",
       data: {
         lecture,
       },
     });
   } catch (error) {
-    console.error('Lỗi cập nhật bài giảng:', error);
+    console.error("Lỗi cập nhật bài giảng:", error);
     res.status(500).json({
       success: false,
-      message: 'Lỗi máy chủ',
+      message: "Lỗi máy chủ",
       error: error.message,
     });
   }
@@ -1094,7 +1218,7 @@ exports.deleteLecture = async (req, res) => {
     if (!lecture) {
       return res.status(404).json({
         success: false,
-        message: 'Không tìm thấy bài giảng',
+        message: "Không tìm thấy bài giảng",
       });
     }
 
@@ -1103,7 +1227,7 @@ exports.deleteLecture = async (req, res) => {
     if (!chapter) {
       return res.status(404).json({
         success: false,
-        message: 'Không tìm thấy chương của bài giảng này',
+        message: "Không tìm thấy chương của bài giảng này",
       });
     }
 
@@ -1112,14 +1236,14 @@ exports.deleteLecture = async (req, res) => {
     if (!course) {
       return res.status(404).json({
         success: false,
-        message: 'Không tìm thấy khóa học của chương này',
+        message: "Không tìm thấy khóa học của chương này",
       });
     }
 
-    if (role === 'teacher' && course.createdBy !== userId) {
+    if (role === "teacher" && course.createdBy !== userId) {
       return res.status(403).json({
         success: false,
-        message: 'Bạn không có quyền xóa bài giảng này',
+        message: "Bạn không có quyền xóa bài giảng này",
       });
     }
 
@@ -1128,20 +1252,19 @@ exports.deleteLecture = async (req, res) => {
     try {
       await courseAggregatesService.recomputeCourseTotalLessons(course.id);
     } catch (aggErr) {
-      console.error('Recompute course totalLessons (silent) error:', aggErr);
+      console.error("Recompute course totalLessons (silent) error:", aggErr);
     }
 
     res.json({
       success: true,
-      message: 'Xóa bài giảng thành công',
+      message: "Xóa bài giảng thành công",
     });
   } catch (error) {
-    console.error('Lỗi xóa bài giảng:', error);
+    console.error("Lỗi xóa bài giảng:", error);
     res.status(500).json({
       success: false,
-      message: 'Lỗi máy chủ',
+      message: "Lỗi máy chủ",
       error: error.message,
     });
   }
 };
-

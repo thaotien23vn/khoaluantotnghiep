@@ -20,7 +20,7 @@ exports.createQuiz = async (req, res) => {
     }
 
     const { courseId } = req.params;
-    const { title, description, maxScore, timeLimit, passingScore } = req.body;
+    const { title, description, maxScore, timeLimit, passingScore, startTime, endTime, showResults } = req.body;
 
     // Check if course exists and user owns it
     const course = await Course.findByPk(courseId);
@@ -45,6 +45,9 @@ exports.createQuiz = async (req, res) => {
       maxScore: maxScore || 100,
       timeLimit: timeLimit || 60, // minutes
       passingScore: passingScore || 60,
+      startTime: startTime || null,
+      endTime: endTime || null,
+      showResults: showResults !== undefined ? showResults : true,
       createdBy: req.user.id
     });
 
@@ -150,6 +153,192 @@ exports.getCourseQuizzes = async (req, res) => {
 };
 
 /**
+ * @desc    Get all quizzes for a course (Student)
+ * @route   GET /api/student/courses/:courseId/quizzes
+ * @access  Private (Enrolled Student & Admin)
+ */
+exports.getStudentCourseQuizzes = async (req, res) => {
+  try {
+    const { courseId } = req.params;
+    const userId = req.user.id;
+
+    // Check if course exists and student is enrolled
+    const course = await Course.findByPk(courseId);
+    if (!course) {
+      return res.status(404).json({
+        success: false,
+        message: 'Không tìm thấy khóa học'
+      });
+    }
+
+    if (req.user.role !== 'admin') {
+      const { Enrollment } = db.models;
+      const enrollment = await Enrollment.findOne({
+        where: {
+          userId,
+          courseId,
+          status: 'enrolled'
+        }
+      });
+
+      if (!enrollment) {
+        return res.status(403).json({
+          success: false,
+          message: 'Bạn chưa đăng ký khóa học này'
+        });
+      }
+    }
+
+    const quizzes = await Quiz.findAll({
+      where: { courseId },
+      attributes: ['id', 'title', 'description', 'maxScore', 'timeLimit', 'passingScore', 'startTime', 'endTime', 'showResults'],
+      include: [
+        {
+          model: Attempt,
+          as: 'attempts',
+          where: { userId },
+          required: false,
+          attributes: ['id', 'score', 'percentageScore', 'passed', 'startedAt', 'completedAt'],
+          order: [['startedAt', 'DESC']]
+        }
+      ],
+      order: [['created_at', 'DESC']]
+    });
+
+    const formattedQuizzes = quizzes.map(quiz => {
+      const attempts = quiz.attempts || [];
+      let status = 'not_started';
+      let latestAttempt = null;
+
+      if (attempts.length > 0) {
+        latestAttempt = attempts[0]; // Do đã được order DESC theo startedAt
+        const hasCompleted = attempts.some(a => a.completedAt);
+        const hasInProgress = attempts.some(a => !a.completedAt);
+
+        if (hasInProgress) {
+          status = 'in_progress';
+        } else if (hasCompleted) {
+          status = 'completed';
+        }
+      }
+
+      return {
+        ...quiz.toJSON(),
+        attempts: undefined, // Ẩn mảng attempts gốc
+        status,
+        userStatus: {
+          status,
+          lastScore: latestAttempt?.percentageScore || 0,
+          isPassed: latestAttempt?.passed || false,
+          attemptCount: attempts.length,
+          latestAttemptId: latestAttempt?.id || null
+        }
+      };
+    });
+
+    res.json({
+      success: true,
+      data: { quizzes: formattedQuizzes }
+    });
+  } catch (error) {
+    console.error('Get student course quizzes error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Lỗi máy chủ',
+      error: error.message
+    });
+  }
+};
+
+/**
+ * @desc    Get all quizzes from all enrolled courses (Dashboard view)
+ * @route   GET /api/student/quizzes
+ * @access  Private (Student)
+ */
+exports.getAllMyQuizzes = async (req, res) => {
+  try {
+    const userId = req.user.id;
+    const { Enrollment } = db.models;
+
+    // 1. Tìm tất cả ID khóa học đã đăng ký
+    const enrollments = await Enrollment.findAll({
+      where: { userId, status: 'enrolled' },
+      attributes: ['courseId']
+    });
+
+    const courseIds = enrollments.map(e => e.courseId);
+
+    if (courseIds.length === 0) {
+      return res.json({ success: true, data: { quizzes: [] } });
+    }
+
+    // 2. Lấy tất cả quiz thuộc các khóa học đó
+    const quizzes = await Quiz.findAll({
+      where: { courseId: courseIds },
+      attributes: ['id', 'title', 'description', 'maxScore', 'timeLimit', 'passingScore', 'startTime', 'endTime', 'showResults'],
+      include: [
+        {
+          model: Course,
+          as: 'course',
+          attributes: ['id', 'title', 'imageUrl']
+        },
+        {
+          model: Attempt,
+          as: 'attempts',
+          where: { userId },
+          required: false,
+          attributes: ['id', 'score', 'percentageScore', 'passed', 'completedAt'],
+          order: [['startedAt', 'DESC']]
+        }
+      ],
+      order: [['created_at', 'DESC']]
+    });
+
+    // 3. Format dữ liệu
+    const formattedQuizzes = quizzes.map(quiz => {
+      const attempts = quiz.attempts || [];
+      let status = 'not_started';
+      let latestAttempt = null;
+
+      if (attempts.length > 0) {
+        latestAttempt = attempts[0];
+        const hasCompleted = attempts.some(a => a.completedAt);
+        const hasInProgress = attempts.some(a => !a.completedAt);
+
+        if (hasInProgress) status = 'in_progress';
+        else if (hasCompleted) status = 'completed';
+      }
+
+      return {
+        ...quiz.toJSON(),
+        attempts: undefined,
+        status,
+        courseTitle: quiz.course?.title,
+        userStatus: {
+          status,
+          lastScore: latestAttempt?.percentageScore || 0,
+          isPassed: latestAttempt?.passed || false,
+          attemptCount: attempts.length,
+          latestAttemptId: latestAttempt?.id || null
+        }
+      };
+    });
+
+    res.json({
+      success: true,
+      data: { quizzes: formattedQuizzes }
+    });
+  } catch (error) {
+    console.error('Get all my quizzes error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Lỗi máy chủ',
+      error: error.message
+    });
+  }
+};
+
+/**
  * @desc    Get quiz details
  * @route   GET /api/teacher/quizzes/:quizId
  * @access  Private (Teacher & Admin)
@@ -168,6 +357,17 @@ exports.getQuiz = async (req, res) => {
           model: Course,
           as: 'course',
           attributes: ['id', 'title', 'createdBy']
+        },
+        {
+          model: Attempt,
+          as: 'attempts',
+          include: [
+            {
+              model: User,
+              as: 'user',
+              attributes: ['id', 'name', 'email']
+            }
+          ]
         }
       ]
     });
@@ -187,9 +387,32 @@ exports.getQuiz = async (req, res) => {
       });
     }
 
+    // Format attempts to include duration and passed status
+    const quizData = quiz.toJSON();
+    if (quizData.attempts) {
+      quizData.attempts = quizData.attempts.map(attempt => {
+        let duration = null;
+        if (attempt.startedAt && attempt.completedAt) {
+          const start = new Date(attempt.startedAt);
+          const end = new Date(attempt.completedAt);
+          const diffInMs = end - start;
+          const minutes = Math.floor(diffInMs / 60000);
+          const seconds = Math.floor((diffInMs % 60000) / 1000);
+          duration = `${minutes} phút ${seconds} giây`;
+        }
+
+        return {
+          ...attempt,
+          duration,
+          completionTime: attempt.completedAt,
+          isPassed: attempt.passed
+        };
+      });
+    }
+
     res.json({
       success: true,
-      data: { quiz }
+      data: { quiz: quizData }
     });
   } catch (error) {
     console.error('Get quiz error:', error);
@@ -218,7 +441,7 @@ exports.updateQuiz = async (req, res) => {
     }
 
     const { quizId } = req.params;
-    const { title, description, maxScore, timeLimit, passingScore } = req.body;
+    const { title, description, maxScore, timeLimit, passingScore, startTime, endTime, showResults } = req.body;
 
     const quiz = await Quiz.findByPk(quizId, {
       include: [
@@ -250,7 +473,10 @@ exports.updateQuiz = async (req, res) => {
       description,
       maxScore,
       timeLimit,
-      passingScore
+      passingScore,
+      startTime,
+      endTime,
+      showResults
     });
 
     res.json({
