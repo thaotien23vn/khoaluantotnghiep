@@ -75,6 +75,17 @@ module.exports = (sequelize) => {
       unique: true,
       field: 'google_id',
     },
+
+    chatBannedUntil: {
+      type: DataTypes.DATE,
+      allowNull: true,
+      field: 'chat_banned_until',
+    },
+    chatBanReason: {
+      type: DataTypes.TEXT,
+      allowNull: true,
+      field: 'chat_ban_reason',
+    },
   }, {
     tableName: 'users',
   });

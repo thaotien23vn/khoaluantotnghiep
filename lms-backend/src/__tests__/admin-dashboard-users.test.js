@@ -1,20 +1,10 @@
 const request = require('supertest');
 const app = require('../app');
-
-async function loginAdmin() {
-  const res = await request(app)
-    .post('/api/auth/login')
-    .send({ email: process.env.TEST_ADMIN_EMAIL || 'adminThai@gmail.com', password: process.env.TEST_ADMIN_PASSWORD || '123456' });
-
-  expect([200, 201]).toContain(res.statusCode);
-  const token = res.body?.data?.token;
-  expect(typeof token).toBe('string');
-  return token;
-}
+const { loginByRole } = require('./testAuth');
 
 describe('Admin core endpoints', () => {
   it('GET /api/admin/dashboard should return stats', async () => {
-    const token = await loginAdmin();
+    const token = await loginByRole('admin');
 
     const res = await request(app)
       .get('/api/admin/dashboard')
@@ -26,7 +16,7 @@ describe('Admin core endpoints', () => {
   });
 
   it('GET /api/admin/users should return list', async () => {
-    const token = await loginAdmin();
+    const token = await loginByRole('admin');
 
     const res = await request(app)
       .get('/api/admin/users')

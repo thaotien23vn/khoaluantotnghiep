@@ -1,24 +1,62 @@
 const request = require('supertest');
 const app = require('../app');
+const bcrypt = require('bcryptjs');
+const db = require('../models');
 
 const TEST_ACCOUNTS = {
   admin: {
-    email: process.env.TEST_ADMIN_EMAIL || 'adminThai@gmail.com',
+    email: process.env.TEST_ADMIN_EMAIL || 'admin@gmail.com',
     password: process.env.TEST_ADMIN_PASSWORD || '123456',
   },
   teacher: {
-    email: process.env.TEST_TEACHER_EMAIL || 'a@example.com',
-    password: process.env.TEST_TEACHER_PASSWORD || 'password123',
+    email: process.env.TEST_TEACHER_EMAIL || 'teacher@gmail.com',
+    password: process.env.TEST_TEACHER_PASSWORD || '123456',
   },
   student: {
-    email: process.env.TEST_STUDENT_EMAIL || 'ngocthaiuser1@gmail.com',
+    email: process.env.TEST_STUDENT_EMAIL || 'user@gmail.com',
     password: process.env.TEST_STUDENT_PASSWORD || '123456',
   },
 };
 
+async function ensureTestAccount(role) {
+  const account = TEST_ACCOUNTS[role];
+  if (!account) throw new Error(`Unknown role: ${role}`);
+
+  const { User } = db.models;
+  const existing = await User.findOne({ where: { email: account.email } });
+
+  const passwordHash = await bcrypt.hash(account.password, 10);
+
+  if (existing) {
+    if (!existing.isEmailVerified || !existing.isActive || existing.role !== role) {
+      await existing.update({
+        role,
+        isEmailVerified: true,
+        isActive: true,
+      });
+    }
+
+    // Ensure password always matches TEST_ACCOUNTS, since DB may be recreated.
+    await existing.update({ passwordHash });
+    return;
+  }
+
+  await User.create({
+    name: `Test ${role}`,
+    email: account.email,
+    username: `test_${role}_${Date.now()}`,
+    passwordHash,
+    role,
+    isEmailVerified: true,
+    isActive: true,
+  });
+}
+
 async function loginByRole(role) {
   const account = TEST_ACCOUNTS[role];
   if (!account) throw new Error(`Unknown role: ${role}`);
+
+  await ensureTestAccount(role);
 
   const res = await request(app)
     .post('/api/auth/login')

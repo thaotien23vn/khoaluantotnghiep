@@ -5,7 +5,7 @@ describe('POST /api/auth/login', () => {
   it('should login admin and return token', async () => {
     const res = await request(app)
       .post('/api/auth/login')
-      .send({ email: process.env.TEST_ADMIN_EMAIL || 'adminThai@gmail.com', password: process.env.TEST_ADMIN_PASSWORD || '123456' });
+      .send({ email: process.env.TEST_ADMIN_EMAIL || 'admin@gmail.com', password: process.env.TEST_ADMIN_PASSWORD || '123456' });
 
     expect([200, 201]).toContain(res.statusCode);
     expect(res.body).toHaveProperty('success', true);

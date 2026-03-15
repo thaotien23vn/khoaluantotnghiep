@@ -12,9 +12,26 @@ async function getAnyTeacherCourse(token) {
 
   const courses = res.body?.data?.courses;
   expect(Array.isArray(courses)).toBe(true);
-  expect(courses.length).toBeGreaterThan(0);
 
-  return courses[0];
+  if (courses.length > 0) return courses[0];
+
+  const uniq = Date.now();
+  const createRes = await request(app)
+    .post('/api/teacher/courses')
+    .set('Authorization', `Bearer ${token}`)
+    .send({ title: `it_seed_teacher_core_course_${uniq}`, description: 'seed', price: 0, published: true });
+
+  expect([200, 201]).toContain(createRes.statusCode);
+  const courseId = createRes.body?.data?.course?.id;
+  expect(courseId).toBeTruthy();
+
+  // Ensure published even if create ignores `published`
+  await request(app)
+    .put(`/api/teacher/courses/${courseId}/publish`)
+    .set('Authorization', `Bearer ${token}`)
+    .send({ published: true });
+
+  return { id: courseId };
 }
 
 describe('Teacher core (existing course)', () => {

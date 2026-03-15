@@ -11,6 +11,7 @@ const quizRoutes = require("./routes/quiz.routes");
 const paymentRoutes = require("./routes/payment.routes");
 const reviewRoutes = require("./routes/review.routes");
 const notificationRoutes = require("./routes/notification.routes");
+const forumRoutes = require("./routes/forum.routes");
 const aiRoutes = require("./routes/ai.routes");
 const teacherStatisticsRoutes = require("./routes/teacher_statistics.routes");
 const protectedRoutes = require("./routes/protected.routes");
@@ -133,6 +134,9 @@ app.use("/api", reviewRoutes);
 
 // Notification routes (mixed public and protected)
 app.use("/api", notificationRoutes);
+
+// Forum routes
+app.use("/api/forum", forumRoutes);
 
 // Quiz routes (mixed public and protected)
 app.use("/api", quizRoutes);

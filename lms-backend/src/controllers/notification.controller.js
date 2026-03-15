@@ -2,6 +2,7 @@ const db = require('../models');
 const { Notification, User, Course, Enrollment, Quiz, Review } = db.models;
 const { validationResult } = require('express-validator');
 const { Op } = require('sequelize');
+const { emitNotification } = require('../socket');
 
 /**
  * @desc    Get user notifications
@@ -56,6 +57,33 @@ exports.getUserNotifications = async (req, res) => {
       success: false,
       message: 'Lỗi máy chủ',
       error: error.message
+    });
+  }
+};
+
+/**
+ * @desc    Delete all notifications for current user
+ * @route   DELETE /api/student/notifications/delete-all
+ * @access  Private (Student & Admin)
+ */
+exports.deleteAllNotifications = async (req, res) => {
+  try {
+    await Notification.destroy({
+      where: {
+        userId: req.user.id,
+      },
+    });
+
+    return res.json({
+      success: true,
+      message: 'Đã xóa tất cả thông báo',
+    });
+  } catch (error) {
+    console.error('Delete all notifications error:', error);
+    return res.status(500).json({
+      success: false,
+      message: 'Lỗi máy chủ',
+      error: error.message,
     });
   }
 };
@@ -215,7 +243,7 @@ exports.createEnrollmentNotification = async (userId, courseId) => {
 
     if (!course) return;
 
-    await Notification.create({
+    const notification = await Notification.create({
       userId,
       type: 'enrollment',
       title: 'Đăng ký khóa học thành công',
@@ -225,6 +253,8 @@ exports.createEnrollmentNotification = async (userId, courseId) => {
         courseTitle: course.title
       }
     });
+
+    emitNotification(userId, notification);
   } catch (error) {
     console.error('Create enrollment notification error:', error);
   }
@@ -252,7 +282,7 @@ exports.createQuizCompletionNotification = async (userId, quizId, score, passed)
       ? `Chúc mừng! Bạn đã hoàn thành bài kiểm tra "${quiz.title}" với điểm ${score}`
       : `Bạn chưa đạt bài kiểm tra "${quiz.title}" với điểm ${score}. Hãy thử lại nhé!`;
 
-    await Notification.create({
+    const notification = await Notification.create({
       userId,
       type: 'quiz',
       title,
@@ -266,6 +296,8 @@ exports.createQuizCompletionNotification = async (userId, quizId, score, passed)
         passed
       }
     });
+
+    emitNotification(userId, notification);
   } catch (error) {
     console.error('Create quiz completion notification error:', error);
   }
@@ -282,7 +314,7 @@ exports.createReviewNotification = async (teacherId, courseId, reviewId, rating,
 
     if (!course) return;
 
-    await Notification.create({
+    const notification = await Notification.create({
       userId: teacherId,
       type: 'review',
       title: 'Đánh giá mới cho khóa học',
@@ -295,6 +327,8 @@ exports.createReviewNotification = async (teacherId, courseId, reviewId, rating,
         reviewerName
       }
     });
+
+    emitNotification(teacherId, notification);
   } catch (error) {
     console.error('Create review notification error:', error);
   }
@@ -311,7 +345,7 @@ exports.createPaymentNotification = async (userId, courseId, amount) => {
 
     if (!course) return;
 
-    await Notification.create({
+    const notification = await Notification.create({
       userId,
       type: 'payment',
       title: 'Thanh toán thành công',
@@ -322,6 +356,8 @@ exports.createPaymentNotification = async (userId, courseId, amount) => {
         amount
       }
     });
+
+    emitNotification(userId, notification);
   } catch (error) {
     console.error('Create payment notification error:', error);
   }
@@ -380,7 +416,10 @@ exports.createCourseUpdateNotification = async (courseId, updateType, updateCont
       }
     }));
 
-    await Notification.bulkCreate(notifications);
+    const created = await Notification.bulkCreate(notifications);
+    for (const n of created) {
+      emitNotification(n.userId, n);
+    }
   } catch (error) {
     console.error('Create course update notification error:', error);
   }
@@ -397,7 +436,7 @@ exports.createCertificateNotification = async (userId, courseId) => {
 
     if (!course) return;
 
-    await Notification.create({
+    const notification = await Notification.create({
       userId,
       type: 'certificate',
       title: 'Chứng chỉ hoàn thành',
@@ -407,6 +446,8 @@ exports.createCertificateNotification = async (userId, courseId) => {
         courseTitle: course.title
       }
     });
+
+    emitNotification(userId, notification);
   } catch (error) {
     console.error('Create certificate notification error:', error);
   }
@@ -440,7 +481,10 @@ exports.sendNotification = async (req, res) => {
       payload: payload || {}
     }));
 
-    await Notification.bulkCreate(notifications);
+    const created = await Notification.bulkCreate(notifications);
+    for (const n of created) {
+      emitNotification(n.userId, n);
+    }
 
     res.status(201).json({
       success: true,
@@ -506,4 +550,49 @@ exports.getAllNotifications = async (req, res) => {
       error: error.message
     });
   }
+};
+
+/**
+ * @desc    Get current admin's own notifications (same response shape as student/teacher)
+ * @route   GET /api/admin/my-notifications
+ * @access  Private (Admin)
+ */
+exports.getMyAdminNotifications = async (req, res) => {
+  return exports.getUserNotifications(req, res);
+};
+
+/**
+ * @desc    Mark admin notification as read
+ * @route   PUT /api/admin/my-notifications/:notificationId/read
+ * @access  Private (Admin)
+ */
+exports.markMyAdminNotificationAsRead = async (req, res) => {
+  return exports.markAsRead(req, res);
+};
+
+/**
+ * @desc    Mark all admin notifications as read
+ * @route   PUT /api/admin/my-notifications/read-all
+ * @access  Private (Admin)
+ */
+exports.markAllMyAdminNotificationsAsRead = async (req, res) => {
+  return exports.markAllAsRead(req, res);
+};
+
+/**
+ * @desc    Delete admin notification
+ * @route   DELETE /api/admin/my-notifications/:notificationId
+ * @access  Private (Admin)
+ */
+exports.deleteMyAdminNotification = async (req, res) => {
+  return exports.deleteNotification(req, res);
+};
+
+/**
+ * @desc    Delete all admin notifications
+ * @route   DELETE /api/admin/my-notifications/delete-all
+ * @access  Private (Admin)
+ */
+exports.deleteAllMyAdminNotifications = async (req, res) => {
+  return exports.deleteAllNotifications(req, res);
 };

@@ -73,6 +73,18 @@ router.put(
 );
 
 /**
+ * @route   DELETE /api/student/notifications/delete-all
+ * @desc    Delete all notifications for current user
+ * @access  Private (Student & Admin)
+ */
+router.delete(
+  '/student/notifications/delete-all',
+  authMiddleware,
+  authorizeRole('student', 'admin'),
+  notificationController.deleteAllNotifications
+);
+
+/**
  * @route   DELETE /api/student/notifications/:notificationId
  * @desc    Delete notification
  * @access  Private (Student & Admin)
@@ -119,6 +131,13 @@ router.delete(
  );
 
  router.delete(
+  '/teacher/notifications/delete-all',
+  authMiddleware,
+  authorizeRole('teacher', 'admin'),
+  notificationController.deleteAllNotifications
+ );
+
+ router.delete(
    '/teacher/notifications/:notificationId',
    authMiddleware,
    authorizeRole('teacher', 'admin'),
@@ -157,6 +176,49 @@ router.get(
     query('read').optional().isBoolean().withMessage('Read phải là boolean')
   ],
   notificationController.getAllNotifications
+);
+
+// ========== ADMIN "MY" NOTIFICATIONS (for FE compatibility) ==========
+
+router.get(
+  '/admin/my-notifications',
+  authMiddleware,
+  authorizeRole('admin'),
+  [
+    query('page').optional().isInt({ min: 1 }).withMessage('Trang phải là số nguyên dương'),
+    query('limit').optional().isInt({ min: 1, max: 100 }).withMessage('Giới hạn phải là số nguyên từ 1-100'),
+    query('type').optional().isIn(['enrollment', 'quiz', 'review', 'payment', 'course_update', 'certificate', 'announcement']).withMessage('Loại thông báo không hợp lệ'),
+    query('read').optional().isBoolean().withMessage('Read phải là boolean')
+  ],
+  notificationController.getMyAdminNotifications
+);
+
+router.put(
+  '/admin/my-notifications/:notificationId/read',
+  authMiddleware,
+  authorizeRole('admin'),
+  notificationController.markMyAdminNotificationAsRead
+);
+
+router.put(
+  '/admin/my-notifications/read-all',
+  authMiddleware,
+  authorizeRole('admin'),
+  notificationController.markAllMyAdminNotificationsAsRead
+);
+
+router.delete(
+  '/admin/my-notifications/delete-all',
+  authMiddleware,
+  authorizeRole('admin'),
+  notificationController.deleteAllMyAdminNotifications
+);
+
+router.delete(
+  '/admin/my-notifications/:notificationId',
+  authMiddleware,
+  authorizeRole('admin'),
+  notificationController.deleteMyAdminNotification
 );
 
 module.exports = router;

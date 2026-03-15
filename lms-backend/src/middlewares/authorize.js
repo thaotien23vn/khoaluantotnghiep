@@ -45,6 +45,8 @@ const authorizeRole = (...allowedRoles) => {
         role: user.role,
         name: user.name,
         username: user.username,
+        chatBannedUntil: user.chatBannedUntil,
+        chatBanReason: user.chatBanReason,
       };
 
       next();

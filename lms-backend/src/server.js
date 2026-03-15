@@ -2,6 +2,8 @@ require('dotenv').config();
 const app = require('./app');
 const { connectDB } = require('./models');
 const emailService = require('./services/email.service');
+const http = require('http');
+const { initSocket } = require('./socket');
 
 const PORT = process.env.PORT || 5000;
 
@@ -47,7 +49,10 @@ const validateEnv = () => {
       console.warn('⚠️  Email service not properly configured. Some features may not work.');
     }
 
-    app.listen(PORT, () => {
+    const server = http.createServer(app);
+    initSocket(server);
+
+    server.listen(PORT, () => {
       console.log(`✓ Server chạy trên port ${PORT}`);
       console.log(`✓ API: http://localhost:${PORT}/api`);
     });
