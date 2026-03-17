@@ -1,15 +1,25 @@
 const { Sequelize } = require('sequelize');
 
-const sequelize = new Sequelize(
-  process.env.DB_NAME,
-  process.env.DB_USER,
-  process.env.DB_PASSWORD,
-  {
-    host: process.env.DB_HOST,
-    dialect: 'mysql',
-    logging: false,
-  }
-);
+// Use SQLite for testing, MySQL for other environments
+const isTest = process.env.NODE_ENV === 'test';
+
+const sequelize = isTest 
+  ? new Sequelize('sqlite::memory:', {
+      logging: false,
+      define: {
+        timestamps: true
+      }
+    })
+  : new Sequelize(
+      process.env.DB_NAME,
+      process.env.DB_USER,
+      process.env.DB_PASSWORD,
+      {
+        host: process.env.DB_HOST,
+        dialect: 'mysql',
+        logging: false,
+      }
+    );
 
 // ----- models setup -----
 const models = {};
@@ -163,6 +173,12 @@ User.hasMany(Notification, { foreignKey: 'userId', as: 'notifications' });
 const connectDB = async () => {
   await sequelize.authenticate();
   console.log('✅ Database connected');
+  
+  // Sync database for testing
+  if (process.env.NODE_ENV === 'test') {
+    await sequelize.sync({ force: true });
+    console.log('✅ Test database synced');
+  }
 };
 
 module.exports = { sequelize, connectDB, models };
