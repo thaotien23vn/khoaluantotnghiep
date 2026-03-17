@@ -13,7 +13,7 @@ const TEST_ACCOUNTS = {
     password: process.env.TEST_TEACHER_PASSWORD || '123456',
   },
   student: {
-    email: process.env.TEST_STUDENT_EMAIL || 'user@gmail.com',
+    email: process.env.TEST_STUDENT_EMAIL || 'student@gmail.com',
     password: process.env.TEST_STUDENT_PASSWORD || '123456',
   },
 };
@@ -73,6 +73,29 @@ async function loginByRole(role) {
 
   return token;
 }
+
+// Setup test accounts before all tests
+beforeAll(async () => {
+  try {
+    // Ensure database is connected and synced
+    if (process.env.NODE_ENV === 'test') {
+      await db.sequelize.sync({ force: true });
+      console.log('✅ Test database synced');
+    }
+
+    // Create all test accounts
+    console.log('🔧 Creating test accounts...');
+    await Promise.all([
+      ensureTestAccount('admin'),
+      ensureTestAccount('teacher'),
+      ensureTestAccount('student'),
+    ]);
+    console.log('✅ Test accounts created successfully');
+  } catch (error) {
+    console.error('❌ Failed to setup test accounts:', error.message);
+    throw error;
+  }
+});
 
 module.exports = {
   loginByRole,

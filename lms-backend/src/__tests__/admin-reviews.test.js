@@ -1,25 +1,10 @@
 const request = require('supertest');
 const app = require('../app');
 const { seedCore } = require('./jest.teardown');
+const { loginByRole } = require('./testAuth');
 
 async function loginAndGetToken() {
-  const res = await request(app)
-    .post('/api/auth/login')
-    .send({
-      email: process.env.TEST_ADMIN_EMAIL || 'adminThai@gmail.com',
-      password: process.env.TEST_ADMIN_PASSWORD || '123456',
-    });
-
-  if (!(res.statusCode === 200 || res.statusCode === 201) || res.body?.success !== true) {
-    throw new Error(`Login failed: ${res.statusCode} ${JSON.stringify(res.body)}`);
-  }
-
-  const token = res.body?.token || res.body?.accessToken || res.body?.data?.token || res.body?.data?.accessToken;
-  if (!token) {
-    throw new Error(`Login did not return token. Body: ${JSON.stringify(res.body)}`);
-  }
-
-  return token;
+  return await loginByRole('admin');
 }
 
 describe('GET /api/admin/reviews', () => {

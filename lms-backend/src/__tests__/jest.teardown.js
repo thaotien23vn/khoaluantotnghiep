@@ -12,6 +12,20 @@ async function ensureUser({
   isEmailVerified = true,
 }) {
   const { User } = db.models;
+  
+  // For SQLite, we need to handle table creation
+  try {
+    const existing = await User.findOne({ where: { email } });
+    if (existing) return existing;
+  } catch (error) {
+    // Table might not exist yet, try to sync
+    if (error.message.includes('no such table') || error.message.includes('SQLITE_ERROR: no such table')) {
+      await db.sequelize.sync();
+    } else {
+      throw error;
+    }
+  }
+  
   const existing = await User.findOne({ where: { email } });
   if (existing) return existing;
 
@@ -28,6 +42,9 @@ async function ensureUser({
 }
 
 async function seedCore() {
+  // Ensure all tables are created first
+  await db.sequelize.sync();
+  
   const { Category, Course, Enrollment, Review, Notification, ScheduleEvent } = db.models;
 
   const teacher = await ensureUser({
