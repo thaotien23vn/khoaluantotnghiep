@@ -24,6 +24,7 @@ const handleServiceError = (error, res) => {
     return res.status(error.status).json({
       success: false,
       message: error.message,
+      error: error.message,
     });
   }
   console.error('Lỗi:', error);
