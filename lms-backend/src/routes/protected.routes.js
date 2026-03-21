@@ -10,7 +10,8 @@ const uploadMedia = require('../middlewares/uploadMedia');
 const courseController = require('../modules/course/course.controller');
 const chapterController = require('../modules/chapter/chapter.controller');
 const lessonController = require('../modules/lesson/lesson.controller');
-const enrollmentController = require('../controllers/enrollment.controller');
+const paymentController = require('../modules/payment/payment.controller');
+const enrollmentController = require('../modules/enrollment/enrollment.controller');
 const adminController = require('../controllers/admin.controller');
 const scheduleController = require('../controllers/schedule.controller');
 const {
@@ -32,6 +33,20 @@ const {
   updateLessonValidation,
   deleteLessonValidation,
 } = require('../modules/lesson/lesson.validation');
+
+const {
+  createPaymentValidation,
+  processPaymentValidation,
+  getPaymentHistoryValidation,
+  getPaymentDetailValidation,
+} = require('../modules/payment/payment.validation');
+
+const {
+  enrollCourseValidation,
+  unenrollCourseValidation,
+  getEnrollmentByCourseValidation,
+  updateProgressValidation,
+} = require('../modules/enrollment/enrollment.validation');
 
 const router = express.Router();
 
@@ -469,6 +484,7 @@ router.post(
   '/courses/:courseId/enroll',
   authMiddleware,
   authorizeRole('student'),
+  enrollCourseValidation,
   enrollmentController.enroll
 );
 
@@ -481,6 +497,7 @@ router.delete(
   '/courses/:courseId/enroll',
   authMiddleware,
   authorizeRole('student'),
+  unenrollCourseValidation,
   enrollmentController.unenroll
 );
 
@@ -493,6 +510,7 @@ router.get(
   '/enrollments/course/:courseId',
   authMiddleware,
   authorizeRole('student'),
+  getEnrollmentByCourseValidation,
   enrollmentController.getEnrollmentByCourse
 );
 
@@ -541,7 +559,62 @@ router.put(
   '/progress/:courseId',
   authMiddleware,
   authorizeRole('student'),
+  updateProgressValidation,
   enrollmentController.updateProgress
+);
+
+// ---------- Payment (Student & Admin) ----------
+
+/**
+ * @route   POST /api/student/courses/:courseId/payment
+ * @desc    Create payment for a course
+ * @access  Private (Student)
+ */
+router.post(
+  '/courses/:courseId/payment',
+  authMiddleware,
+  authorizeRole('student'),
+  createPaymentValidation,
+  paymentController.createPayment
+);
+
+/**
+ * @route   POST /api/student/payments/process
+ * @desc    Process payment callback (success/failure)
+ * @access  Private (Student)
+ */
+router.post(
+  '/payments/process',
+  authMiddleware,
+  authorizeRole('student'),
+  processPaymentValidation,
+  paymentController.processPayment
+);
+
+/**
+ * @route   GET /api/student/payments
+ * @desc    Get payment history
+ * @access  Private (Student)
+ */
+router.get(
+  '/payments',
+  authMiddleware,
+  authorizeRole('student'),
+  getPaymentHistoryValidation,
+  paymentController.getPaymentHistory
+);
+
+/**
+ * @route   GET /api/student/payments/:id
+ * @desc    Get payment detail
+ * @access  Private (Student)
+ */
+router.get(
+  '/payments/:id',
+  authMiddleware,
+  authorizeRole('student'),
+  getPaymentDetailValidation,
+  paymentController.getPaymentDetail
 );
 
 /**
