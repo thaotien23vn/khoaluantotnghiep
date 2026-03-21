@@ -1,6 +1,6 @@
 const express = require('express');
 const multer = require('multer');
-const authController = require('../controllers/auth.controller');
+const authController = require('../modules/auth/auth.controller');
 const authMiddleware = require('../middlewares/auth');
 const uploadMedia = require('../middlewares/uploadMedia');
 const {
@@ -17,7 +17,7 @@ const {
   updateCurrentUserValidation,
   resendVerificationValidation,
   checkResetTokenValidation,
-} = require('../validators/auth.validator');
+} = require('../modules/auth/auth.validation');
 
 const router = express.Router();
 
