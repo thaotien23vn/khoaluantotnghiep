@@ -29,6 +29,24 @@ describe('Teacher course CRUD (safe: only test-created resources)', () => {
     expect(updateRes.statusCode).toBe(200);
     expect(updateRes.body).toHaveProperty('success', true);
 
+    // Test updating published via general update endpoint (frontend behavior)
+    const updatePublishRes = await request(app)
+      .put(`/api/teacher/courses/${createdId}`)
+      .set('Authorization', `Bearer ${token}`)
+      .send({ published: true });
+
+    expect(updatePublishRes.statusCode).toBe(200);
+    expect(updatePublishRes.body).toHaveProperty('success', true);
+
+    // Test with string 'true' (common frontend issue)
+    const updatePublishStringRes = await request(app)
+      .put(`/api/teacher/courses/${createdId}`)
+      .set('Authorization', `Bearer ${token}`)
+      .send({ published: 'true' });
+
+    expect(updatePublishStringRes.statusCode).toBe(200);
+    expect(updatePublishStringRes.body).toHaveProperty('success', true);
+
     const unpubRes = await request(app)
       .put(`/api/teacher/courses/${createdId}/publish`)
       .set('Authorization', `Bearer ${token}`)

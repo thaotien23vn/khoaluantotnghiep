@@ -123,8 +123,11 @@ const updateCourseValidation = [
   
   body('published')
     .optional()
-    .isBoolean()
-    .withMessage('Published phải là boolean'),
+    .custom((value) => {
+      if (typeof value === 'boolean') return true;
+      if (value === 'true' || value === 'false' || value === '1' || value === '0' || value === 1 || value === 0) return true;
+      throw new Error('Published phải là boolean');
+    }),
   
   body('level')
     .optional()
