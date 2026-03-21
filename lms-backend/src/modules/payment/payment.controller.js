@@ -68,6 +68,7 @@ class PaymentController {
 
   /**
    * Process payment callback (success/failure)
+   * Also handles creating payment if courseId is provided
    */
   async processPayment(req, res) {
     try {
@@ -77,11 +78,12 @@ class PaymentController {
       const { id: userId } = req.user;
       const result = await paymentService.processPayment(userId, req.body);
       
+      const statusCode = result.isNew ? 201 : 200;
       const message = result.payment.status === 'completed'
         ? 'Thanh toán thành công và đã ghi danh khóa học'
         : 'Thanh toán thất bại';
 
-      res.json({
+      res.status(statusCode).json({
         success: true,
         message,
         data: result,
@@ -120,6 +122,52 @@ class PaymentController {
       const result = await paymentService.getPaymentDetail(id, userId);
       res.json({
         success: true,
+        data: result,
+      });
+    } catch (error) {
+      handleServiceError(error, res);
+    }
+  }
+
+  /**
+   * Get payment detail (alias for backward compatibility - uses :paymentId param)
+   */
+  async getPayment(req, res) {
+    try {
+      const validationError = handleValidationErrors(req, res);
+      if (validationError) return;
+
+      const { paymentId } = req.params;
+      const { id: userId } = req.user;
+      const result = await paymentService.getPaymentDetail(paymentId, userId);
+      res.json({
+        success: true,
+        data: result,
+      });
+    } catch (error) {
+      handleServiceError(error, res);
+    }
+  }
+
+  /**
+   * Verify payment (alias for processPayment - backward compatibility)
+   */
+  async verifyPayment(req, res) {
+    try {
+      const validationError = handleValidationErrors(req, res);
+      if (validationError) return;
+
+      const { id: userId } = req.user;
+      // Map verify to process with completed status
+      const processData = {
+        ...req.body,
+        status: 'completed',
+      };
+      const result = await paymentService.processPayment(userId, processData);
+
+      res.json({
+        success: true,
+        message: 'Thanh toán xác nhận thành công',
         data: result,
       });
     } catch (error) {

@@ -102,19 +102,64 @@ class PaymentService {
 
   /**
    * Process payment success/failure callback
+   * Also handles creating payment if courseId is provided (for backward compatibility)
    */
   async processPayment(userId, processData) {
-    const { paymentId, status, providerTxn } = processData;
+    const { paymentId, courseId, status = 'completed', providerTxn, provider = 'mock' } = processData;
 
-    const payment = await Payment.findOne({
-      where: {
-        id: paymentId,
+    let payment;
+
+    if (paymentId) {
+      // Process existing payment
+      payment = await Payment.findOne({
+        where: {
+          id: paymentId,
+          userId,
+        },
+      });
+
+      if (!payment) {
+        throw { status: 404, message: 'Không tìm thấy giao dịch thanh toán' };
+      }
+    } else if (courseId) {
+      // Create new payment for course and process immediately
+      const course = await Course.findByPk(courseId);
+      if (!course) {
+        throw { status: 404, message: 'Không tìm thấy khóa học' };
+      }
+
+      const price = Number(course.price || 0);
+      const providerTxnNew = generateProviderTxn(provider);
+
+      // Create payment with completed status for mock provider
+      payment = await Payment.create({
         userId,
-      },
-    });
+        courseId,
+        amount: price,
+        currency: 'USD',
+        provider,
+        providerTxn: providerTxn || providerTxnNew,
+        status: status,
+        paymentDetails: {
+          initiatedAt: new Date().toISOString(),
+          processedAt: new Date().toISOString(),
+          finalStatus: status,
+        },
+      });
 
-    if (!payment) {
-      throw { status: 404, message: 'Không tìm thấy giao dịch thanh toán' };
+      // If payment successful, auto-enroll user
+      let enrollment = null;
+      if (status === 'completed') {
+        enrollment = await this._enrollAfterPayment(userId, courseId);
+      }
+
+      return { 
+        payment,
+        enrollment,
+        isNew: true,
+      };
+    } else {
+      throw { status: 400, message: 'Thiếu paymentId hoặc courseId' };
     }
 
     if (payment.status !== 'pending') {
@@ -146,6 +191,7 @@ class PaymentService {
     return { 
       payment,
       enrollment,
+      isNew: false,
     };
   }
 
