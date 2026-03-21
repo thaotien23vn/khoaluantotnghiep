@@ -1,20 +1,13 @@
 const express = require('express');
 const authMiddleware = require('../middlewares/auth');
 const authorizeRole = require('../middlewares/authorize');
-const notificationController = require('../controllers/notification.controller');
-const { body, query } = require('express-validator');
+const notificationController = require('../modules/notification/notification.controller');
+const {
+  getNotificationsValidation,
+  sendNotificationValidation,
+} = require('../modules/notification/notification.validation');
 
 const router = express.Router();
-
-// Notification validation rules
-const sendNotificationValidation = [
-  body('userIds').isArray({ min: 1 }).withMessage('Danh sách người dùng không được rỗng'),
-  body('userIds.*').isInt().withMessage('ID người dùng phải là số nguyên'),
-  body('type').isIn(['enrollment', 'quiz', 'review', 'payment', 'course_update', 'certificate', 'announcement']).withMessage('Loại thông báo không hợp lệ'),
-  body('title').notEmpty().withMessage('Tiêu đề không được để trống'),
-  body('message').notEmpty().withMessage('Nội dung không được để trống'),
-  body('payload').optional().isObject().withMessage('Payload phải là object')
-];
 
 // ========== STUDENT ROUTES ==========
 
@@ -27,12 +20,7 @@ router.get(
   '/student/notifications',
   authMiddleware,
   authorizeRole('student', 'admin'),
-  [
-    query('page').optional().isInt({ min: 1 }).withMessage('Trang phải là số nguyên dương'),
-    query('limit').optional().isInt({ min: 1, max: 100 }).withMessage('Giới hạn phải là số nguyên từ 1-100'),
-    query('type').optional().isIn(['enrollment', 'quiz', 'review', 'payment', 'course_update', 'certificate', 'announcement']).withMessage('Loại thông báo không hợp lệ'),
-    query('read').optional().isBoolean().withMessage('Read phải là boolean')
-  ],
+  getNotificationsValidation,
   notificationController.getUserNotifications
 );
 
@@ -96,18 +84,13 @@ router.delete(
   notificationController.deleteNotification
 );
 
- router.get(
-   '/teacher/notifications',
-   authMiddleware,
-   authorizeRole('teacher', 'admin'),
-   [
-     query('page').optional().isInt({ min: 1 }).withMessage('Trang phải là số nguyên dương'),
-     query('limit').optional().isInt({ min: 1, max: 100 }).withMessage('Giới hạn phải là số nguyên từ 1-100'),
-     query('type').optional().isIn(['enrollment', 'quiz', 'review', 'payment', 'course_update', 'certificate', 'announcement']).withMessage('Loại thông báo không hợp lệ'),
-     query('read').optional().isBoolean().withMessage('Read phải là boolean')
-   ],
-   notificationController.getUserNotifications
- );
+router.get(
+  '/teacher/notifications',
+  authMiddleware,
+  authorizeRole('teacher', 'admin'),
+  getNotificationsValidation,
+  notificationController.getUserNotifications
+);
 
  router.get(
    '/teacher/notifications/unread-count',
@@ -168,13 +151,7 @@ router.get(
   '/admin/notifications',
   authMiddleware,
   authorizeRole('admin'),
-  [
-    query('page').optional().isInt({ min: 1 }).withMessage('Trang phải là số nguyên dương'),
-    query('limit').optional().isInt({ min: 1, max: 100 }).withMessage('Giới hạn phải là số nguyên từ 1-100'),
-    query('userId').optional().isInt().withMessage('ID người dùng phải là số nguyên'),
-    query('type').optional().isIn(['enrollment', 'quiz', 'review', 'payment', 'course_update', 'certificate', 'announcement']).withMessage('Loại thông báo không hợp lệ'),
-    query('read').optional().isBoolean().withMessage('Read phải là boolean')
-  ],
+  getNotificationsValidation,
   notificationController.getAllNotifications
 );
 
@@ -184,41 +161,36 @@ router.get(
   '/admin/my-notifications',
   authMiddleware,
   authorizeRole('admin'),
-  [
-    query('page').optional().isInt({ min: 1 }).withMessage('Trang phải là số nguyên dương'),
-    query('limit').optional().isInt({ min: 1, max: 100 }).withMessage('Giới hạn phải là số nguyên từ 1-100'),
-    query('type').optional().isIn(['enrollment', 'quiz', 'review', 'payment', 'course_update', 'certificate', 'announcement']).withMessage('Loại thông báo không hợp lệ'),
-    query('read').optional().isBoolean().withMessage('Read phải là boolean')
-  ],
-  notificationController.getMyAdminNotifications
+  getNotificationsValidation,
+  notificationController.getUserNotifications
 );
 
 router.put(
   '/admin/my-notifications/:notificationId/read',
   authMiddleware,
   authorizeRole('admin'),
-  notificationController.markMyAdminNotificationAsRead
+  notificationController.markAsRead
 );
 
 router.put(
   '/admin/my-notifications/read-all',
   authMiddleware,
   authorizeRole('admin'),
-  notificationController.markAllMyAdminNotificationsAsRead
+  notificationController.markAllAsRead
 );
 
 router.delete(
   '/admin/my-notifications/delete-all',
   authMiddleware,
   authorizeRole('admin'),
-  notificationController.deleteAllMyAdminNotifications
+  notificationController.deleteAllNotifications
 );
 
 router.delete(
   '/admin/my-notifications/:notificationId',
   authMiddleware,
   authorizeRole('admin'),
-  notificationController.deleteMyAdminNotification
+  notificationController.deleteNotification
 );
 
 module.exports = router;
