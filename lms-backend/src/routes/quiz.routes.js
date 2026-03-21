@@ -1,28 +1,27 @@
 const express = require("express");
 const authMiddleware = require("../middlewares/auth");
 const authorizeRole = require("../middlewares/authorize");
-const quizController = require("../controllers/quiz.controller");
-const attemptController = require("../controllers/attempt.controller");
-const { body } = require("express-validator");
+const quizController = require("../modules/quiz/quiz.controller");
+const attemptController = require("../modules/attempt/attempt.controller");
+const {
+  createQuizValidation,
+  updateQuizValidation,
+  addQuestionValidation,
+  updateQuestionValidation,
+  deleteQuestionValidation,
+  getQuizValidation,
+  getCourseQuizzesValidation,
+} = require("../modules/quiz/quiz.validation");
+const {
+  startAttemptValidation,
+  submitAttemptValidation,
+  getQuizAttemptsValidation,
+  getAttemptValidation,
+  deleteAttemptValidation,
+} = require("../modules/attempt/attempt.validation");
 const uploadMedia = require("../middlewares/uploadMedia");
 
 const router = express.Router();
-
-// Quiz validation rules
-const quizValidation = [
-  body("title").notEmpty().withMessage("Tiêu đề quiz không được để trống"),
-  body("maxScore").optional().isNumeric().withMessage("Điểm tối đa phải là số"),
-  body("timeLimit")
-    .optional()
-    .isNumeric()
-    .withMessage("Thời gian làm bài phải là số"),
-  body("passingScore")
-    .optional()
-    .isNumeric()
-    .withMessage("Điểm đạt phải là số"),
-];
-
-// Question validation rules are now inline in routes
 
 // ========== TEACHER/ADMIN ROUTES ==========
 
@@ -49,7 +48,7 @@ router.post(
   "/teacher/courses/:courseId/quizzes",
   authMiddleware,
   authorizeRole("teacher", "admin"),
-  quizValidation,
+  createQuizValidation,
   quizController.createQuiz,
 );
 
@@ -62,6 +61,7 @@ router.get(
   "/teacher/courses/:courseId/quizzes",
   authMiddleware,
   authorizeRole("teacher", "admin"),
+  getCourseQuizzesValidation,
   quizController.getCourseQuizzes,
 );
 
@@ -74,6 +74,7 @@ router.get(
   "/teacher/quizzes/:quizId",
   authMiddleware,
   authorizeRole("teacher", "admin"),
+  getQuizValidation,
   quizController.getQuiz,
 );
 
@@ -86,7 +87,7 @@ router.put(
   "/teacher/quizzes/:quizId",
   authMiddleware,
   authorizeRole("teacher", "admin"),
-  quizValidation,
+  updateQuizValidation,
   quizController.updateQuiz,
 );
 
@@ -99,6 +100,7 @@ router.delete(
   "/teacher/quizzes/:quizId",
   authMiddleware,
   authorizeRole("teacher", "admin"),
+  getQuizValidation,
   quizController.deleteQuiz,
 );
 
@@ -113,25 +115,7 @@ router.post(
   "/teacher/quizzes/:quizId/questions",
   authMiddleware,
   authorizeRole("teacher", "admin"),
-  // Use combined validation for all question types
-  [
-    body("type")
-      .isIn(["multiple_choice", "true_false", "short_answer", "essay"])
-      .withMessage("Loại câu hỏi không hợp lệ"),
-    body("content")
-      .notEmpty()
-      .withMessage("Nội dung câu hỏi không được để trống"),
-    body("points").optional().isNumeric().withMessage("Điểm phải là số"),
-    // Multiple choice specific validation
-    body("options")
-      .if(body("type").equals("multiple_choice"))
-      .isArray({ min: 2 })
-      .withMessage("Câu hỏi trắc nghiệm phải có ít nhất 2 lựa chọn"),
-    body("correctAnswer")
-      .if(body("type").equals("multiple_choice"))
-      .notEmpty()
-      .withMessage("Đáp án đúng không được để trống"),
-  ],
+  addQuestionValidation,
   quizController.addQuestion,
 );
 
@@ -144,27 +128,7 @@ router.put(
   "/teacher/questions/:questionId",
   authMiddleware,
   authorizeRole("teacher", "admin"),
-  // Use combined validation for all question types
-  [
-    body("type")
-      .optional()
-      .isIn(["multiple_choice", "true_false", "short_answer", "essay"])
-      .withMessage("Loại câu hỏi không hợp lệ"),
-    body("content")
-      .optional()
-      .notEmpty()
-      .withMessage("Nội dung câu hỏi không được để trống"),
-    body("points").optional().isNumeric().withMessage("Điểm phải là số"),
-    // Multiple choice specific validation
-    body("options")
-      .if(body("type").equals("multiple_choice"))
-      .isArray({ min: 2 })
-      .withMessage("Câu hỏi trắc nghiệm phải có ít nhất 2 lựa chọn"),
-    body("correctAnswer")
-      .if(body("type").equals("multiple_choice"))
-      .notEmpty()
-      .withMessage("Đáp án đúng không được để trống"),
-  ],
+  updateQuestionValidation,
   quizController.updateQuestion,
 );
 
@@ -177,6 +141,7 @@ router.delete(
   "/teacher/questions/:questionId",
   authMiddleware,
   authorizeRole("teacher", "admin"),
+  deleteQuestionValidation,
   quizController.deleteQuestion,
 );
 
@@ -189,6 +154,7 @@ router.get(
   "/teacher/quizzes/:quizId/attempts",
   authMiddleware,
   authorizeRole("teacher", "admin"),
+  getQuizAttemptsValidation,
   attemptController.getQuizAttemptsForTeacher,
 );
 
@@ -201,6 +167,7 @@ router.delete(
   "/teacher/attempts/:attemptId",
   authMiddleware,
   authorizeRole("teacher", "admin"),
+  deleteAttemptValidation,
   attemptController.deleteAttempt,
 );
 
@@ -213,6 +180,7 @@ router.get(
   "/teacher/attempts/:attemptId",
   authMiddleware,
   authorizeRole("teacher", "admin"),
+  getAttemptValidation,
   attemptController.getAttemptForTeacher,
 );
 
@@ -239,6 +207,7 @@ router.get(
   "/student/courses/:courseId/quizzes",
   authMiddleware,
   authorizeRole("student", "admin"),
+  getCourseQuizzesValidation,
   quizController.getStudentCourseQuizzes,
 );
 
@@ -251,6 +220,7 @@ router.post(
   "/student/quizzes/:quizId/start",
   authMiddleware,
   authorizeRole("student", "admin"),
+  startAttemptValidation,
   attemptController.startAttempt,
 );
 
@@ -263,7 +233,7 @@ router.post(
   "/student/attempts/:attemptId/submit",
   authMiddleware,
   authorizeRole("student", "admin"),
-  body("answers").isObject().withMessage("Đáp án phải là object"),
+  submitAttemptValidation,
   attemptController.submitAttempt,
 );
 
@@ -276,6 +246,7 @@ router.get(
   "/student/quizzes/:quizId/attempts",
   authMiddleware,
   authorizeRole("student", "admin"),
+  getQuizAttemptsValidation,
   attemptController.getQuizAttempts,
 );
 
@@ -288,6 +259,7 @@ router.get(
   "/student/attempts/:attemptId",
   authMiddleware,
   authorizeRole("student", "admin"),
+  getAttemptValidation,
   attemptController.getAttempt,
 );
 
