@@ -107,10 +107,9 @@ const registerUser = async (userData) => {
       if (result.success) {
         console.log('✅ Verification email sent:', email);
       } else {
-        console.log('⚠️  Failed to send email:', result.error || 'Unknown error');
       }
     })
-    .catch(err => console.error('⚠️  Email sending error:', err.message));
+    .catch(err => {});
 
   return {
     user: {
@@ -218,6 +217,7 @@ const loginUser = async (loginData) => {
 
   // Verify password
   const isPasswordValid = await bcrypt.compare(password, user.passwordHash);
+  
   if (!isPasswordValid) {
     throw {
       status: 401,

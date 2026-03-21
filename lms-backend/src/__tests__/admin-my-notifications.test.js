@@ -29,21 +29,34 @@ describe('Admin my-notifications', () => {
     // Ensure admin user exists in DB with same email used for login
     const db = require('../models');
     const { User, Notification } = db.models;
-    const email = process.env.TEST_ADMIN_EMAIL || 'adminThai@gmail.com';
+    const email = (process.env.TEST_ADMIN_EMAIL || 'adminThai@gmail.com').toLowerCase();
     const password = process.env.TEST_ADMIN_PASSWORD || '123456';
 
     let admin = await User.findOne({ where: { email } });
-    if (!admin) {
+    
+    if (admin) {
+      // Update password to ensure it matches for testing
       const passwordHash = await bcrypt.hash(password, 10);
-      admin = await User.create({
-        name: 'IT Seed Admin',
-        username: `${TEST_PREFIX}admin`,
-        email,
+      await admin.update({ 
         passwordHash,
-        role: 'admin',
         isEmailVerified: true,
-        isActive: true,
+        isActive: true 
       });
+    } else {
+      const passwordHash = await bcrypt.hash(password, 10);
+      try {
+        admin = await User.create({
+          name: 'IT Seed Admin',
+          username: `${TEST_PREFIX}admin`,
+          email,
+          passwordHash,
+          role: 'admin',
+          isEmailVerified: true,
+          isActive: true,
+        });
+      } catch (err) {
+        throw err;
+      }
     }
 
     const token = await loginAdmin();
