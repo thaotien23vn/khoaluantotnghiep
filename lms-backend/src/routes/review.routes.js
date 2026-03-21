@@ -1,16 +1,17 @@
 const express = require('express');
 const authMiddleware = require('../middlewares/auth');
 const authorizeRole = require('../middlewares/authorize');
-const reviewController = require('../controllers/review.controller');
-const { body, query } = require('express-validator');
+const reviewController = require('../modules/review/review.controller');
+const {
+  createReviewValidation,
+  getCourseReviewsValidation,
+  updateReviewValidation,
+  deleteReviewValidation,
+  getUserReviewsValidation,
+  getAllReviewsValidation,
+} = require('../modules/review/review.validation');
 
 const router = express.Router();
-
-// Review validation rules
-const reviewValidation = [
-  body('rating').isInt({ min: 1, max: 5 }).withMessage('Đánh giá phải từ 1-5 sao'),
-  body('comment').optional().isLength({ min: 10, max: 1000 }).withMessage('Bình luận phải từ 10-1000 ký tự')
-];
 
 // ========== PUBLIC ROUTES ==========
 
@@ -21,12 +22,7 @@ const reviewValidation = [
  */
 router.get(
   '/courses/:courseId/reviews',
-  [
-    query('page').optional().isInt({ min: 1 }).withMessage('Trang phải là số nguyên dương'),
-    query('limit').optional().isInt({ min: 1, max: 100 }).withMessage('Giới hạn phải là số nguyên từ 1-100'),
-    query('rating').optional().isInt({ min: 1, max: 5 }).withMessage('Đánh giá phải từ 1-5'),
-    query('sort').optional().isIn(['newest', 'oldest', 'highest', 'lowest']).withMessage('Sắp xếp không hợp lệ')
-  ],
+  getCourseReviewsValidation,
   reviewController.getCourseReviews
 );
 
@@ -41,7 +37,7 @@ router.post(
   '/student/courses/:courseId/reviews',
   authMiddleware,
   authorizeRole('student', 'admin'),
-  reviewValidation,
+  createReviewValidation,
   reviewController.createReview
 );
 
@@ -54,7 +50,7 @@ router.put(
   '/student/reviews/:reviewId',
   authMiddleware,
   authorizeRole('student', 'admin'),
-  reviewValidation,
+  updateReviewValidation,
   reviewController.updateReview
 );
 
@@ -67,6 +63,7 @@ router.delete(
   '/student/reviews/:reviewId',
   authMiddleware,
   authorizeRole('student', 'admin'),
+  deleteReviewValidation,
   reviewController.deleteReview
 );
 
@@ -79,10 +76,7 @@ router.get(
   '/student/reviews',
   authMiddleware,
   authorizeRole('student', 'admin'),
-  [
-    query('page').optional().isInt({ min: 1 }).withMessage('Trang phải là số nguyên dương'),
-    query('limit').optional().isInt({ min: 1, max: 100 }).withMessage('Giới hạn phải là số nguyên từ 1-100')
-  ],
+  getUserReviewsValidation,
   reviewController.getUserReviews
 );
 
@@ -109,13 +103,7 @@ router.get(
   '/admin/reviews',
   authMiddleware,
   authorizeRole('admin'),
-  [
-    query('page').optional().isInt({ min: 1 }).withMessage('Trang phải là số nguyên dương'),
-    query('limit').optional().isInt({ min: 1, max: 100 }).withMessage('Giới hạn phải là số nguyên từ 1-100'),
-    query('courseId').optional().isInt().withMessage('ID khóa học phải là số nguyên'),
-    query('userId').optional().isInt().withMessage('ID người dùng phải là số nguyên'),
-    query('rating').optional().isInt({ min: 1, max: 5 }).withMessage('Đánh giá phải từ 1-5')
-  ],
+  getAllReviewsValidation,
   reviewController.getAllReviews
 );
 

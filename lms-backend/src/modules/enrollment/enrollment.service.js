@@ -1,6 +1,6 @@
 const db = require('../../models');
 const courseAggregatesService = require('../../services/courseAggregates.service');
-const notificationController = require('../../controllers/notification.controller');
+const notificationService = require('../notification/notification.service');
 
 const { Enrollment, Course, User, Payment } = db.models;
 
@@ -102,7 +102,14 @@ class EnrollmentService {
 
     // Send notification
     try {
-      await notificationController.createEnrollmentNotification(userId, course.id);
+      await notificationService.createNotification({
+        userId,
+        title: 'Đăng ký khóa học thành công',
+        message: `Bạn đã đăng ký thành công khóa học "${course.title}"`,
+        type: 'enrollment',
+        relatedId: course.id,
+        relatedType: 'course'
+      });
     } catch (notifyErr) {
       console.error('Create enrollment notification (silent) error:', notifyErr);
     }
