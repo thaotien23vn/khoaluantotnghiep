@@ -47,13 +47,12 @@ exports.register = async (req, res) => {
       });
     }
 
-    // Hash password
     const hashedPassword = await bcrypt.hash(password, 10);
 
     // Tạo mã xác nhận 6 chữ số
     const emailVerificationToken = generateNumericCode();
 
-    // Tạo user mới
+    // Tạo user mới - cần xác thực email (gửi qua Brevo)
     const user = await UserModel.create({
       name,
       username,
@@ -62,27 +61,25 @@ exports.register = async (req, res) => {
       passwordHash: hashedPassword,
       role: 'student',
       isEmailVerified: false,
-      emailVerificationToken,
-      emailVerificationTokenExpires: new Date(Date.now() + 24 * 60 * 60 * 1000), // 24 giờ
+      emailVerificationToken: emailVerificationToken,
+      emailVerificationTokenExpires: new Date(Date.now() + 24 * 60 * 60 * 1000),
     });
 
-    // Gửi email xác nhận
-    const verificationLink = `http://localhost:5000/api/auth/verify-email/${emailVerificationToken}`;
-    try {
-      await emailService.sendVerificationEmail(email, name, emailVerificationToken, verificationLink);
-    } catch (emailError) {
-      console.error('Lỗi gửi email:', emailError);
-      // Xóa user nếu không gửi được email
-      await user.destroy();
-      return res.status(500).json({
-        success: false,
-        message: 'Lỗi gửi email xác nhận. Vui lòng thử lại sau',
-      });
-    }
+    // Gửi email xác nhận qua Brevo - fire and forget, không block response
+    const verificationLink = `${process.env.FRONTEND_URL || 'http://localhost:5173'}/verify-email/${emailVerificationToken}`;
+    emailService.sendVerificationEmail(email, name, emailVerificationToken, verificationLink)
+      .then(result => {
+        if (result.success) {
+          console.log('✅ Đã gửi email xác nhận qua Brevo:', email);
+        } else {
+          console.log('⚠️  Không gửi được email:', result.error || 'Unknown error');
+        }
+      })
+      .catch(err => console.error('⚠️  Lỗi gửi email:', err.message));
 
     res.status(201).json({
       success: true,
-      message: 'Đăng ký thành công. Vui lòng kiểm tra email để xác nhận tài khoản',
+      message: 'Đăng ký thành công. Vui lòng kiểm tra email để xác nhận',
       data: {
         user: {
           id: user.id,

@@ -1,7 +1,10 @@
 const { Sequelize } = require('sequelize');
 
-// Use SQLite for testing, MySQL for other environments
+// Determine database dialect based on environment
 const isTest = process.env.NODE_ENV === 'test';
+const isPostgres = process.env.DB_DIALECT === 'postgres' || 
+                   (process.env.DB_HOST && process.env.DB_HOST.includes('.render.com')) ||
+                   (process.env.DB_HOST && process.env.DB_HOST.startsWith('dpg-'));
 
 const sequelize = isTest 
   ? new Sequelize('sqlite::memory:', {
@@ -10,16 +13,29 @@ const sequelize = isTest
         timestamps: true
       }
     })
-  : new Sequelize(
-      process.env.DB_NAME,
-      process.env.DB_USER,
-      process.env.DB_PASSWORD,
-      {
+  : isPostgres
+    ? new Sequelize(process.env.DB_NAME, process.env.DB_USER, process.env.DB_PASSWORD, {
         host: process.env.DB_HOST,
-        dialect: 'mysql',
+        port: process.env.DB_PORT || 5432,
+        dialect: 'postgres',
         logging: false,
-      }
-    );
+        dialectOptions: {
+          ssl: process.env.NODE_ENV === 'production' ? {
+            require: true,
+            rejectUnauthorized: false
+          } : false
+        }
+      })
+    : new Sequelize(
+        process.env.DB_NAME,
+        process.env.DB_USER,
+        process.env.DB_PASSWORD,
+        {
+          host: process.env.DB_HOST,
+          dialect: 'mysql',
+          logging: false,
+        }
+      );
 
 // ----- models setup -----
 const models = {};

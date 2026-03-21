@@ -12,6 +12,9 @@ function initSocket(httpServer) {
         .map((o) => o.trim()),
       credentials: true,
     },
+    transports: ['websocket', 'polling'],
+    pingTimeout: 60000,
+    pingInterval: 25000,
   });
 
   io.use((socket, next) => {

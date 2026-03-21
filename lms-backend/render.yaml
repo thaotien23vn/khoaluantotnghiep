@@ -1,0 +1,96 @@
+services:
+  - type: web
+    name: lms-backend
+    runtime: node
+    region: singapore
+    plan: starter
+    buildCommand: npm install
+    startCommand: npm start
+    healthCheckPath: /api/health
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: PORT
+        value: 3000
+      - key: DB_HOST
+        fromDatabase:
+          name: lms-postgres
+          property: host
+      - key: DB_PORT
+        fromDatabase:
+          name: lms-postgres
+          property: port
+      - key: DB_NAME
+        fromDatabase:
+          name: lms-postgres
+          property: database
+      - key: DB_USER
+        fromDatabase:
+          name: lms-postgres
+          property: user
+      - key: DB_PASSWORD
+        fromDatabase:
+          name: lms-postgres
+          property: password
+      - key: JWT_SECRET
+        generateValue: true
+      - key: JWT_EXPIRES_IN
+        value: 7d
+      - key: ADMIN_EMAIL
+        value: admin@lms.com
+      - key: ADMIN_PASSWORD
+        generateValue: true
+      - key: ALLOWED_ORIGINS
+        value: http://localhost:3000,http://localhost:5173,https://elearning-eduvn.vercel.app
+      - key: URL_FE_RESETPASS
+        value: https://elearning-eduvn.vercel.app/reset-password
+      - key: EMAIL_HOST
+        value: smtp.gmail.com
+      - key: EMAIL_PORT
+        value: "587"
+      - key: EMAIL_FROM_NAME
+        value: LMS
+      - key: EMAIL_VERIFY_EXPIRE
+        value: 24h
+      - key: RESET_PASSWORD_EXPIRE
+        value: 1h
+      # Cloudinary - bạn cần set thủ công trên Render Dashboard
+      - key: CLOUDINARY_CLOUD_NAME
+        sync: false
+      - key: CLOUDINARY_API_KEY
+        sync: false
+      - key: CLOUDINARY_API_SECRET
+        sync: false
+      - key: CLOUDINARY_FOLDER
+        value: lms_media
+      # Email credentials - cần set thủ công
+      - key: EMAIL_USER
+        sync: false
+      - key: EMAIL_PASSWORD
+        sync: false
+      # Google OAuth - tùy chọn
+      - key: GOOGLE_CLIENT_ID
+        sync: false
+      - key: GOOGLE_CLIENT_SECRET
+        sync: false
+      - key: GOOGLE_CALLBACK_URL
+        sync: false
+      # AI Gemini API - tùy chọn
+      - key: GEMINI_API_KEY
+        sync: false
+      - key: AI_ENABLED
+        value: "true"
+      - key: AI_MODEL
+        value: gemini-flash-latest
+      - key: AI_EMBEDDING_MODEL
+        value: gemini-embedding-001
+      - key: AI_MAX_OUTPUT_TOKENS
+        value: "1024"
+      - key: AI_HTTP_TIMEOUT_MS
+        value: "30000"
+
+databases:
+  - name: lms-postgres
+    region: singapore
+    plan: starter
+    ipAllowList: []

@@ -1,6 +1,7 @@
 require('dotenv').config();
 const app = require('./app');
 const { connectDB } = require('./models');
+const { autoSeed } = require('./models/seed');
 const emailService = require('./services/email.service');
 const http = require('http');
 const { initSocket } = require('./socket');
@@ -42,6 +43,15 @@ const validateEnv = () => {
 
     // Kết nối database
     await connectDB();
+
+    // Tự động tạo admin nếu chưa có (không cần biến env)
+    console.log('🌱 Kiểm tra và tạo admin user nếu cần...');
+    try {
+      await autoSeed();
+      console.log('✅ Auto seed hoàn tất\n');
+    } catch (seedErr) {
+      console.error('⚠️  Auto seed thất bại nhưng vẫn tiếp tục khởi động:', seedErr.message);
+    }
 
     // Kiểm tra kết nối email
     const emailConnected = await emailService.verifyEmailConnection();
