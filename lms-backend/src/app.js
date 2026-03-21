@@ -1,9 +1,6 @@
 const express = require("express");
 const cors = require("cors");
 const helmet = require("helmet");
-const passport = require('passport');
-const session = require('express-session');
-require('./config/passport'); // Load passport configuration
 const authRoutes = require("./routes/auth.routes");
 const courseRoutes = require("./routes/course.routes");
 const categoryRoutes = require("./routes/category.routes");
@@ -96,20 +93,6 @@ app.use((req, res, next) => {
 // Input validation and sanitization
 app.use(validateInput);
 
-// Session middleware (required for Passport)
-app.use(session({
-  secret: process.env.JWT_SECRET || 'default-secret',
-  resave: false,
-  saveUninitialized: false,
-  cookie: {
-    secure: process.env.NODE_ENV === 'production',
-    maxAge: 24 * 60 * 60 * 1000 // 24 hours
-  }
-}));
-
-// Passport middleware
-app.use(passport.initialize());
-app.use(passport.session());
 
 // General API rate limiting
 app.use("/api/", apiLimiter);

@@ -68,13 +68,6 @@ services:
         sync: false
       - key: EMAIL_PASSWORD
         sync: false
-      # Google OAuth - tùy chọn
-      - key: GOOGLE_CLIENT_ID
-        sync: false
-      - key: GOOGLE_CLIENT_SECRET
-        sync: false
-      - key: GOOGLE_CALLBACK_URL
-        sync: false
       # AI Gemini API - tùy chọn
       - key: GEMINI_API_KEY
         sync: false

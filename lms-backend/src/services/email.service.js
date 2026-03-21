@@ -3,53 +3,75 @@ const emailConfig = require('../config/email');
 // Brevo API base URL
 const BREVO_API_URL = 'https://api.brevo.com/v3';
 
-// Kiểm tra cấu hình
-function isConfigured() {
-  return !!emailConfig.apiKey;
-}
+/**
+ * Check if email service is configured
+ * @returns {boolean} Configuration status
+ */
+const isConfigured = () => !!emailConfig.apiKey;
 
-// Tạo sender object
-function getSender() {
-  return {
-    name: emailConfig.fromName,
-    email: emailConfig.fromEmail,
-  };
-}
+/**
+ * Get sender object for emails
+ * @returns {Object} Sender information
+ */
+const getSender = () => ({
+  name: emailConfig.fromName,
+  email: emailConfig.fromEmail,
+});
 
-// Gửi email qua Brevo REST API
-async function sendEmailViaBrevo(toEmail, toName, subject, htmlContent) {
+/**
+ * Send email via Brevo REST API
+ * @param {string} toEmail - Recipient email
+ * @param {string} toName - Recipient name
+ * @param {string} subject - Email subject
+ * @param {string} htmlContent - Email HTML content
+ * @returns {Promise<Object>} Send result
+ */
+const sendEmailViaBrevo = async (toEmail, toName, subject, htmlContent) => {
   if (!isConfigured()) {
-    throw new Error('Thiếu BREVO_API_KEY');
+    throw new Error('Email service not configured - missing BREVO_API_KEY');
   }
 
-  const response = await fetch(`${BREVO_API_URL}/smtp/email`, {
-    method: 'POST',
-    headers: {
-      'Accept': 'application/json',
-      'Content-Type': 'application/json',
-      'api-key': emailConfig.apiKey,
-    },
-    body: JSON.stringify({
-      sender: getSender(),
-      to: [{ email: toEmail, name: toName }],
-      subject: subject,
-      htmlContent: htmlContent,
-    }),
-  });
+  try {
+    const response = await fetch(`${BREVO_API_URL}/smtp/email`, {
+      method: 'POST',
+      headers: {
+        'Accept': 'application/json',
+        'Content-Type': 'application/json',
+        'api-key': emailConfig.apiKey,
+      },
+      body: JSON.stringify({
+        sender: getSender(),
+        to: [{ email: toEmail, name: toName }],
+        subject,
+        htmlContent,
+      }),
+    });
 
-  if (!response.ok) {
-    const errorData = await response.json().catch(() => ({}));
-    throw new Error(errorData.message || `HTTP ${response.status}`);
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({}));
+      throw new Error(errorData.message || `HTTP ${response.status}: ${response.statusText}`);
+    }
+
+    const data = await response.json();
+    return { success: true, messageId: data.messageId, data };
+  } catch (error) {
+    console.error('Brevo API error:', error.message);
+    throw error;
   }
+};
 
-  return await response.json();
-}
-
-// Gửi email xác nhận đăng ký
-exports.sendVerificationEmail = async (email, name, verificationToken, verificationLink) => {
+/**
+ * Send verification email
+ * @param {string} email - Recipient email
+ * @param {string} name - Recipient name
+ * @param {string} verificationCode - Verification code
+ * @param {string} verificationLink - Verification link
+ * @returns {Promise<Object>} Send result
+ */
+const sendVerificationEmail = async (email, name, verificationCode, verificationLink) => {
   if (!isConfigured()) {
-    console.log('ℹ️  Bỏ qua gửi email - thiếu BREVO_API_KEY');
-    return { success: false, skipped: true };
+    console.log('ℹ️  Skipping email send - BREVO_API_KEY not configured');
+    return { success: false, skipped: true, error: 'Email service not configured' };
   }
 
   const htmlContent = `
@@ -64,7 +86,7 @@ exports.sendVerificationEmail = async (email, name, verificationToken, verificat
         </p>
         <div style="background-color: #e3f2fd; padding: 20px; border-radius: 8px; text-align: center; margin: 30px 0;">
           <span style="font-size: 32px; font-weight: bold; color: #1976d2; letter-spacing: 5px;">
-            ${verificationToken}
+            ${verificationCode}
           </span>
         </div>
         <p style="color: #999; font-size: 14px;">
@@ -79,20 +101,26 @@ exports.sendVerificationEmail = async (email, name, verificationToken, verificat
   `;
 
   try {
-    const data = await sendEmailViaBrevo(email, name, 'Xác nhận email - Đăng ký tài khoản', htmlContent);
-    console.log('✅ Đã gửi email xác nhận:', email, 'MessageId:', data.messageId);
-    return { success: true, message: 'Email xác nhận đã được gửi', messageId: data.messageId };
+    const result = await sendEmailViaBrevo(email, name, 'Xác nhận email - Đăng ký tài khoản', htmlContent);
+    console.log('✅ Verification email sent:', email, 'MessageId:', result.messageId);
+    return { success: true, message: 'Email xác nhận đã được gửi', messageId: result.messageId };
   } catch (error) {
-    console.error('⚠️  Lỗi gửi email:', error.message);
+    console.error('⚠️  Failed to send verification email:', error.message);
     return { success: false, error: error.message };
   }
 };
 
-// Gửi email đặt lại mật khẩu
-exports.sendResetPasswordEmail = async (email, name, resetToken, resetLink) => {
+/**
+ * Send reset password email
+ * @param {string} email - Recipient email
+ * @param {string} name - Recipient name
+ * @param {string} resetToken - Reset token
+ * @param {string} resetLink - Reset link
+ * @returns {Promise<Object>} Send result
+ */
+const sendResetPasswordEmail = async (email, name, resetToken, resetLink) => {
   if (!isConfigured()) {
-    console.log('ℹ️  Bỏ qua gửi email - thiếu BREVO_API_KEY');
-    throw new Error('Email service not configured');
+    throw new Error('Email service not configured - missing BREVO_API_KEY');
   }
 
   const htmlContent = `
@@ -123,17 +151,20 @@ exports.sendResetPasswordEmail = async (email, name, resetToken, resetLink) => {
   `;
 
   try {
-    await sendEmailViaBrevo(email, name, 'Đặt lại mật khẩu - EnglishLearning', htmlContent);
-    console.log('✅ Đã gửi email reset password:', email);
-    return { success: true, message: 'Email đặt lại mật khẩu đã được gửi' };
+    const result = await sendEmailViaBrevo(email, name, 'Đặt lại mật khẩu - EnglishLearning', htmlContent);
+    console.log('✅ Reset password email sent:', email, 'MessageId:', result.messageId);
+    return { success: true, message: 'Email đặt lại mật khẩu đã được gửi', messageId: result.messageId };
   } catch (error) {
-    console.error('⚠️  Lỗi gửi email reset password:', error.message);
+    console.error('⚠️  Failed to send reset password email:', error.message);
     throw error;
   }
 };
 
-// Kiểm tra kết nối email
-exports.verifyEmailConnection = async () => {
+/**
+ * Verify email service connection
+ * @returns {Promise<boolean>} Connection status
+ */
+const verifyEmailConnection = async () => {
   console.log('🔍 Brevo API Config:', {
     apiKey: emailConfig.apiKey ? '***' + emailConfig.apiKey.slice(-8) : undefined,
     fromEmail: emailConfig.fromEmail,
@@ -141,12 +172,11 @@ exports.verifyEmailConnection = async () => {
   });
 
   if (!isConfigured()) {
-    console.log('✗ Thiếu BREVO_API_KEY');
+    console.log('✗ Missing BREVO_API_KEY');
     return false;
   }
 
   try {
-    // Test API connection by getting account info
     const response = await fetch(`${BREVO_API_URL}/account`, {
       method: 'GET',
       headers: {
@@ -156,14 +186,22 @@ exports.verifyEmailConnection = async () => {
     });
 
     if (!response.ok) {
-      throw new Error(`HTTP ${response.status}`);
+      throw new Error(`HTTP ${response.status}: ${response.statusText}`);
     }
 
     const account = await response.json();
-    console.log('✅ Kết nối Brevo API thành công:', account.email);
+    console.log('✅ Brevo API connection successful:', account.email);
     return true;
   } catch (error) {
-    console.error('✗ Lỗi kết nối Brevo API:', error.message);
+    console.error('✗ Brevo API connection error:', error.message);
     return false;
   }
+};
+
+module.exports = {
+  sendVerificationEmail,
+  sendResetPasswordEmail,
+  verifyEmailConnection,
+  isConfigured,
+  sendEmailViaBrevo,
 };

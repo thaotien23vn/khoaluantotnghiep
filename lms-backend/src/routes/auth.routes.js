@@ -1,5 +1,4 @@
 const express = require('express');
-const { body } = require('express-validator');
 const multer = require('multer');
 const authController = require('../controllers/auth.controller');
 const authMiddleware = require('../middlewares/auth');
@@ -9,6 +8,16 @@ const {
   emailVerificationLimiter,
   passwordResetLimiter,
 } = require('../middlewares/rateLimiter');
+const {
+  registerValidation,
+  loginValidation,
+  verifyEmailValidation,
+  forgotPasswordValidation,
+  resetPasswordValidation,
+  updateCurrentUserValidation,
+  resendVerificationValidation,
+  checkResetTokenValidation,
+} = require('../validators/auth.validator');
 
 const router = express.Router();
 
@@ -16,24 +25,7 @@ const router = express.Router();
 router.post(
   '/register',
   authLimiter, // Rate limit: 5 attempts per 15 minutes
-  [
-    body('name').trim().notEmpty().withMessage('Tên không được trống'),
-    body('username').trim().notEmpty().withMessage('Tên đăng nhập không được trống'),
-    body('email').isEmail().withMessage('Email không hợp lệ'),
-    body('phone')
-      .optional()
-      .isMobilePhone('any')
-      .withMessage('Số điện thoại không hợp lệ'),
-    body('password')
-      .isLength({ min: 6 })
-      .withMessage('Mật khẩu phải có ít nhất 6 ký tự'),
-    // Người dùng tự đăng ký chỉ được là học viên.
-    // Nếu gửi role khác 'student' -> reject để tránh tự nâng quyền.
-    body('role')
-      .optional()
-      .equals('student')
-      .withMessage('Role không hợp lệ. Người dùng tự đăng ký chỉ có thể là học viên (student).'),
-  ],
+  registerValidation,
   authController.register
 );
 
@@ -41,33 +33,16 @@ router.post(
 router.get('/verify-email/:token', emailVerificationLimiter, authController.verifyEmail);
 
 // ============= Xác nhận email (qua code) =============
-router.post('/verify-email-code', emailVerificationLimiter, authController.verifyEmailByCode);
+router.post('/verify-email-code', emailVerificationLimiter, verifyEmailValidation, authController.verifyEmailByCode);
 
 // ============= Gửi lại email xác nhận =============
-router.post('/resend-verification-email', emailVerificationLimiter, authController.resendVerificationEmail);
+router.post('/resend-verification-email', emailVerificationLimiter, resendVerificationValidation, authController.resendVerificationEmail);
 
 // ============= Đăng nhập =============
 router.post(
   '/login',
   authLimiter, // Rate limit: 5 attempts per 15 minutes
-  [
-    body('email')
-      .optional()
-      .isEmail()
-      .withMessage('Email không hợp lệ'),
-    body('username')
-      .optional()
-      .trim()
-      .notEmpty()
-      .withMessage('Tên đăng nhập không được trống'),
-    body('password').notEmpty().withMessage('Mật khẩu không được trống'),
-    body().custom(body => {
-      if (!body.email && !body.username) {
-        throw new Error('Email hoặc tên đăng nhập phải được cung cấp');
-      }
-      return true;
-    }),
-  ],
+  loginValidation,
   authController.login
 );
 
@@ -75,7 +50,7 @@ router.post(
 router.post(
   '/forgot-password',
   passwordResetLimiter, // Rate limit: 3 attempts per hour
-  [body('email').isEmail().withMessage('Email không hợp lệ')],
+  forgotPasswordValidation,
   authController.forgotPassword
 );
 
@@ -83,13 +58,7 @@ router.post(
 router.post(
   '/reset-password',
   passwordResetLimiter, // Rate limit: 3 attempts per hour
-  [
-    body('token').notEmpty().withMessage('Token không được trống'),
-    body('password')
-      .isLength({ min: 6 })
-      .withMessage('Mật khẩu phải có ít nhất 6 ký tự'),
-    body('confirmPassword').notEmpty().withMessage('Xác nhận mật khẩu không được trống'),
-  ],
+  resetPasswordValidation,
   authController.resetPassword
 );
 
@@ -108,14 +77,7 @@ router.get('/me', authMiddleware, authController.getCurrentUser);
 router.put(
   '/me',
   authMiddleware,
-  [
-    body('name').optional().trim().notEmpty().withMessage('Tên không được trống'),
-    body('phone')
-      .optional()
-      .isMobilePhone('any')
-      .withMessage('Số điện thoại không hợp lệ'),
-    body('avatar').optional().trim().notEmpty().withMessage('Avatar không hợp lệ'),
-  ],
+  updateCurrentUserValidation,
   authController.updateCurrentUser
 );
 
@@ -135,9 +97,5 @@ router.post(
   }).single('file'),
   authController.uploadAvatar
 );
-
-// ============= Google OAuth =============
-router.get('/google', authController.googleAuth);
-router.get('/google/callback', authController.googleAuthCallback);
 
 module.exports = router;

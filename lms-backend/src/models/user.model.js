@@ -69,12 +69,6 @@ module.exports = (sequelize) => {
       type: DataTypes.DATE,
       field: 'reset_password_token_expires',
     },
-    googleId: {
-      type: DataTypes.STRING,
-      allowNull: true,
-      unique: true,
-      field: 'google_id',
-    },
 
     chatBannedUntil: {
       type: DataTypes.DATE,
