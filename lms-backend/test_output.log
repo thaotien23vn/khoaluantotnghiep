@@ -1,0 +1,962 @@
+﻿
+> lms-backend@1.0.0 test
+> jest --runInBand src/__tests__/course-content.test.js --testTimeout=60000
+
+node.exe : (node:28104) [DEP0170] DeprecationWarning: The URL sqlite::memory: is invalid. Future versions of Node.js will throw an error.
+At line:1 char:1
++ & "C:\Program Files\nodejs/node.exe" "C:\Users\VICTUS\AppData\Roaming ...
++ ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: ((node:28104) [D...throw an error.:String) [], RemoteException
+    + FullyQualifiedErrorId : NativeCommandError
+ 
+(Use `node --trace-deprecation ...` to show where the warning was created)
+FAIL src/__tests__/course-content.test.js
+  ΓùÅ Console
+
+    console.log
+      [dotenv@17.3.1] injecting env (18) from .env -- tip: ≡ƒ¢á∩╕Å  run anywhere with `dotenvx run -- yourcommand`
+
+      at _log (node_modules/dotenv/lib/main.js:139:11)
+
+    console.warn
+      (sequelize) Warning: SQLite does not support 'INTEGER' with UNSIGNED or ZEROFILL. Plain 'INTEGER' will be used instead. 
+      >> Check: https://www.sqlite.org/datatype3.html
+
+    [0m [90m 2 |[39m
+     [90m 3 |[39m module[33m.[39mexports [33m=[39m (sequelize) [33m=>[39m {
+    [31m[1m>[22m[39m[90m 4 |[39m   [36mconst[39m [33mUser[39m [33m=[39m sequelize[33m.[39mdefine([32m'User'[39m[33m,[39m {
+     [90m   |[39m                          [31m[1m^[22m[39m
+     [90m 5 |[39m     id[33m:[39m {
+     [90m 6 |[39m       type[33m:[39m [33mDataTypes[39m[33m.[39m[33mINTEGER[39m[33m.[39m[33mUNSIGNED[39m[33m,[39m
+     [90m 7 |[39m       autoIncrement[33m:[39m [36mtrue[39m[33m,[39m[0m
+
+      at Logger.warn (node_modules/sequelize/src/utils/logger.ts:41:13)
+      at warn (node_modules/sequelize/src/data-types.js:40:14)
+      at removeUnsupportedIntegerOptions (node_modules/sequelize/src/dialects/sqlite/data-types.js:14:7)
+      at new INTEGER (node_modules/sequelize/src/dialects/sqlite/data-types.js:146:7)
+      at Object.construct (node_modules/sequelize/src/utils/class-to-invokable.ts:25:14)
+      at Proxy.extend (node_modules/sequelize/src/data-types.js:44:12)
+      at Sequelize.normalizeDataType (node_modules/sequelize/src/sequelize.js:1302:37)
+      at Sequelize.normalizeAttribute (node_modules/sequelize/src/sequelize.js:1324:27)
+      at node_modules/sequelize/src/model.js:1043:34
+      at node_modules/lodash/lodash.js:13508:38
+      at node_modules/lodash/lodash.js:5006:15
+      at baseForOwn (node_modules/lodash/lodash.js:3032:24)
+      at Function.mapValues (node_modules/lodash/lodash.js:13507:7)
+      at Function.init (node_modules/sequelize/src/model.js:1042:28)
+      at Sequelize.define (node_modules/sequelize/src/sequelize.js:468:11)
+      at define (src/models/user.model.js:4:26)
+      at src/models/index.js:68:84
+          at Array.forEach (<anonymous>)
+      at Object.forEach (src/models/index.js:67:3)
+      at Object.require (src/__tests__/jest.teardown.js:2:12)
+
+  ΓùÅ Phase 2: Course Content System ΓÇ║ Course Management ΓÇ║ Γ£à Create course - teacher should succeed
+
+
+
+    [0m [90m 67 |[39m [36masync[39m [36mfunction[39m cleanupTestData() {
+     [90m 68 |[39m   [90m// Delete in correct order to avoid FK constraints[39m
+    [31m[1m>[22m[39m[90m 69 |[39m   [36mawait[39m [33mLecture[39m[33m.[39mdestroy({
+     [90m    |[39m   [31m[1m^[22m[39m
+     [90m 70 |[39m     where[33m:[39m { title[33m:[39m { [[33mOp[39m[33m.[39mlike][33m:[39m [32m`${TEST_PREFIX}%`[39m } }[33m,[39m
+     [90m 71 |[39m   })[33m;[39m
+     [90m 72 |[39m   [0m
+
+      at Database.<anonymous> (node_modules/sequelize/src/dialects/sqlite/query.js:236:27)
+      at node_modules/sequelize/src/dialects/sqlite/query.js:234:50
+      at Query.run (node_modules/sequelize/src/dialects/sqlite/query.js:234:12)
+      at node_modules/sequelize/src/sequelize.js:650:28
+      at SQLiteQueryInterface.bulkDelete (node_modules/sequelize/src/dialects/abstract/query-interface.js:992:12)
+      at Function.destroy (node_modules/sequelize/src/model.js:3083:16)
+      at cleanupTestData (src/__tests__/course-content.test.js:69:3)
+      at Object.<anonymous> (src/__tests__/course-content.test.js:100:5)
+
+  ΓùÅ Phase 2: Course Content System ΓÇ║ Course Management ΓÇ║ Γ¥î Create course - student should fail
+
+
+
+    [0m [90m 67 |[39m [36masync[39m [36mfunction[39m cleanupTestData() {
+     [90m 68 |[39m   [90m// Delete in correct order to avoid FK constraints[39m
+    [31m[1m>[22m[39m[90m 69 |[39m   [36mawait[39m [33mLecture[39m[33m.[39mdestroy({
+     [90m    |[39m   [31m[1m^[22m[39m
+     [90m 70 |[39m     where[33m:[39m { title[33m:[39m { [[33mOp[39m[33m.[39mlike][33m:[39m [32m`${TEST_PREFIX}%`[39m } }[33m,[39m
+     [90m 71 |[39m   })[33m;[39m
+     [90m 72 |[39m   [0m
+
+      at Database.<anonymous> (node_modules/sequelize/src/dialects/sqlite/query.js:236:27)
+      at node_modules/sequelize/src/dialects/sqlite/query.js:234:50
+      at Query.run (node_modules/sequelize/src/dialects/sqlite/query.js:234:12)
+      at node_modules/sequelize/src/sequelize.js:650:28
+      at SQLiteQueryInterface.bulkDelete (node_modules/sequelize/src/dialects/abstract/query-interface.js:992:12)
+      at Function.destroy (node_modules/sequelize/src/model.js:3083:16)
+      at cleanupTestData (src/__tests__/course-content.test.js:69:3)
+      at Object.<anonymous> (src/__tests__/course-content.test.js:100:5)
+
+  ΓùÅ Phase 2: Course Content System ΓÇ║ Course Management ΓÇ║ Γ¥î Create course - invalid data should fail
+
+
+
+    [0m [90m 67 |[39m [36masync[39m [36mfunction[39m cleanupTestData() {
+     [90m 68 |[39m   [90m// Delete in correct order to avoid FK constraints[39m
+    [31m[1m>[22m[39m[90m 69 |[39m   [36mawait[39m [33mLecture[39m[33m.[39mdestroy({
+     [90m    |[39m   [31m[1m^[22m[39m
+     [90m 70 |[39m     where[33m:[39m { title[33m:[39m { [[33mOp[39m[33m.[39mlike][33m:[39m [32m`${TEST_PREFIX}%`[39m } }[33m,[39m
+     [90m 71 |[39m   })[33m;[39m
+     [90m 72 |[39m   [0m
+
+      at Database.<anonymous> (node_modules/sequelize/src/dialects/sqlite/query.js:236:27)
+      at node_modules/sequelize/src/dialects/sqlite/query.js:234:50
+      at Query.run (node_modules/sequelize/src/dialects/sqlite/query.js:234:12)
+      at node_modules/sequelize/src/sequelize.js:650:28
+      at SQLiteQueryInterface.bulkDelete (node_modules/sequelize/src/dialects/abstract/query-interface.js:992:12)
+      at Function.destroy (node_modules/sequelize/src/model.js:3083:16)
+      at cleanupTestData (src/__tests__/course-content.test.js:69:3)
+      at Object.<anonymous> (src/__tests__/course-content.test.js:100:5)
+
+  ΓùÅ Phase 2: Course Content System ΓÇ║ Course Management ΓÇ║ Γ£à Get course list - should return paginated results
+
+
+
+    [0m [90m 67 |[39m [36masync[39m [36mfunction[39m cleanupTestData() {
+     [90m 68 |[39m   [90m// Delete in correct order to avoid FK constraints[39m
+    [31m[1m>[22m[39m[90m 69 |[39m   [36mawait[39m [33mLecture[39m[33m.[39mdestroy({
+     [90m    |[39m   [31m[1m^[22m[39m
+     [90m 70 |[39m     where[33m:[39m { title[33m:[39m { [[33mOp[39m[33m.[39mlike][33m:[39m [32m`${TEST_PREFIX}%`[39m } }[33m,[39m
+     [90m 71 |[39m   })[33m;[39m
+     [90m 72 |[39m   [0m
+
+      at Database.<anonymous> (node_modules/sequelize/src/dialects/sqlite/query.js:236:27)
+      at node_modules/sequelize/src/dialects/sqlite/query.js:234:50
+      at Query.run (node_modules/sequelize/src/dialects/sqlite/query.js:234:12)
+      at node_modules/sequelize/src/sequelize.js:650:28
+      at SQLiteQueryInterface.bulkDelete (node_modules/sequelize/src/dialects/abstract/query-interface.js:992:12)
+      at Function.destroy (node_modules/sequelize/src/model.js:3083:16)
+      at cleanupTestData (src/__tests__/course-content.test.js:69:3)
+      at Object.<anonymous> (src/__tests__/course-content.test.js:100:5)
+
+  ΓùÅ Phase 2: Course Content System ΓÇ║ Course Management ΓÇ║ Γ£à Get course detail - should include chapters
+
+
+
+    [0m [90m 67 |[39m [36masync[39m [36mfunction[39m cleanupTestData() {
+     [90m 68 |[39m   [90m// Delete in correct order to avoid FK constraints[39m
+    [31m[1m>[22m[39m[90m 69 |[39m   [36mawait[39m [33mLecture[39m[33m.[39mdestroy({
+     [90m    |[39m   [31m[1m^[22m[39m
+     [90m 70 |[39m     where[33m:[39m { title[33m:[39m { [[33mOp[39m[33m.[39mlike][33m:[39m [32m`${TEST_PREFIX}%`[39m } }[33m,[39m
+     [90m 71 |[39m   })[33m;[39m
+     [90m 72 |[39m   [0m
+
+      at Database.<anonymous> (node_modules/sequelize/src/dialects/sqlite/query.js:236:27)
+      at node_modules/sequelize/src/dialects/sqlite/query.js:234:50
+      at Query.run (node_modules/sequelize/src/dialects/sqlite/query.js:234:12)
+      at node_modules/sequelize/src/sequelize.js:650:28
+      at SQLiteQueryInterface.bulkDelete (node_modules/sequelize/src/dialects/abstract/query-interface.js:992:12)
+      at Function.destroy (node_modules/sequelize/src/model.js:3083:16)
+      at cleanupTestData (src/__tests__/course-content.test.js:69:3)
+      at Object.<anonymous> (src/__tests__/course-content.test.js:100:5)
+
+  ΓùÅ Phase 2: Course Content System ΓÇ║ Course Management ΓÇ║ Γ£à Update course - owner teacher should succeed
+
+
+
+    [0m [90m 67 |[39m [36masync[39m [36mfunction[39m cleanupTestData() {
+     [90m 68 |[39m   [90m// Delete in correct order to avoid FK constraints[39m
+    [31m[1m>[22m[39m[90m 69 |[39m   [36mawait[39m [33mLecture[39m[33m.[39mdestroy({
+     [90m    |[39m   [31m[1m^[22m[39m
+     [90m 70 |[39m     where[33m:[39m { title[33m:[39m { [[33mOp[39m[33m.[39mlike][33m:[39m [32m`${TEST_PREFIX}%`[39m } }[33m,[39m
+     [90m 71 |[39m   })[33m;[39m
+     [90m 72 |[39m   [0m
+
+      at Database.<anonymous> (node_modules/sequelize/src/dialects/sqlite/query.js:236:27)
+      at node_modules/sequelize/src/dialects/sqlite/query.js:234:50
+      at Query.run (node_modules/sequelize/src/dialects/sqlite/query.js:234:12)
+      at node_modules/sequelize/src/sequelize.js:650:28
+      at SQLiteQueryInterface.bulkDelete (node_modules/sequelize/src/dialects/abstract/query-interface.js:992:12)
+      at Function.destroy (node_modules/sequelize/src/model.js:3083:16)
+      at cleanupTestData (src/__tests__/course-content.test.js:69:3)
+      at Object.<anonymous> (src/__tests__/course-content.test.js:100:5)
+
+  ΓùÅ Phase 2: Course Content System ΓÇ║ Course Management ΓÇ║ Γ¥î Update course - other teacher should fail
+
+
+
+    [0m [90m 67 |[39m [36masync[39m [36mfunction[39m cleanupTestData() {
+     [90m 68 |[39m   [90m// Delete in correct order to avoid FK constraints[39m
+    [31m[1m>[22m[39m[90m 69 |[39m   [36mawait[39m [33mLecture[39m[33m.[39mdestroy({
+     [90m    |[39m   [31m[1m^[22m[39m
+     [90m 70 |[39m     where[33m:[39m { title[33m:[39m { [[33mOp[39m[33m.[39mlike][33m:[39m [32m`${TEST_PREFIX}%`[39m } }[33m,[39m
+     [90m 71 |[39m   })[33m;[39m
+     [90m 72 |[39m   [0m
+
+      at Database.<anonymous> (node_modules/sequelize/src/dialects/sqlite/query.js:236:27)
+      at node_modules/sequelize/src/dialects/sqlite/query.js:234:50
+      at Query.run (node_modules/sequelize/src/dialects/sqlite/query.js:234:12)
+      at node_modules/sequelize/src/sequelize.js:650:28
+      at SQLiteQueryInterface.bulkDelete (node_modules/sequelize/src/dialects/abstract/query-interface.js:992:12)
+      at Function.destroy (node_modules/sequelize/src/model.js:3083:16)
+      at cleanupTestData (src/__tests__/course-content.test.js:69:3)
+      at Object.<anonymous> (src/__tests__/course-content.test.js:100:5)
+
+  ΓùÅ Phase 2: Course Content System ΓÇ║ Course Management ΓÇ║ Γ£à Update course - admin can update any course
+
+
+
+    [0m [90m 67 |[39m [36masync[39m [36mfunction[39m cleanupTestData() {
+     [90m 68 |[39m   [90m// Delete in correct order to avoid FK constraints[39m
+    [31m[1m>[22m[39m[90m 69 |[39m   [36mawait[39m [33mLecture[39m[33m.[39mdestroy({
+     [90m    |[39m   [31m[1m^[22m[39m
+     [90m 70 |[39m     where[33m:[39m { title[33m:[39m { [[33mOp[39m[33m.[39mlike][33m:[39m [32m`${TEST_PREFIX}%`[39m } }[33m,[39m
+     [90m 71 |[39m   })[33m;[39m
+     [90m 72 |[39m   [0m
+
+      at Database.<anonymous> (node_modules/sequelize/src/dialects/sqlite/query.js:236:27)
+      at node_modules/sequelize/src/dialects/sqlite/query.js:234:50
+      at Query.run (node_modules/sequelize/src/dialects/sqlite/query.js:234:12)
+      at node_modules/sequelize/src/sequelize.js:650:28
+      at SQLiteQueryInterface.bulkDelete (node_modules/sequelize/src/dialects/abstract/query-interface.js:992:12)
+      at Function.destroy (node_modules/sequelize/src/model.js:3083:16)
+      at cleanupTestData (src/__tests__/course-content.test.js:69:3)
+      at Object.<anonymous> (src/__tests__/course-content.test.js:100:5)
+
+  ΓùÅ Phase 2: Course Content System ΓÇ║ Course Management ΓÇ║ Γ£à Get teacher courses - should return only own courses
+
+
+
+    [0m [90m 67 |[39m [36masync[39m [36mfunction[39m cleanupTestData() {
+     [90m 68 |[39m   [90m// Delete in correct order to avoid FK constraints[39m
+    [31m[1m>[22m[39m[90m 69 |[39m   [36mawait[39m [33mLecture[39m[33m.[39mdestroy({
+     [90m    |[39m   [31m[1m^[22m[39m
+     [90m 70 |[39m     where[33m:[39m { title[33m:[39m { [[33mOp[39m[33m.[39mlike][33m:[39m [32m`${TEST_PREFIX}%`[39m } }[33m,[39m
+     [90m 71 |[39m   })[33m;[39m
+     [90m 72 |[39m   [0m
+
+      at Database.<anonymous> (node_modules/sequelize/src/dialects/sqlite/query.js:236:27)
+      at node_modules/sequelize/src/dialects/sqlite/query.js:234:50
+      at Query.run (node_modules/sequelize/src/dialects/sqlite/query.js:234:12)
+      at node_modules/sequelize/src/sequelize.js:650:28
+      at SQLiteQueryInterface.bulkDelete (node_modules/sequelize/src/dialects/abstract/query-interface.js:992:12)
+      at Function.destroy (node_modules/sequelize/src/model.js:3083:16)
+      at cleanupTestData (src/__tests__/course-content.test.js:69:3)
+      at Object.<anonymous> (src/__tests__/course-content.test.js:100:5)
+
+  ΓùÅ Phase 2: Course Content System ΓÇ║ Chapter Management ΓÇ║ Γ£à Create chapter - course owner should succeed
+
+
+
+    [0m [90m 67 |[39m [36masync[39m [36mfunction[39m cleanupTestData() {
+     [90m 68 |[39m   [90m// Delete in correct order to avoid FK constraints[39m
+    [31m[1m>[22m[39m[90m 69 |[39m   [36mawait[39m [33mLecture[39m[33m.[39mdestroy({
+     [90m    |[39m   [31m[1m^[22m[39m
+     [90m 70 |[39m     where[33m:[39m { title[33m:[39m { [[33mOp[39m[33m.[39mlike][33m:[39m [32m`${TEST_PREFIX}%`[39m } }[33m,[39m
+     [90m 71 |[39m   })[33m;[39m
+     [90m 72 |[39m   [0m
+
+      at Database.<anonymous> (node_modules/sequelize/src/dialects/sqlite/query.js:236:27)
+      at node_modules/sequelize/src/dialects/sqlite/query.js:234:50
+      at Query.run (node_modules/sequelize/src/dialects/sqlite/query.js:234:12)
+      at node_modules/sequelize/src/sequelize.js:650:28
+      at SQLiteQueryInterface.bulkDelete (node_modules/sequelize/src/dialects/abstract/query-interface.js:992:12)
+      at Function.destroy (node_modules/sequelize/src/model.js:3083:16)
+      at cleanupTestData (src/__tests__/course-content.test.js:69:3)
+      at Object.<anonymous> (src/__tests__/course-content.test.js:100:5)
+
+  ΓùÅ Phase 2: Course Content System ΓÇ║ Chapter Management ΓÇ║ Γ£à Create multiple chapters - auto order increment
+
+
+
+    [0m [90m 67 |[39m [36masync[39m [36mfunction[39m cleanupTestData() {
+     [90m 68 |[39m   [90m// Delete in correct order to avoid FK constraints[39m
+    [31m[1m>[22m[39m[90m 69 |[39m   [36mawait[39m [33mLecture[39m[33m.[39mdestroy({
+     [90m    |[39m   [31m[1m^[22m[39m
+     [90m 70 |[39m     where[33m:[39m { title[33m:[39m { [[33mOp[39m[33m.[39mlike][33m:[39m [32m`${TEST_PREFIX}%`[39m } }[33m,[39m
+     [90m 71 |[39m   })[33m;[39m
+     [90m 72 |[39m   [0m
+
+      at Database.<anonymous> (node_modules/sequelize/src/dialects/sqlite/query.js:236:27)
+      at node_modules/sequelize/src/dialects/sqlite/query.js:234:50
+      at Query.run (node_modules/sequelize/src/dialects/sqlite/query.js:234:12)
+      at node_modules/sequelize/src/sequelize.js:650:28
+      at SQLiteQueryInterface.bulkDelete (node_modules/sequelize/src/dialects/abstract/query-interface.js:992:12)
+      at Function.destroy (node_modules/sequelize/src/model.js:3083:16)
+      at cleanupTestData (src/__tests__/course-content.test.js:69:3)
+      at Object.<anonymous> (src/__tests__/course-content.test.js:100:5)
+
+  ΓùÅ Phase 2: Course Content System ΓÇ║ Chapter Management ΓÇ║ Γ¥î Create chapter - student should fail
+
+
+
+    [0m [90m 67 |[39m [36masync[39m [36mfunction[39m cleanupTestData() {
+     [90m 68 |[39m   [90m// Delete in correct order to avoid FK constraints[39m
+    [31m[1m>[22m[39m[90m 69 |[39m   [36mawait[39m [33mLecture[39m[33m.[39mdestroy({
+     [90m    |[39m   [31m[1m^[22m[39m
+     [90m 70 |[39m     where[33m:[39m { title[33m:[39m { [[33mOp[39m[33m.[39mlike][33m:[39m [32m`${TEST_PREFIX}%`[39m } }[33m,[39m
+     [90m 71 |[39m   })[33m;[39m
+     [90m 72 |[39m   [0m
+
+      at Database.<anonymous> (node_modules/sequelize/src/dialects/sqlite/query.js:236:27)
+      at node_modules/sequelize/src/dialects/sqlite/query.js:234:50
+      at Query.run (node_modules/sequelize/src/dialects/sqlite/query.js:234:12)
+      at node_modules/sequelize/src/sequelize.js:650:28
+      at SQLiteQueryInterface.bulkDelete (node_modules/sequelize/src/dialects/abstract/query-interface.js:992:12)
+      at Function.destroy (node_modules/sequelize/src/model.js:3083:16)
+      at cleanupTestData (src/__tests__/course-content.test.js:69:3)
+      at Object.<anonymous> (src/__tests__/course-content.test.js:100:5)
+
+  ΓùÅ Phase 2: Course Content System ΓÇ║ Chapter Management ΓÇ║ Γ£à Get chapters by course - should return ordered list
+
+
+
+    [0m [90m 67 |[39m [36masync[39m [36mfunction[39m cleanupTestData() {
+     [90m 68 |[39m   [90m// Delete in correct order to avoid FK constraints[39m
+    [31m[1m>[22m[39m[90m 69 |[39m   [36mawait[39m [33mLecture[39m[33m.[39mdestroy({
+     [90m    |[39m   [31m[1m^[22m[39m
+     [90m 70 |[39m     where[33m:[39m { title[33m:[39m { [[33mOp[39m[33m.[39mlike][33m:[39m [32m`${TEST_PREFIX}%`[39m } }[33m,[39m
+     [90m 71 |[39m   })[33m;[39m
+     [90m 72 |[39m   [0m
+
+      at Database.<anonymous> (node_modules/sequelize/src/dialects/sqlite/query.js:236:27)
+      at node_modules/sequelize/src/dialects/sqlite/query.js:234:50
+      at Query.run (node_modules/sequelize/src/dialects/sqlite/query.js:234:12)
+      at node_modules/sequelize/src/sequelize.js:650:28
+      at SQLiteQueryInterface.bulkDelete (node_modules/sequelize/src/dialects/abstract/query-interface.js:992:12)
+      at Function.destroy (node_modules/sequelize/src/model.js:3083:16)
+      at cleanupTestData (src/__tests__/course-content.test.js:69:3)
+      at Object.<anonymous> (src/__tests__/course-content.test.js:100:5)
+
+  ΓùÅ Phase 2: Course Content System ΓÇ║ Chapter Management ΓÇ║ Γ£à Update chapter - owner should succeed
+
+
+
+    [0m [90m 67 |[39m [36masync[39m [36mfunction[39m cleanupTestData() {
+     [90m 68 |[39m   [90m// Delete in correct order to avoid FK constraints[39m
+    [31m[1m>[22m[39m[90m 69 |[39m   [36mawait[39m [33mLecture[39m[33m.[39mdestroy({
+     [90m    |[39m   [31m[1m^[22m[39m
+     [90m 70 |[39m     where[33m:[39m { title[33m:[39m { [[33mOp[39m[33m.[39mlike][33m:[39m [32m`${TEST_PREFIX}%`[39m } }[33m,[39m
+     [90m 71 |[39m   })[33m;[39m
+     [90m 72 |[39m   [0m
+
+      at Database.<anonymous> (node_modules/sequelize/src/dialects/sqlite/query.js:236:27)
+      at node_modules/sequelize/src/dialects/sqlite/query.js:234:50
+      at Query.run (node_modules/sequelize/src/dialects/sqlite/query.js:234:12)
+      at node_modules/sequelize/src/sequelize.js:650:28
+      at SQLiteQueryInterface.bulkDelete (node_modules/sequelize/src/dialects/abstract/query-interface.js:992:12)
+      at Function.destroy (node_modules/sequelize/src/model.js:3083:16)
+      at cleanupTestData (src/__tests__/course-content.test.js:69:3)
+      at Object.<anonymous> (src/__tests__/course-content.test.js:100:5)
+
+  ΓùÅ Phase 2: Course Content System ΓÇ║ Chapter Management ΓÇ║ Γ£à Reorder chapters
+
+
+
+    [0m [90m 67 |[39m [36masync[39m [36mfunction[39m cleanupTestData() {
+     [90m 68 |[39m   [90m// Delete in correct order to avoid FK constraints[39m
+    [31m[1m>[22m[39m[90m 69 |[39m   [36mawait[39m [33mLecture[39m[33m.[39mdestroy({
+     [90m    |[39m   [31m[1m^[22m[39m
+     [90m 70 |[39m     where[33m:[39m { title[33m:[39m { [[33mOp[39m[33m.[39mlike][33m:[39m [32m`${TEST_PREFIX}%`[39m } }[33m,[39m
+     [90m 71 |[39m   })[33m;[39m
+     [90m 72 |[39m   [0m
+
+      at Database.<anonymous> (node_modules/sequelize/src/dialects/sqlite/query.js:236:27)
+      at node_modules/sequelize/src/dialects/sqlite/query.js:234:50
+      at Query.run (node_modules/sequelize/src/dialects/sqlite/query.js:234:12)
+      at node_modules/sequelize/src/sequelize.js:650:28
+      at SQLiteQueryInterface.bulkDelete (node_modules/sequelize/src/dialects/abstract/query-interface.js:992:12)
+      at Function.destroy (node_modules/sequelize/src/model.js:3083:16)
+      at cleanupTestData (src/__tests__/course-content.test.js:69:3)
+      at Object.<anonymous> (src/__tests__/course-content.test.js:100:5)
+
+  ΓùÅ Phase 2: Course Content System ΓÇ║ Chapter Management ΓÇ║ Γ£à Get chapter detail - should include lessons
+
+
+
+    [0m [90m 67 |[39m [36masync[39m [36mfunction[39m cleanupTestData() {
+     [90m 68 |[39m   [90m// Delete in correct order to avoid FK constraints[39m
+    [31m[1m>[22m[39m[90m 69 |[39m   [36mawait[39m [33mLecture[39m[33m.[39mdestroy({
+     [90m    |[39m   [31m[1m^[22m[39m
+     [90m 70 |[39m     where[33m:[39m { title[33m:[39m { [[33mOp[39m[33m.[39mlike][33m:[39m [32m`${TEST_PREFIX}%`[39m } }[33m,[39m
+     [90m 71 |[39m   })[33m;[39m
+     [90m 72 |[39m   [0m
+
+      at Database.<anonymous> (node_modules/sequelize/src/dialects/sqlite/query.js:236:27)
+      at node_modules/sequelize/src/dialects/sqlite/query.js:234:50
+      at Query.run (node_modules/sequelize/src/dialects/sqlite/query.js:234:12)
+      at node_modules/sequelize/src/sequelize.js:650:28
+      at SQLiteQueryInterface.bulkDelete (node_modules/sequelize/src/dialects/abstract/query-interface.js:992:12)
+      at Function.destroy (node_modules/sequelize/src/model.js:3083:16)
+      at cleanupTestData (src/__tests__/course-content.test.js:69:3)
+      at Object.<anonymous> (src/__tests__/course-content.test.js:100:5)
+
+  ΓùÅ Phase 2: Course Content System ΓÇ║ Lesson Management ΓÇ║ Γ£à Create video lesson - should succeed
+
+
+
+    [0m [90m 67 |[39m [36masync[39m [36mfunction[39m cleanupTestData() {
+     [90m 68 |[39m   [90m// Delete in correct order to avoid FK constraints[39m
+    [31m[1m>[22m[39m[90m 69 |[39m   [36mawait[39m [33mLecture[39m[33m.[39mdestroy({
+     [90m    |[39m   [31m[1m^[22m[39m
+     [90m 70 |[39m     where[33m:[39m { title[33m:[39m { [[33mOp[39m[33m.[39mlike][33m:[39m [32m`${TEST_PREFIX}%`[39m } }[33m,[39m
+     [90m 71 |[39m   })[33m;[39m
+     [90m 72 |[39m   [0m
+
+      at Database.<anonymous> (node_modules/sequelize/src/dialects/sqlite/query.js:236:27)
+      at node_modules/sequelize/src/dialects/sqlite/query.js:234:50
+      at Query.run (node_modules/sequelize/src/dialects/sqlite/query.js:234:12)
+      at node_modules/sequelize/src/sequelize.js:650:28
+      at SQLiteQueryInterface.bulkDelete (node_modules/sequelize/src/dialects/abstract/query-interface.js:992:12)
+      at Function.destroy (node_modules/sequelize/src/model.js:3083:16)
+      at cleanupTestData (src/__tests__/course-content.test.js:69:3)
+      at Object.<anonymous> (src/__tests__/course-content.test.js:100:5)
+
+  ΓùÅ Phase 2: Course Content System ΓÇ║ Lesson Management ΓÇ║ Γ£à Create text lesson - should succeed
+
+
+
+    [0m [90m 67 |[39m [36masync[39m [36mfunction[39m cleanupTestData() {
+     [90m 68 |[39m   [90m// Delete in correct order to avoid FK constraints[39m
+    [31m[1m>[22m[39m[90m 69 |[39m   [36mawait[39m [33mLecture[39m[33m.[39mdestroy({
+     [90m    |[39m   [31m[1m^[22m[39m
+     [90m 70 |[39m     where[33m:[39m { title[33m:[39m { [[33mOp[39m[33m.[39mlike][33m:[39m [32m`${TEST_PREFIX}%`[39m } }[33m,[39m
+     [90m 71 |[39m   })[33m;[39m
+     [90m 72 |[39m   [0m
+
+      at Database.<anonymous> (node_modules/sequelize/src/dialects/sqlite/query.js:236:27)
+      at node_modules/sequelize/src/dialects/sqlite/query.js:234:50
+      at Query.run (node_modules/sequelize/src/dialects/sqlite/query.js:234:12)
+      at node_modules/sequelize/src/sequelize.js:650:28
+      at SQLiteQueryInterface.bulkDelete (node_modules/sequelize/src/dialects/abstract/query-interface.js:992:12)
+      at Function.destroy (node_modules/sequelize/src/model.js:3083:16)
+      at cleanupTestData (src/__tests__/course-content.test.js:69:3)
+      at Object.<anonymous> (src/__tests__/course-content.test.js:100:5)
+
+  ΓùÅ Phase 2: Course Content System ΓÇ║ Lesson Management ΓÇ║ Γ¥î Create lesson - invalid video URL should fail
+
+
+
+    [0m [90m 67 |[39m [36masync[39m [36mfunction[39m cleanupTestData() {
+     [90m 68 |[39m   [90m// Delete in correct order to avoid FK constraints[39m
+    [31m[1m>[22m[39m[90m 69 |[39m   [36mawait[39m [33mLecture[39m[33m.[39mdestroy({
+     [90m    |[39m   [31m[1m^[22m[39m
+     [90m 70 |[39m     where[33m:[39m { title[33m:[39m { [[33mOp[39m[33m.[39mlike][33m:[39m [32m`${TEST_PREFIX}%`[39m } }[33m,[39m
+     [90m 71 |[39m   })[33m;[39m
+     [90m 72 |[39m   [0m
+
+      at Database.<anonymous> (node_modules/sequelize/src/dialects/sqlite/query.js:236:27)
+      at node_modules/sequelize/src/dialects/sqlite/query.js:234:50
+      at Query.run (node_modules/sequelize/src/dialects/sqlite/query.js:234:12)
+      at node_modules/sequelize/src/sequelize.js:650:28
+      at SQLiteQueryInterface.bulkDelete (node_modules/sequelize/src/dialects/abstract/query-interface.js:992:12)
+      at Function.destroy (node_modules/sequelize/src/model.js:3083:16)
+      at cleanupTestData (src/__tests__/course-content.test.js:69:3)
+      at Object.<anonymous> (src/__tests__/course-content.test.js:100:5)
+
+  ΓùÅ Phase 2: Course Content System ΓÇ║ Lesson Management ΓÇ║ Γ¥î Create lesson - missing video URL for video type
+
+
+
+    [0m [90m 67 |[39m [36masync[39m [36mfunction[39m cleanupTestData() {
+     [90m 68 |[39m   [90m// Delete in correct order to avoid FK constraints[39m
+    [31m[1m>[22m[39m[90m 69 |[39m   [36mawait[39m [33mLecture[39m[33m.[39mdestroy({
+     [90m    |[39m   [31m[1m^[22m[39m
+     [90m 70 |[39m     where[33m:[39m { title[33m:[39m { [[33mOp[39m[33m.[39mlike][33m:[39m [32m`${TEST_PREFIX}%`[39m } }[33m,[39m
+     [90m 71 |[39m   })[33m;[39m
+     [90m 72 |[39m   [0m
+
+      at Database.<anonymous> (node_modules/sequelize/src/dialects/sqlite/query.js:236:27)
+      at node_modules/sequelize/src/dialects/sqlite/query.js:234:50
+      at Query.run (node_modules/sequelize/src/dialects/sqlite/query.js:234:12)
+      at node_modules/sequelize/src/sequelize.js:650:28
+      at SQLiteQueryInterface.bulkDelete (node_modules/sequelize/src/dialects/abstract/query-interface.js:992:12)
+      at Function.destroy (node_modules/sequelize/src/model.js:3083:16)
+      at cleanupTestData (src/__tests__/course-content.test.js:69:3)
+      at Object.<anonymous> (src/__tests__/course-content.test.js:100:5)
+
+  ΓùÅ Phase 2: Course Content System ΓÇ║ Lesson Management ΓÇ║ Γ£à Get lessons by chapter - should filter by access
+
+
+
+    [0m [90m 67 |[39m [36masync[39m [36mfunction[39m cleanupTestData() {
+     [90m 68 |[39m   [90m// Delete in correct order to avoid FK constraints[39m
+    [31m[1m>[22m[39m[90m 69 |[39m   [36mawait[39m [33mLecture[39m[33m.[39mdestroy({
+     [90m    |[39m   [31m[1m^[22m[39m
+     [90m 70 |[39m     where[33m:[39m { title[33m:[39m { [[33mOp[39m[33m.[39mlike][33m:[39m [32m`${TEST_PREFIX}%`[39m } }[33m,[39m
+     [90m 71 |[39m   })[33m;[39m
+     [90m 72 |[39m   [0m
+
+      at Database.<anonymous> (node_modules/sequelize/src/dialects/sqlite/query.js:236:27)
+      at node_modules/sequelize/src/dialects/sqlite/query.js:234:50
+      at Query.run (node_modules/sequelize/src/dialects/sqlite/query.js:234:12)
+      at node_modules/sequelize/src/sequelize.js:650:28
+      at SQLiteQueryInterface.bulkDelete (node_modules/sequelize/src/dialects/abstract/query-interface.js:992:12)
+      at Function.destroy (node_modules/sequelize/src/model.js:3083:16)
+      at cleanupTestData (src/__tests__/course-content.test.js:69:3)
+      at Object.<anonymous> (src/__tests__/course-content.test.js:100:5)
+
+  ΓùÅ Phase 2: Course Content System ΓÇ║ Lesson Management ΓÇ║ Γ£à Update lesson - owner should succeed
+
+
+
+    [0m [90m 67 |[39m [36masync[39m [36mfunction[39m cleanupTestData() {
+     [90m 68 |[39m   [90m// Delete in correct order to avoid FK constraints[39m
+    [31m[1m>[22m[39m[90m 69 |[39m   [36mawait[39m [33mLecture[39m[33m.[39mdestroy({
+     [90m    |[39m   [31m[1m^[22m[39m
+     [90m 70 |[39m     where[33m:[39m { title[33m:[39m { [[33mOp[39m[33m.[39mlike][33m:[39m [32m`${TEST_PREFIX}%`[39m } }[33m,[39m
+     [90m 71 |[39m   })[33m;[39m
+     [90m 72 |[39m   [0m
+
+      at Database.<anonymous> (node_modules/sequelize/src/dialects/sqlite/query.js:236:27)
+      at node_modules/sequelize/src/dialects/sqlite/query.js:234:50
+      at Query.run (node_modules/sequelize/src/dialects/sqlite/query.js:234:12)
+      at node_modules/sequelize/src/sequelize.js:650:28
+      at SQLiteQueryInterface.bulkDelete (node_modules/sequelize/src/dialects/abstract/query-interface.js:992:12)
+      at Function.destroy (node_modules/sequelize/src/model.js:3083:16)
+      at cleanupTestData (src/__tests__/course-content.test.js:69:3)
+      at Object.<anonymous> (src/__tests__/course-content.test.js:100:5)
+
+  ΓùÅ Phase 2: Course Content System ΓÇ║ Lesson Management ΓÇ║ Γ£à Get lesson detail - should return full content
+
+
+
+    [0m [90m 67 |[39m [36masync[39m [36mfunction[39m cleanupTestData() {
+     [90m 68 |[39m   [90m// Delete in correct order to avoid FK constraints[39m
+    [31m[1m>[22m[39m[90m 69 |[39m   [36mawait[39m [33mLecture[39m[33m.[39mdestroy({
+     [90m    |[39m   [31m[1m^[22m[39m
+     [90m 70 |[39m     where[33m:[39m { title[33m:[39m { [[33mOp[39m[33m.[39mlike][33m:[39m [32m`${TEST_PREFIX}%`[39m } }[33m,[39m
+     [90m 71 |[39m   })[33m;[39m
+     [90m 72 |[39m   [0m
+
+      at Database.<anonymous> (node_modules/sequelize/src/dialects/sqlite/query.js:236:27)
+      at node_modules/sequelize/src/dialects/sqlite/query.js:234:50
+      at Query.run (node_modules/sequelize/src/dialects/sqlite/query.js:234:12)
+      at node_modules/sequelize/src/sequelize.js:650:28
+      at SQLiteQueryInterface.bulkDelete (node_modules/sequelize/src/dialects/abstract/query-interface.js:992:12)
+      at Function.destroy (node_modules/sequelize/src/model.js:3083:16)
+      at cleanupTestData (src/__tests__/course-content.test.js:69:3)
+      at Object.<anonymous> (src/__tests__/course-content.test.js:100:5)
+
+  ΓùÅ Phase 2: Course Content System ΓÇ║ Lesson Management ΓÇ║ Γ£à Reorder lessons
+
+
+
+    [0m [90m 67 |[39m [36masync[39m [36mfunction[39m cleanupTestData() {
+     [90m 68 |[39m   [90m// Delete in correct order to avoid FK constraints[39m
+    [31m[1m>[22m[39m[90m 69 |[39m   [36mawait[39m [33mLecture[39m[33m.[39mdestroy({
+     [90m    |[39m   [31m[1m^[22m[39m
+     [90m 70 |[39m     where[33m:[39m { title[33m:[39m { [[33mOp[39m[33m.[39mlike][33m:[39m [32m`${TEST_PREFIX}%`[39m } }[33m,[39m
+     [90m 71 |[39m   })[33m;[39m
+     [90m 72 |[39m   [0m
+
+      at Database.<anonymous> (node_modules/sequelize/src/dialects/sqlite/query.js:236:27)
+      at node_modules/sequelize/src/dialects/sqlite/query.js:234:50
+      at Query.run (node_modules/sequelize/src/dialects/sqlite/query.js:234:12)
+      at node_modules/sequelize/src/sequelize.js:650:28
+      at SQLiteQueryInterface.bulkDelete (node_modules/sequelize/src/dialects/abstract/query-interface.js:992:12)
+      at Function.destroy (node_modules/sequelize/src/model.js:3083:16)
+      at cleanupTestData (src/__tests__/course-content.test.js:69:3)
+      at Object.<anonymous> (src/__tests__/course-content.test.js:100:5)
+
+  ΓùÅ Phase 2: Course Content System ΓÇ║ Lesson Management ΓÇ║ Γ¥î Delete lesson - student should fail
+
+
+
+    [0m [90m 67 |[39m [36masync[39m [36mfunction[39m cleanupTestData() {
+     [90m 68 |[39m   [90m// Delete in correct order to avoid FK constraints[39m
+    [31m[1m>[22m[39m[90m 69 |[39m   [36mawait[39m [33mLecture[39m[33m.[39mdestroy({
+     [90m    |[39m   [31m[1m^[22m[39m
+     [90m 70 |[39m     where[33m:[39m { title[33m:[39m { [[33mOp[39m[33m.[39mlike][33m:[39m [32m`${TEST_PREFIX}%`[39m } }[33m,[39m
+     [90m 71 |[39m   })[33m;[39m
+     [90m 72 |[39m   [0m
+
+      at Database.<anonymous> (node_modules/sequelize/src/dialects/sqlite/query.js:236:27)
+      at node_modules/sequelize/src/dialects/sqlite/query.js:234:50
+      at Query.run (node_modules/sequelize/src/dialects/sqlite/query.js:234:12)
+      at node_modules/sequelize/src/sequelize.js:650:28
+      at SQLiteQueryInterface.bulkDelete (node_modules/sequelize/src/dialects/abstract/query-interface.js:992:12)
+      at Function.destroy (node_modules/sequelize/src/model.js:3083:16)
+      at cleanupTestData (src/__tests__/course-content.test.js:69:3)
+      at Object.<anonymous> (src/__tests__/course-content.test.js:100:5)
+
+  ΓùÅ Phase 2: Course Content System ΓÇ║ Progress Tracking ΓÇ║ Γ£à Student can view published courses
+
+
+
+    [0m [90m 67 |[39m [36masync[39m [36mfunction[39m cleanupTestData() {
+     [90m 68 |[39m   [90m// Delete in correct order to avoid FK constraints[39m
+    [31m[1m>[22m[39m[90m 69 |[39m   [36mawait[39m [33mLecture[39m[33m.[39mdestroy({
+     [90m    |[39m   [31m[1m^[22m[39m
+     [90m 70 |[39m     where[33m:[39m { title[33m:[39m { [[33mOp[39m[33m.[39mlike][33m:[39m [32m`${TEST_PREFIX}%`[39m } }[33m,[39m
+     [90m 71 |[39m   })[33m;[39m
+     [90m 72 |[39m   [0m
+
+      at Database.<anonymous> (node_modules/sequelize/src/dialects/sqlite/query.js:236:27)
+      at node_modules/sequelize/src/dialects/sqlite/query.js:234:50
+      at Query.run (node_modules/sequelize/src/dialects/sqlite/query.js:234:12)
+      at node_modules/sequelize/src/sequelize.js:650:28
+      at SQLiteQueryInterface.bulkDelete (node_modules/sequelize/src/dialects/abstract/query-interface.js:992:12)
+      at Function.destroy (node_modules/sequelize/src/model.js:3083:16)
+      at cleanupTestData (src/__tests__/course-content.test.js:69:3)
+      at Object.<anonymous> (src/__tests__/course-content.test.js:100:5)
+
+  ΓùÅ Phase 2: Course Content System ΓÇ║ Progress Tracking ΓÇ║ Γ¥î Get progress without enrollment should fail
+
+
+
+    [0m [90m 67 |[39m [36masync[39m [36mfunction[39m cleanupTestData() {
+     [90m 68 |[39m   [90m// Delete in correct order to avoid FK constraints[39m
+    [31m[1m>[22m[39m[90m 69 |[39m   [36mawait[39m [33mLecture[39m[33m.[39mdestroy({
+     [90m    |[39m   [31m[1m^[22m[39m
+     [90m 70 |[39m     where[33m:[39m { title[33m:[39m { [[33mOp[39m[33m.[39mlike][33m:[39m [32m`${TEST_PREFIX}%`[39m } }[33m,[39m
+     [90m 71 |[39m   })[33m;[39m
+     [90m 72 |[39m   [0m
+
+      at Database.<anonymous> (node_modules/sequelize/src/dialects/sqlite/query.js:236:27)
+      at node_modules/sequelize/src/dialects/sqlite/query.js:234:50
+      at Query.run (node_modules/sequelize/src/dialects/sqlite/query.js:234:12)
+      at node_modules/sequelize/src/sequelize.js:650:28
+      at SQLiteQueryInterface.bulkDelete (node_modules/sequelize/src/dialects/abstract/query-interface.js:992:12)
+      at Function.destroy (node_modules/sequelize/src/model.js:3083:16)
+      at cleanupTestData (src/__tests__/course-content.test.js:69:3)
+      at Object.<anonymous> (src/__tests__/course-content.test.js:100:5)
+
+  ΓùÅ Phase 2: Course Content System ΓÇ║ Progress Tracking ΓÇ║ Γ£à Mark lesson complete - should update progress
+
+
+
+    [0m [90m 67 |[39m [36masync[39m [36mfunction[39m cleanupTestData() {
+     [90m 68 |[39m   [90m// Delete in correct order to avoid FK constraints[39m
+    [31m[1m>[22m[39m[90m 69 |[39m   [36mawait[39m [33mLecture[39m[33m.[39mdestroy({
+     [90m    |[39m   [31m[1m^[22m[39m
+     [90m 70 |[39m     where[33m:[39m { title[33m:[39m { [[33mOp[39m[33m.[39mlike][33m:[39m [32m`${TEST_PREFIX}%`[39m } }[33m,[39m
+     [90m 71 |[39m   })[33m;[39m
+     [90m 72 |[39m   [0m
+
+      at Database.<anonymous> (node_modules/sequelize/src/dialects/sqlite/query.js:236:27)
+      at node_modules/sequelize/src/dialects/sqlite/query.js:234:50
+      at Query.run (node_modules/sequelize/src/dialects/sqlite/query.js:234:12)
+      at node_modules/sequelize/src/sequelize.js:650:28
+      at SQLiteQueryInterface.bulkDelete (node_modules/sequelize/src/dialects/abstract/query-interface.js:992:12)
+      at Function.destroy (node_modules/sequelize/src/model.js:3083:16)
+      at cleanupTestData (src/__tests__/course-content.test.js:69:3)
+      at Object.<anonymous> (src/__tests__/course-content.test.js:100:5)
+
+  ΓùÅ Phase 2: Course Content System ΓÇ║ Progress Tracking ΓÇ║ Γ£à Get progress after enrollment - should show stats
+
+
+
+    [0m [90m 67 |[39m [36masync[39m [36mfunction[39m cleanupTestData() {
+     [90m 68 |[39m   [90m// Delete in correct order to avoid FK constraints[39m
+    [31m[1m>[22m[39m[90m 69 |[39m   [36mawait[39m [33mLecture[39m[33m.[39mdestroy({
+     [90m    |[39m   [31m[1m^[22m[39m
+     [90m 70 |[39m     where[33m:[39m { title[33m:[39m { [[33mOp[39m[33m.[39mlike][33m:[39m [32m`${TEST_PREFIX}%`[39m } }[33m,[39m
+     [90m 71 |[39m   })[33m;[39m
+     [90m 72 |[39m   [0m
+
+      at Database.<anonymous> (node_modules/sequelize/src/dialects/sqlite/query.js:236:27)
+      at node_modules/sequelize/src/dialects/sqlite/query.js:234:50
+      at Query.run (node_modules/sequelize/src/dialects/sqlite/query.js:234:12)
+      at node_modules/sequelize/src/sequelize.js:650:28
+      at SQLiteQueryInterface.bulkDelete (node_modules/sequelize/src/dialects/abstract/query-interface.js:992:12)
+      at Function.destroy (node_modules/sequelize/src/model.js:3083:16)
+      at cleanupTestData (src/__tests__/course-content.test.js:69:3)
+      at Object.<anonymous> (src/__tests__/course-content.test.js:100:5)
+
+  ΓùÅ Phase 2: Course Content System ΓÇ║ Progress Tracking ΓÇ║ Γ£à Get enrolled courses with progress
+
+
+
+    [0m [90m 67 |[39m [36masync[39m [36mfunction[39m cleanupTestData() {
+     [90m 68 |[39m   [90m// Delete in correct order to avoid FK constraints[39m
+    [31m[1m>[22m[39m[90m 69 |[39m   [36mawait[39m [33mLecture[39m[33m.[39mdestroy({
+     [90m    |[39m   [31m[1m^[22m[39m
+     [90m 70 |[39m     where[33m:[39m { title[33m:[39m { [[33mOp[39m[33m.[39mlike][33m:[39m [32m`${TEST_PREFIX}%`[39m } }[33m,[39m
+     [90m 71 |[39m   })[33m;[39m
+     [90m 72 |[39m   [0m
+
+      at Database.<anonymous> (node_modules/sequelize/src/dialects/sqlite/query.js:236:27)
+      at node_modules/sequelize/src/dialects/sqlite/query.js:234:50
+      at Query.run (node_modules/sequelize/src/dialects/sqlite/query.js:234:12)
+      at node_modules/sequelize/src/sequelize.js:650:28
+      at SQLiteQueryInterface.bulkDelete (node_modules/sequelize/src/dialects/abstract/query-interface.js:992:12)
+      at Function.destroy (node_modules/sequelize/src/model.js:3083:16)
+      at cleanupTestData (src/__tests__/course-content.test.js:69:3)
+      at Object.<anonymous> (src/__tests__/course-content.test.js:100:5)
+
+  ΓùÅ Phase 2: Course Content System ΓÇ║ Progress Tracking ΓÇ║ Γ£à Check lesson completion status
+
+
+
+    [0m [90m 67 |[39m [36masync[39m [36mfunction[39m cleanupTestData() {
+     [90m 68 |[39m   [90m// Delete in correct order to avoid FK constraints[39m
+    [31m[1m>[22m[39m[90m 69 |[39m   [36mawait[39m [33mLecture[39m[33m.[39mdestroy({
+     [90m    |[39m   [31m[1m^[22m[39m
+     [90m 70 |[39m     where[33m:[39m { title[33m:[39m { [[33mOp[39m[33m.[39mlike][33m:[39m [32m`${TEST_PREFIX}%`[39m } }[33m,[39m
+     [90m 71 |[39m   })[33m;[39m
+     [90m 72 |[39m   [0m
+
+      at Database.<anonymous> (node_modules/sequelize/src/dialects/sqlite/query.js:236:27)
+      at node_modules/sequelize/src/dialects/sqlite/query.js:234:50
+      at Query.run (node_modules/sequelize/src/dialects/sqlite/query.js:234:12)
+      at node_modules/sequelize/src/sequelize.js:650:28
+      at SQLiteQueryInterface.bulkDelete (node_modules/sequelize/src/dialects/abstract/query-interface.js:992:12)
+      at Function.destroy (node_modules/sequelize/src/model.js:3083:16)
+      at cleanupTestData (src/__tests__/course-content.test.js:69:3)
+      at Object.<anonymous> (src/__tests__/course-content.test.js:100:5)
+
+  ΓùÅ Phase 2: Course Content System ΓÇ║ Progress Tracking ΓÇ║ Γ£à Mark lesson incomplete
+
+
+
+    [0m [90m 67 |[39m [36masync[39m [36mfunction[39m cleanupTestData() {
+     [90m 68 |[39m   [90m// Delete in correct order to avoid FK constraints[39m
+    [31m[1m>[22m[39m[90m 69 |[39m   [36mawait[39m [33mLecture[39m[33m.[39mdestroy({
+     [90m    |[39m   [31m[1m^[22m[39m
+     [90m 70 |[39m     where[33m:[39m { title[33m:[39m { [[33mOp[39m[33m.[39mlike][33m:[39m [32m`${TEST_PREFIX}%`[39m } }[33m,[39m
+     [90m 71 |[39m   })[33m;[39m
+     [90m 72 |[39m   [0m
+
+      at Database.<anonymous> (node_modules/sequelize/src/dialects/sqlite/query.js:236:27)
+      at node_modules/sequelize/src/dialects/sqlite/query.js:234:50
+      at Query.run (node_modules/sequelize/src/dialects/sqlite/query.js:234:12)
+      at node_modules/sequelize/src/sequelize.js:650:28
+      at SQLiteQueryInterface.bulkDelete (node_modules/sequelize/src/dialects/abstract/query-interface.js:992:12)
+      at Function.destroy (node_modules/sequelize/src/model.js:3083:16)
+      at cleanupTestData (src/__tests__/course-content.test.js:69:3)
+      at Object.<anonymous> (src/__tests__/course-content.test.js:100:5)
+
+  ΓùÅ Phase 2: Course Content System ΓÇ║ Progress Tracking ΓÇ║ Γ£à Verify lesson marked incomplete
+
+
+
+    [0m [90m 67 |[39m [36masync[39m [36mfunction[39m cleanupTestData() {
+     [90m 68 |[39m   [90m// Delete in correct order to avoid FK constraints[39m
+    [31m[1m>[22m[39m[90m 69 |[39m   [36mawait[39m [33mLecture[39m[33m.[39mdestroy({
+     [90m    |[39m   [31m[1m^[22m[39m
+     [90m 70 |[39m     where[33m:[39m { title[33m:[39m { [[33mOp[39m[33m.[39mlike][33m:[39m [32m`${TEST_PREFIX}%`[39m } }[33m,[39m
+     [90m 71 |[39m   })[33m;[39m
+     [90m 72 |[39m   [0m
+
+      at Database.<anonymous> (node_modules/sequelize/src/dialects/sqlite/query.js:236:27)
+      at node_modules/sequelize/src/dialects/sqlite/query.js:234:50
+      at Query.run (node_modules/sequelize/src/dialects/sqlite/query.js:234:12)
+      at node_modules/sequelize/src/sequelize.js:650:28
+      at SQLiteQueryInterface.bulkDelete (node_modules/sequelize/src/dialects/abstract/query-interface.js:992:12)
+      at Function.destroy (node_modules/sequelize/src/model.js:3083:16)
+      at cleanupTestData (src/__tests__/course-content.test.js:69:3)
+      at Object.<anonymous> (src/__tests__/course-content.test.js:100:5)
+
+  ΓùÅ Phase 2: Course Content System ΓÇ║ Edge Cases ΓÇ║ Γ¥î Get non-existent course - should return 404
+
+
+
+    [0m [90m 67 |[39m [36masync[39m [36mfunction[39m cleanupTestData() {
+     [90m 68 |[39m   [90m// Delete in correct order to avoid FK constraints[39m
+    [31m[1m>[22m[39m[90m 69 |[39m   [36mawait[39m [33mLecture[39m[33m.[39mdestroy({
+     [90m    |[39m   [31m[1m^[22m[39m
+     [90m 70 |[39m     where[33m:[39m { title[33m:[39m { [[33mOp[39m[33m.[39mlike][33m:[39m [32m`${TEST_PREFIX}%`[39m } }[33m,[39m
+     [90m 71 |[39m   })[33m;[39m
+     [90m 72 |[39m   [0m
+
+      at Database.<anonymous> (node_modules/sequelize/src/dialects/sqlite/query.js:236:27)
+      at node_modules/sequelize/src/dialects/sqlite/query.js:234:50
+      at Query.run (node_modules/sequelize/src/dialects/sqlite/query.js:234:12)
+      at node_modules/sequelize/src/sequelize.js:650:28
+      at SQLiteQueryInterface.bulkDelete (node_modules/sequelize/src/dialects/abstract/query-interface.js:992:12)
+      at Function.destroy (node_modules/sequelize/src/model.js:3083:16)
+      at cleanupTestData (src/__tests__/course-content.test.js:69:3)
+      at Object.<anonymous> (src/__tests__/course-content.test.js:100:5)
+
+  ΓùÅ Phase 2: Course Content System ΓÇ║ Edge Cases ΓÇ║ Γ¥î Get non-existent chapter - should return 404
+
+
+
+    [0m [90m 67 |[39m [36masync[39m [36mfunction[39m cleanupTestData() {
+     [90m 68 |[39m   [90m// Delete in correct order to avoid FK constraints[39m
+    [31m[1m>[22m[39m[90m 69 |[39m   [36mawait[39m [33mLecture[39m[33m.[39mdestroy({
+     [90m    |[39m   [31m[1m^[22m[39m
+     [90m 70 |[39m     where[33m:[39m { title[33m:[39m { [[33mOp[39m[33m.[39mlike][33m:[39m [32m`${TEST_PREFIX}%`[39m } }[33m,[39m
+     [90m 71 |[39m   })[33m;[39m
+     [90m 72 |[39m   [0m
+
+      at Database.<anonymous> (node_modules/sequelize/src/dialects/sqlite/query.js:236:27)
+      at node_modules/sequelize/src/dialects/sqlite/query.js:234:50
+      at Query.run (node_modules/sequelize/src/dialects/sqlite/query.js:234:12)
+      at node_modules/sequelize/src/sequelize.js:650:28
+      at SQLiteQueryInterface.bulkDelete (node_modules/sequelize/src/dialects/abstract/query-interface.js:992:12)
+      at Function.destroy (node_modules/sequelize/src/model.js:3083:16)
+      at cleanupTestData (src/__tests__/course-content.test.js:69:3)
+      at Object.<anonymous> (src/__tests__/course-content.test.js:100:5)
+
+  ΓùÅ Phase 2: Course Content System ΓÇ║ Edge Cases ΓÇ║ Γ¥î Get non-existent lesson - should return 404
+
+
+
+    [0m [90m 67 |[39m [36masync[39m [36mfunction[39m cleanupTestData() {
+     [90m 68 |[39m   [90m// Delete in correct order to avoid FK constraints[39m
+    [31m[1m>[22m[39m[90m 69 |[39m   [36mawait[39m [33mLecture[39m[33m.[39mdestroy({
+     [90m    |[39m   [31m[1m^[22m[39m
+     [90m 70 |[39m     where[33m:[39m { title[33m:[39m { [[33mOp[39m[33m.[39mlike][33m:[39m [32m`${TEST_PREFIX}%`[39m } }[33m,[39m
+     [90m 71 |[39m   })[33m;[39m
+     [90m 72 |[39m   [0m
+
+      at Database.<anonymous> (node_modules/sequelize/src/dialects/sqlite/query.js:236:27)
+      at node_modules/sequelize/src/dialects/sqlite/query.js:234:50
+      at Query.run (node_modules/sequelize/src/dialects/sqlite/query.js:234:12)
+      at node_modules/sequelize/src/sequelize.js:650:28
+      at SQLiteQueryInterface.bulkDelete (node_modules/sequelize/src/dialects/abstract/query-interface.js:992:12)
+      at Function.destroy (node_modules/sequelize/src/model.js:3083:16)
+      at cleanupTestData (src/__tests__/course-content.test.js:69:3)
+      at Object.<anonymous> (src/__tests__/course-content.test.js:100:5)
+
+  ΓùÅ Phase 2: Course Content System ΓÇ║ Edge Cases ΓÇ║ Γ¥î Update non-existent course - should return 404
+
+
+
+    [0m [90m 67 |[39m [36masync[39m [36mfunction[39m cleanupTestData() {
+     [90m 68 |[39m   [90m// Delete in correct order to avoid FK constraints[39m
+    [31m[1m>[22m[39m[90m 69 |[39m   [36mawait[39m [33mLecture[39m[33m.[39mdestroy({
+     [90m    |[39m   [31m[1m^[22m[39m
+     [90m 70 |[39m     where[33m:[39m { title[33m:[39m { [[33mOp[39m[33m.[39mlike][33m:[39m [32m`${TEST_PREFIX}%`[39m } }[33m,[39m
+     [90m 71 |[39m   })[33m;[39m
+     [90m 72 |[39m   [0m
+
+      at Database.<anonymous> (node_modules/sequelize/src/dialects/sqlite/query.js:236:27)
+      at node_modules/sequelize/src/dialects/sqlite/query.js:234:50
+      at Query.run (node_modules/sequelize/src/dialects/sqlite/query.js:234:12)
+      at node_modules/sequelize/src/sequelize.js:650:28
+      at SQLiteQueryInterface.bulkDelete (node_modules/sequelize/src/dialects/abstract/query-interface.js:992:12)
+      at Function.destroy (node_modules/sequelize/src/model.js:3083:16)
+      at cleanupTestData (src/__tests__/course-content.test.js:69:3)
+      at Object.<anonymous> (src/__tests__/course-content.test.js:100:5)
+
+  ΓùÅ Phase 2: Course Content System ΓÇ║ Edge Cases ΓÇ║ Γ¥î Delete non-existent lesson - should return 404
+
+
+
+    [0m [90m 67 |[39m [36masync[39m [36mfunction[39m cleanupTestData() {
+     [90m 68 |[39m   [90m// Delete in correct order to avoid FK constraints[39m
+    [31m[1m>[22m[39m[90m 69 |[39m   [36mawait[39m [33mLecture[39m[33m.[39mdestroy({
+     [90m    |[39m   [31m[1m^[22m[39m
+     [90m 70 |[39m     where[33m:[39m { title[33m:[39m { [[33mOp[39m[33m.[39mlike][33m:[39m [32m`${TEST_PREFIX}%`[39m } }[33m,[39m
+     [90m 71 |[39m   })[33m;[39m
+     [90m 72 |[39m   [0m
+
+      at Database.<anonymous> (node_modules/sequelize/src/dialects/sqlite/query.js:236:27)
+      at node_modules/sequelize/src/dialects/sqlite/query.js:234:50
+      at Query.run (node_modules/sequelize/src/dialects/sqlite/query.js:234:12)
+      at node_modules/sequelize/src/sequelize.js:650:28
+      at SQLiteQueryInterface.bulkDelete (node_modules/sequelize/src/dialects/abstract/query-interface.js:992:12)
+      at Function.destroy (node_modules/sequelize/src/model.js:3083:16)
+      at cleanupTestData (src/__tests__/course-content.test.js:69:3)
+      at Object.<anonymous> (src/__tests__/course-content.test.js:100:5)
+
+  ΓùÅ Phase 2: Course Content System ΓÇ║ Edge Cases ΓÇ║ Γ¥î Access unpublished course without auth - should fail
+
+
+
+    [0m [90m 67 |[39m [36masync[39m [36mfunction[39m cleanupTestData() {
+     [90m 68 |[39m   [90m// Delete in correct order to avoid FK constraints[39m
+    [31m[1m>[22m[39m[90m 69 |[39m   [36mawait[39m [33mLecture[39m[33m.[39mdestroy({
+     [90m    |[39m   [31m[1m^[22m[39m
+     [90m 70 |[39m     where[33m:[39m { title[33m:[39m { [[33mOp[39m[33m.[39mlike][33m:[39m [32m`${TEST_PREFIX}%`[39m } }[33m,[39m
+     [90m 71 |[39m   })[33m;[39m
+     [90m 72 |[39m   [0m
+
+      at Database.<anonymous> (node_modules/sequelize/src/dialects/sqlite/query.js:236:27)
+      at node_modules/sequelize/src/dialects/sqlite/query.js:234:50
+      at Query.run (node_modules/sequelize/src/dialects/sqlite/query.js:234:12)
+      at node_modules/sequelize/src/sequelize.js:650:28
+      at SQLiteQueryInterface.bulkDelete (node_modules/sequelize/src/dialects/abstract/query-interface.js:992:12)
+      at Function.destroy (node_modules/sequelize/src/model.js:3083:16)
+      at cleanupTestData (src/__tests__/course-content.test.js:69:3)
+      at Object.<anonymous> (src/__tests__/course-content.test.js:100:5)
+
+  ΓùÅ Phase 2: Course Content System ΓÇ║ Edge Cases ΓÇ║ Γ¥î Empty course list pagination
+
+
+
+    [0m [90m 67 |[39m [36masync[39m [36mfunction[39m cleanupTestData() {
+     [90m 68 |[39m   [90m// Delete in correct order to avoid FK constraints[39m
+    [31m[1m>[22m[39m[90m 69 |[39m   [36mawait[39m [33mLecture[39m[33m.[39mdestroy({
+     [90m    |[39m   [31m[1m^[22m[39m
+     [90m 70 |[39m     where[33m:[39m { title[33m:[39m { [[33mOp[39m[33m.[39mlike][33m:[39m [32m`${TEST_PREFIX}%`[39m } }[33m,[39m
+     [90m 71 |[39m   })[33m;[39m
+     [90m 72 |[39m   [0m
+
+      at Database.<anonymous> (node_modules/sequelize/src/dialects/sqlite/query.js:236:27)
+      at node_modules/sequelize/src/dialects/sqlite/query.js:234:50
+      at Query.run (node_modules/sequelize/src/dialects/sqlite/query.js:234:12)
+      at node_modules/sequelize/src/sequelize.js:650:28
+      at SQLiteQueryInterface.bulkDelete (node_modules/sequelize/src/dialects/abstract/query-interface.js:992:12)
+      at Function.destroy (node_modules/sequelize/src/model.js:3083:16)
+      at cleanupTestData (src/__tests__/course-content.test.js:69:3)
+      at Object.<anonymous> (src/__tests__/course-content.test.js:100:5)
+
+  ΓùÅ Phase 2: Course Content System ΓÇ║ Edge Cases ΓÇ║ Γ¥î Invalid pagination parameters
+
+
+
+    [0m [90m 67 |[39m [36masync[39m [36mfunction[39m cleanupTestData() {
+     [90m 68 |[39m   [90m// Delete in correct order to avoid FK constraints[39m
+    [31m[1m>[22m[39m[90m 69 |[39m   [36mawait[39m [33mLecture[39m[33m.[39mdestroy({
+     [90m    |[39m   [31m[1m^[22m[39m
+     [90m 70 |[39m     where[33m:[39m { title[33m:[39m { [[33mOp[39m[33m.[39mlike][33m:[39m [32m`${TEST_PREFIX}%`[39m } }[33m,[39m
+     [90m 71 |[39m   })[33m;[39m
+     [90m 72 |[39m   [0m
+
+      at Database.<anonymous> (node_modules/sequelize/src/dialects/sqlite/query.js:236:27)
+      at node_modules/sequelize/src/dialects/sqlite/query.js:234:50
+      at Query.run (node_modules/sequelize/src/dialects/sqlite/query.js:234:12)
+      at node_modules/sequelize/src/sequelize.js:650:28
+      at SQLiteQueryInterface.bulkDelete (node_modules/sequelize/src/dialects/abstract/query-interface.js:992:12)
+      at Function.destroy (node_modules/sequelize/src/model.js:3083:16)
+      at cleanupTestData (src/__tests__/course-content.test.js:69:3)
+      at Object.<anonymous> (src/__tests__/course-content.test.js:100:5)
+
+  ΓùÅ Phase 2: Course Content System ΓÇ║ Edge Cases ΓÇ║ Γ¥î Mark non-existent lesson complete
+
+
+
+    [0m [90m 67 |[39m [36masync[39m [36mfunction[39m cleanupTestData() {
+     [90m 68 |[39m   [90m// Delete in correct order to avoid FK constraints[39m
+    [31m[1m>[22m[39m[90m 69 |[39m   [36mawait[39m [33mLecture[39m[33m.[39mdestroy({
+     [90m    |[39m   [31m[1m^[22m[39m
+     [90m 70 |[39m     where[33m:[39m { title[33m:[39m { [[33mOp[39m[33m.[39mlike][33m:[39m [32m`${TEST_PREFIX}%`[39m } }[33m,[39m
+     [90m 71 |[39m   })[33m;[39m
+     [90m 72 |[39m   [0m
+
+      at Database.<anonymous> (node_modules/sequelize/src/dialects/sqlite/query.js:236:27)
+      at node_modules/sequelize/src/dialects/sqlite/query.js:234:50
+      at Query.run (node_modules/sequelize/src/dialects/sqlite/query.js:234:12)
+      at node_modules/sequelize/src/sequelize.js:650:28
+      at SQLiteQueryInterface.bulkDelete (node_modules/sequelize/src/dialects/abstract/query-interface.js:992:12)
+      at Function.destroy (node_modules/sequelize/src/model.js:3083:16)
+      at cleanupTestData (src/__tests__/course-content.test.js:69:3)
+      at Object.<anonymous> (src/__tests__/course-content.test.js:100:5)
+
+
+  ΓùÅ Test suite failed to run
+
+
+
+    [0m [90m 67 |[39m [36masync[39m [36mfunction[39m cleanupTestData() {
+     [90m 68 |[39m   [90m// Delete in correct order to avoid FK constraints[39m
+    [31m[1m>[22m[39m[90m 69 |[39m   [36mawait[39m [33mLecture[39m[33m.[39mdestroy({
+     [90m    |[39m   [31m[1m^[22m[39m
+     [90m 70 |[39m     where[33m:[39m { title[33m:[39m { [[33mOp[39m[33m.[39mlike][33m:[39m [32m`${TEST_PREFIX}%`[39m } }[33m,[39m
+     [90m 71 |[39m   })[33m;[39m
+     [90m 72 |[39m   [0m
+
+      at Database.<anonymous> (node_modules/sequelize/src/dialects/sqlite/query.js:236:27)
+      at node_modules/sequelize/src/dialects/sqlite/query.js:234:50
+      at Query.run (node_modules/sequelize/src/dialects/sqlite/query.js:234:12)
+      at node_modules/sequelize/src/sequelize.js:650:28
+      at SQLiteQueryInterface.bulkDelete (node_modules/sequelize/src/dialects/abstract/query-interface.js:992:12)
+      at Function.destroy (node_modules/sequelize/src/model.js:3083:16)
+      at cleanupTestData (src/__tests__/course-content.test.js:69:3)
+      at Object.<anonymous> (src/__tests__/course-content.test.js:121:5)
+
+Test Suites: 1 failed, 1 total
+Tests:       42 failed, 42 total
+Snapshots:   0 total
+Time:        1.95 s, estimated 2 s
+Ran all test suites matching src/__tests__/course-content.test.js.

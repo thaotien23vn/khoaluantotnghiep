@@ -7,11 +7,31 @@ const express = require('express');
 const authMiddleware = require('../middlewares/auth');
 const authorizeRole = require('../middlewares/authorize');
 const uploadMedia = require('../middlewares/uploadMedia');
-const courseController = require('../controllers/course.controller');
+const courseController = require('../modules/course/course.controller');
+const chapterController = require('../modules/chapter/chapter.controller');
+const lessonController = require('../modules/lesson/lesson.controller');
 const enrollmentController = require('../controllers/enrollment.controller');
 const adminController = require('../controllers/admin.controller');
 const scheduleController = require('../controllers/schedule.controller');
-const { body } = require('express-validator');
+const {
+  createCourseValidation,
+  updateCourseValidation,
+  getMyCoursesValidation,
+  setPublishedValidation,
+  getCourseEnrollmentsValidation,
+} = require('../modules/course/course.validation');
+
+const {
+  createChapterValidation,
+  updateChapterValidation,
+  deleteChapterValidation,
+} = require('../modules/chapter/chapter.validation');
+
+const {
+  createLessonValidation,
+  updateLessonValidation,
+  deleteLessonValidation,
+} = require('../modules/lesson/lesson.validation');
 
 const router = express.Router();
 
@@ -216,6 +236,7 @@ router.get(
   '/courses',
   authMiddleware,
   authorizeRole('teacher', 'admin'),
+  getMyCoursesValidation,
   courseController.getMyCourses
 );
 
@@ -228,6 +249,7 @@ router.post(
   '/courses',
   authMiddleware,
   authorizeRole('teacher', 'admin'),
+  createCourseValidation,
   courseController.createCourse
 );
 
@@ -252,6 +274,7 @@ router.put(
   '/courses/:id',
   authMiddleware,
   authorizeRole('teacher', 'admin'),
+  updateCourseValidation,
   courseController.updateCourse
 );
 
@@ -264,7 +287,7 @@ router.put(
   '/courses/:id/publish',
   authMiddleware,
   authorizeRole('teacher', 'admin'),
-  [body('published').isBoolean().withMessage('published phải là boolean')],
+  setPublishedValidation,
   courseController.setCoursePublished
 );
 
@@ -349,7 +372,8 @@ router.post(
   '/courses/:courseId/chapters',
   authMiddleware,
   authorizeRole('teacher', 'admin'),
-  courseController.createChapter
+  createChapterValidation,
+  chapterController.createChapter
 );
 
 /**
@@ -361,7 +385,8 @@ router.put(
   '/chapters/:id',
   authMiddleware,
   authorizeRole('teacher', 'admin'),
-  courseController.updateChapter
+  updateChapterValidation,
+  chapterController.updateChapter
 );
 
 /**
@@ -373,7 +398,8 @@ router.delete(
   '/chapters/:id',
   authMiddleware,
   authorizeRole('teacher', 'admin'),
-  courseController.deleteChapter
+  deleteChapterValidation,
+  chapterController.deleteChapter
 );
 
 /**
@@ -387,7 +413,8 @@ router.post(
   authorizeRole('teacher', 'admin'),
   uploadMedia.single('file'),
   uploadMedia.handleUploadError,
-  courseController.createLecture
+  createLessonValidation,
+  lessonController.createLesson
 );
 
 /**
@@ -401,7 +428,8 @@ router.put(
   authorizeRole('teacher', 'admin'),
   uploadMedia.single('file'),
   uploadMedia.handleUploadError,
-  courseController.updateLecture
+  updateLessonValidation,
+  lessonController.updateLesson
 );
 
 /**
@@ -413,7 +441,8 @@ router.delete(
   '/lectures/:id',
   authMiddleware,
   authorizeRole('teacher', 'admin'),
-  courseController.deleteLecture
+  deleteLessonValidation,
+  lessonController.deleteLesson
 );
 
 /**
@@ -425,6 +454,7 @@ router.get(
   '/courses/:courseId/enrollments',
   authMiddleware,
   authorizeRole('teacher', 'admin'),
+  getCourseEnrollmentsValidation,
   courseController.getCourseEnrollmentsForOwner
 );
 
