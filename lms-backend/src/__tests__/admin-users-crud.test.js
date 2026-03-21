@@ -14,7 +14,7 @@ describe('Admin users CRUD (test-created users only)', () => {
     const createRes = await request(app)
       .post('/api/admin/users')
       .set('Authorization', `Bearer ${token}`)
-      .send({ username, email, password: '123456', role: 'student' });
+      .send({ username, email, password: 'Password123@', role: 'student' });
 
     expect(createRes.statusCode).toBe(201);
     expect(createRes.body).toHaveProperty('success', true);
@@ -38,7 +38,7 @@ describe('Admin users CRUD (test-created users only)', () => {
     const updateRes = await request(app)
       .put(`/api/admin/users/${createdId}`)
       .set('Authorization', `Bearer ${token}`)
-      .send({ isActive: true, role: 'student', newPassword: '123456' });
+      .send({ isActive: true, role: 'student', newpassword: 'Password123@' });
 
     expect(updateRes.statusCode).toBe(200);
     expect(updateRes.body).toHaveProperty('success', true);

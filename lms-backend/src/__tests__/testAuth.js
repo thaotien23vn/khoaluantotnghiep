@@ -6,15 +6,15 @@ const db = require('../models');
 const TEST_ACCOUNTS = {
   admin: {
     email: process.env.TEST_ADMIN_EMAIL || 'admin@gmail.com',
-    password: process.env.TEST_ADMIN_PASSWORD || '123456',
+    password: process.env.TEST_ADMIN_PASSWORD || 'Password123@',
   },
   teacher: {
     email: process.env.TEST_TEACHER_EMAIL || 'teacher@gmail.com',
-    password: process.env.TEST_TEACHER_PASSWORD || '123456',
+    password: process.env.TEST_TEACHER_PASSWORD || 'Password123@',
   },
   student: {
     email: process.env.TEST_STUDENT_EMAIL || 'student@gmail.com',
-    password: process.env.TEST_STUDENT_PASSWORD || '123456',
+    password: process.env.TEST_STUDENT_PASSWORD || 'Password123@',
   },
 };
 

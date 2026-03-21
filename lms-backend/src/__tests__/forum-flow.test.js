@@ -4,7 +4,7 @@ const db = require('../models');
 const { seedCore, TEST_PREFIX } = require('./jest.teardown');
 const { loginByRole } = require('./testAuth');
 
-async function login(email, password = '123456') {
+async function login(email, password = 'Password123@') {
   const res = await request(app).post('/api/auth/login').send({ email, password });
   expect([200, 201]).toContain(res.statusCode);
   const token = res.body?.data?.token;

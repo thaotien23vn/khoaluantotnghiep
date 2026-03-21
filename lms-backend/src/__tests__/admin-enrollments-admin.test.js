@@ -36,7 +36,7 @@ describe('Admin enrollments (admin enroll/unenroll + list by course/user)', () =
     const createUserRes = await request(app)
       .post('/api/admin/users')
       .set('Authorization', `Bearer ${adminToken}`)
-      .send({ username, email, password: '123456', role: 'student' });
+      .send({ username, email, password: 'Password123@', role: 'student' });
 
     expect(createUserRes.statusCode).toBe(201);
     const studentId = createUserRes.body?.data?.user?.id;

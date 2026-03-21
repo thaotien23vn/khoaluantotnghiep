@@ -16,7 +16,13 @@ async function ensureUser({
   // For SQLite, we need to handle table creation
   try {
     const existing = await User.findOne({ where: { email } });
-    if (existing) return existing;
+    if (existing) {
+      // Update password hash to ensure it matches current password
+      const passwordHash = await bcrypt.hash(password, 10);
+      existing.passwordHash = passwordHash;
+      await existing.save();
+      return existing;
+    }
   } catch (error) {
     // Table might not exist yet, try to sync
     if (error.message.includes('no such table') || error.message.includes('SQLITE_ERROR: no such table')) {
@@ -27,7 +33,13 @@ async function ensureUser({
   }
   
   const existing = await User.findOne({ where: { email } });
-  if (existing) return existing;
+  if (existing) {
+    // Update password hash to ensure it matches current password
+    const passwordHash = await bcrypt.hash(password, 10);
+    existing.passwordHash = passwordHash;
+    await existing.save();
+    return existing;
+  }
 
   const passwordHash = await bcrypt.hash(password, 10);
   return User.create({
@@ -51,7 +63,7 @@ async function seedCore() {
     email: `${TEST_PREFIX}teacher@example.com`,
     username: `${TEST_PREFIX}teacher`,
     name: 'IT Seed Teacher',
-    password: '123456',
+    password: 'Password123@',
     role: 'teacher',
   });
 
@@ -59,7 +71,7 @@ async function seedCore() {
     email: `${TEST_PREFIX}student@example.com`,
     username: `${TEST_PREFIX}student`,
     name: 'IT Seed Student',
-    password: '123456',
+    password: 'Password123@',
     role: 'student',
   });
 

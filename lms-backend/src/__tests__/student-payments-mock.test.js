@@ -6,7 +6,7 @@ const { seedCore, TEST_PREFIX } = require('./jest.teardown');
 async function loginStudent() {
   const res = await request(app)
     .post('/api/auth/login')
-    .send({ email: `${TEST_PREFIX}student@example.com`, password: '123456' });
+    .send({ email: `${TEST_PREFIX}student@example.com`, password: 'Password123@' });
 
   expect([200, 201]).toContain(res.statusCode);
   const token = res.body?.data?.token;
