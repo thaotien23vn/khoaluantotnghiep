@@ -13,7 +13,7 @@ const lessonController = require('../modules/lesson/lesson.controller');
 const paymentController = require('../modules/payment/payment.controller');
 const enrollmentController = require('../modules/enrollment/enrollment.controller');
 const adminController = require('../modules/admin/admin.controller');
-const scheduleController = require('../controllers/schedule.controller');
+const scheduleController = require('../modules/schedule/schedule.controller');
 const {
   createCourseValidation,
   updateCourseValidation,
@@ -56,6 +56,14 @@ const {
   updateCategoryValidation,
   deleteCategoryValidation,
 } = require('../modules/admin/admin.validation');
+
+const {
+  getMyScheduleValidation,
+  updateScheduleEventValidation,
+  deleteScheduleEventValidation,
+  listCourseScheduleEventsValidation,
+  createScheduleEventValidation,
+} = require('../modules/schedule/schedule.validation');
 
 const {
   enrollCourseValidation,
@@ -368,6 +376,7 @@ router.get(
   '/courses/:courseId/schedule-events',
   authMiddleware,
   authorizeRole('teacher', 'admin'),
+  listCourseScheduleEventsValidation,
   scheduleController.listCourseScheduleEvents
 );
 
@@ -380,6 +389,7 @@ router.post(
   '/courses/:courseId/schedule-events',
   authMiddleware,
   authorizeRole('teacher', 'admin'),
+  createScheduleEventValidation,
   scheduleController.createCourseScheduleEvent
 );
 
@@ -392,6 +402,7 @@ router.put(
   '/schedule-events/:eventId',
   authMiddleware,
   authorizeRole('teacher', 'admin'),
+  updateScheduleEventValidation,
   scheduleController.updateScheduleEvent
 );
 
@@ -404,6 +415,7 @@ router.delete(
   '/schedule-events/:eventId',
   authMiddleware,
   authorizeRole('teacher', 'admin'),
+  deleteScheduleEventValidation,
   scheduleController.deleteScheduleEvent
 );
 
@@ -564,6 +576,7 @@ router.get(
   '/schedule',
   authMiddleware,
   authorizeRole('student'),
+  getMyScheduleValidation,
   scheduleController.getMySchedule
 );
 
