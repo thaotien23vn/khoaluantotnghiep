@@ -12,7 +12,7 @@ const chapterController = require('../modules/chapter/chapter.controller');
 const lessonController = require('../modules/lesson/lesson.controller');
 const paymentController = require('../modules/payment/payment.controller');
 const enrollmentController = require('../modules/enrollment/enrollment.controller');
-const adminController = require('../controllers/admin.controller');
+const adminController = require('../modules/admin/admin.controller');
 const scheduleController = require('../controllers/schedule.controller');
 const {
   createCourseValidation,
@@ -40,6 +40,22 @@ const {
   getPaymentHistoryValidation,
   getPaymentDetailValidation,
 } = require('../modules/payment/payment.validation');
+
+const {
+  createUserValidation,
+  updateUserValidation,
+  deleteUserValidation,
+  getPaymentsValidation,
+  enrollUserValidation,
+  unenrollUserValidation,
+  getCourseEnrollmentsValidation: getAdminCourseEnrollmentsValidation,
+  getUserEnrollmentsValidation,
+  getReviewsValidation,
+  deleteReviewValidation,
+  createCategoryValidation,
+  updateCategoryValidation,
+  deleteCategoryValidation,
+} = require('../modules/admin/admin.validation');
 
 const {
   enrollCourseValidation,
@@ -83,6 +99,7 @@ router.post(
   '/users',
   authMiddleware,
   authorizeRole('admin'),
+  createUserValidation,
   adminController.createUser
 );
 
@@ -95,6 +112,7 @@ router.put(
   '/users/:id',
   authMiddleware,
   authorizeRole('admin'),
+  updateUserValidation,
   adminController.updateUser
 );
 
@@ -107,6 +125,7 @@ router.delete(
   '/users/:id',
   authMiddleware,
   authorizeRole('admin'),
+  deleteUserValidation,
   adminController.deleteUser
 );
 
@@ -119,6 +138,7 @@ router.get(
   '/payments',
   authMiddleware,
   authorizeRole('admin'),
+  getPaymentsValidation,
   adminController.getPayments
 );
 
@@ -131,6 +151,7 @@ router.post(
   '/enrollments',
   authMiddleware,
   authorizeRole('admin'),
+  enrollUserValidation,
   adminController.enrollUserToCourse
 );
 
@@ -143,6 +164,7 @@ router.delete(
   '/enrollments',
   authMiddleware,
   authorizeRole('admin'),
+  unenrollUserValidation,
   adminController.unenrollUserFromCourse
 );
 
@@ -155,6 +177,7 @@ router.get(
   '/courses/:courseId/enrollments-admin',
   authMiddleware,
   authorizeRole('admin'),
+  getAdminCourseEnrollmentsValidation,
   adminController.getCourseEnrollments
 );
 
@@ -167,6 +190,7 @@ router.get(
   '/users/:userId/enrollments',
   authMiddleware,
   authorizeRole('admin'),
+  getUserEnrollmentsValidation,
   adminController.getUserEnrollments
 );
 
@@ -179,6 +203,7 @@ router.get(
   '/reviews',
   authMiddleware,
   authorizeRole('admin'),
+  getReviewsValidation,
   adminController.getReviews
 );
 
@@ -191,6 +216,7 @@ router.delete(
   '/reviews/:id',
   authMiddleware,
   authorizeRole('admin'),
+  deleteReviewValidation,
   adminController.deleteReview
 );
 
@@ -215,6 +241,7 @@ router.post(
   '/categories',
   authMiddleware,
   authorizeRole('admin'),
+  createCategoryValidation,
   adminController.createCategory
 );
 
@@ -227,6 +254,7 @@ router.put(
   '/categories/:id',
   authMiddleware,
   authorizeRole('admin'),
+  updateCategoryValidation,
   adminController.updateCategory
 );
 
@@ -239,6 +267,7 @@ router.delete(
   '/categories/:id',
   authMiddleware,
   authorizeRole('admin'),
+  deleteCategoryValidation,
   adminController.deleteCategory
 );
 
