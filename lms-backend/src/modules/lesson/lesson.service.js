@@ -65,7 +65,7 @@ class LessonService {
         finalContentUrl = uploadResult.url;
       } catch (uploadError) {
         console.error('Lỗi upload media lên Cloudinary:', uploadError);
-        throw { status: 500, message: 'Lỗi upload media. Vui lòng thử lại sau' };
+        throw { status: 500, message: 'Lỗi upload media lên Cloudinary. Vui lòng thử lại sau' };
       }
     }
 
@@ -139,7 +139,7 @@ class LessonService {
         finalContentUrl = uploadResult.url;
       } catch (uploadError) {
         console.error('Lỗi upload media lên Cloudinary:', uploadError);
-        throw { status: 500, message: 'Lỗi upload media. Vui lòng thử lại sau' };
+        throw { status: 500, message: 'Lỗi upload media lên Cloudinary. Vui lòng thử lại sau' };
       }
     }
 
