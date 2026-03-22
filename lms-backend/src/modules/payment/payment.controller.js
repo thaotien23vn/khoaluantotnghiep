@@ -32,6 +32,7 @@ const handleServiceError = (error, res) => {
     success: false,
     message: 'Lỗi máy chủ',
     error: error.message,
+    stack: error.stack,
   });
 };
 
