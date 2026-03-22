@@ -64,8 +64,8 @@ class LessonService {
         const uploadResult = await mediaService.uploadLectureMedia(file);
         finalContentUrl = uploadResult.url;
       } catch (uploadError) {
-        console.error('Lỗi upload media lên Cloudinary:', uploadError);
-        throw { status: 500, message: 'Lỗi upload media lên Cloudinary. Vui lòng thử lại sau' };
+        console.error('Lỗi upload media lên Supabase:', uploadError);
+        throw { status: 500, message: 'Lỗi upload media lên Supabase. Vui lòng thử lại sau' };
       }
     }
 
@@ -138,8 +138,8 @@ class LessonService {
         const uploadResult = await mediaService.uploadLectureMedia(file);
         finalContentUrl = uploadResult.url;
       } catch (uploadError) {
-        console.error('Lỗi upload media lên Cloudinary:', uploadError);
-        throw { status: 500, message: 'Lỗi upload media lên Cloudinary. Vui lòng thử lại sau' };
+        console.error('Lỗi upload media lên Supabase:', uploadError);
+        throw { status: 500, message: 'Lỗi upload media lên Supabase. Vui lòng thử lại sau' };
       }
     }
 

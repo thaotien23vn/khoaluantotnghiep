@@ -42,9 +42,9 @@ describe('Uploads - lecture media', () => {
 
     const createLectureRes = await createLectureReq;
 
-    if (!process.env.CLOUDINARY_CLOUD_NAME || !process.env.CLOUDINARY_API_KEY || !process.env.CLOUDINARY_API_SECRET) {
+    if (!process.env.SUPABASE_URL || !process.env.SUPABASE_SERVICE_KEY) {
       expect(createLectureRes.statusCode).toBe(500);
-      expect(String(createLectureRes.body?.error || '')).toMatch(/Cloudinary/);
+      expect(String(createLectureRes.body?.error || '')).toMatch(/Supabase/);
       return;
     }
 

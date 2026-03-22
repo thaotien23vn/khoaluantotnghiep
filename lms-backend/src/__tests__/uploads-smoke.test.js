@@ -7,25 +7,26 @@ async function loginAdmin() {
   return await loginByRole('admin');
 }
 
-describe('Uploads (smoke tests)', () => {
-  it('POST /api/auth/me/avatar should upload avatar (requires Cloudinary)', async () => {
+describe('Uploads - quiz media', () => {
+  it('POST /api/teacher/media/quiz should upload quiz media (requires Supabase)', async () => {
     const token = await loginAdmin();
 
     const fixturePath = path.join(__dirname, 'fixtures', 'avatar.png');
 
     const res = await request(app)
-      .post('/api/auth/me/avatar')
+      .post('/api/teacher/media/quiz')
       .set('Authorization', `Bearer ${token}`)
       .attach('file', fixturePath);
 
-    if (!process.env.CLOUDINARY_CLOUD_NAME || !process.env.CLOUDINARY_API_KEY || !process.env.CLOUDINARY_API_SECRET) {
+    if (!process.env.SUPABASE_URL || !process.env.SUPABASE_SERVICE_KEY) {
       expect(res.statusCode).toBe(500);
-      expect(String(res.body?.error || '')).toMatch(/Cloudinary/);
+      expect(String(res.body?.error || '')).toMatch(/Supabase/);
       return;
     }
 
-    expect(res.statusCode).toBe(200);
+    expect(res.statusCode).toBe(201);
     expect(res.body).toHaveProperty('success', true);
-    expect(res.body?.data?.user?.avatar).toBeTruthy();
-  });
+    expect(res.body?.data?.url).toBeTruthy();
+    expect(res.body?.data?.publicId).toBeTruthy();
+  }, 30000);
 });

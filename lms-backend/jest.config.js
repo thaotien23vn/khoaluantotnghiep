@@ -4,4 +4,7 @@ module.exports = {
   setupFilesAfterEnv: ['<rootDir>/src/__tests__/jest.teardown.js'],
   testMatch: ['**/__tests__/**/*.test.js'],
   verbose: false,
+  transformIgnorePatterns: [
+    'node_modules/(?!(uuid|@supabase)/)',
+  ],
 };
