@@ -1,7 +1,10 @@
 const express = require('express');
 const authMiddleware = require('../middlewares/auth');
 const authorizeRole = require('../middlewares/authorize');
-const teacherStatsController = require('../controllers/teacher_statistics.controller');
+const teacherStatsController = require('../modules/teacher_statistics/teacher_statistics.controller');
+const {
+  getTeacherStatisticsValidation,
+} = require('../modules/teacher_statistics/teacher_statistics.validation');
 
 const router = express.Router();
 
@@ -14,6 +17,7 @@ router.get(
   '/statistics',
   authMiddleware,
   authorizeRole('teacher', 'admin'),
+  getTeacherStatisticsValidation,
   teacherStatsController.getTeacherDetailedStatistics
 );
 
