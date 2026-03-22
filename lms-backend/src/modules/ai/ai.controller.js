@@ -1,9 +1,9 @@
-const db = require('../models');
-const aiPolicy = require('../services/aiPolicy.service');
-const aiPrompt = require('../services/aiPrompt.service');
-const aiRag = require('../services/aiRag.service');
-const aiGateway = require('../services/aiGateway.service');
-const aiAudit = require('../services/aiAudit.service');
+const db = require('../../models');
+const aiPolicy = require('../../services/aiPolicy.service');
+const aiPrompt = require('../../services/aiPrompt.service');
+const aiRag = require('../../services/aiRag.service');
+const aiGateway = require('../../services/aiGateway.service');
+const aiAudit = require('../../services/aiAudit.service');
 
 const { Enrollment, Course, Chapter, Lecture, AiConversation, AiMessage, AiSetting, AiRolePolicy, AiPromptTemplate } = db.models;
 

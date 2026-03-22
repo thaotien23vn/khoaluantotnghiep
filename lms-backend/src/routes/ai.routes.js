@@ -2,7 +2,7 @@ const express = require('express');
 const authMiddleware = require('../middlewares/auth');
 const authorizeRole = require('../middlewares/authorize');
 const { body } = require('express-validator');
-const aiController = require('../controllers/ai.controller');
+const aiController = require('../modules/ai/ai.controller');
 
 const router = express.Router();
 
