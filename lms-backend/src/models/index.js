@@ -64,6 +64,7 @@ const models = {};
   'review',
   'notification',
   'scheduleEvent',
+  'lectureProgress',
 ].forEach((name) => {
   models[name.charAt(0).toUpperCase() + name.slice(1)] = require(`./${name}.model`)(sequelize);
 });
@@ -94,6 +95,7 @@ const {
   Review,
   Notification,
   ScheduleEvent,
+  LectureProgress,
 } = models;
 
 User.hasMany(Course, { foreignKey: 'createdBy', as: 'createdCourses' });
@@ -161,6 +163,14 @@ User.hasMany(Enrollment, { foreignKey: 'userId' });
 Enrollment.belongsTo(User, { foreignKey: 'userId' });
 Course.hasMany(Enrollment, { foreignKey: 'courseId' });
 Enrollment.belongsTo(Course, { foreignKey: 'courseId' });
+
+// LectureProgress associations
+User.hasMany(LectureProgress, { foreignKey: 'userId' });
+LectureProgress.belongsTo(User, { foreignKey: 'userId' });
+Lecture.hasMany(LectureProgress, { foreignKey: 'lectureId' });
+LectureProgress.belongsTo(Lecture, { foreignKey: 'lectureId' });
+Course.hasMany(LectureProgress, { foreignKey: 'courseId' });
+LectureProgress.belongsTo(Course, { foreignKey: 'courseId' });
 
 Course.hasMany(ScheduleEvent, { foreignKey: 'courseId', as: 'scheduleEvents' });
 ScheduleEvent.belongsTo(Course, { foreignKey: 'courseId', as: 'course' });
