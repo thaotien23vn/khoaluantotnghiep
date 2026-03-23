@@ -1,0 +1,272 @@
+{
+  "info": {
+    "name": "LMS - Full Lecture Progress & Enrollment",
+    "description": "Bộ sưu tập đầy đủ để test tính năng Theo dõi tiến độ (Lecture Progress) và Đăng ký khóa học (Enrollment) mới cập nhật.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "item": [
+    {
+      "name": "0. Authentication",
+      "item": [
+        {
+          "name": "Login as Teacher",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "const response = pm.response.json();",
+                  "if (response.success) {",
+                  "    pm.collectionVariables.set(\"teacher_token\", response.data.token);",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "url": "{{base_url}}/api/auth/login",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"teacher@lms.com\",\n  \"password\": \"admin123456\"\n}"
+            }
+          }
+        },
+        {
+          "name": "Login as Student",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "const response = pm.response.json();",
+                  "if (response.success) {",
+                  "    pm.collectionVariables.set(\"student_token\", response.data.token);",
+                  "    pm.collectionVariables.set(\"student_id\", response.data.user.id);",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "url": "{{base_url}}/api/auth/login",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"student@lms.com\",\n  \"password\": \"admin123456\"\n}"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "1. Setup Data (Teacher)",
+      "item": [
+        {
+          "name": "Create Course",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "const response = pm.response.json();",
+                  "if (response.success) {",
+                  "    pm.collectionVariables.set(\"course_id\", response.data.course.id);",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{teacher_token}}" }
+            ],
+            "url": "{{base_url}}/api/teacher/courses",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"title\": \"Khoá học Test Tiến độ\",\n  \"description\": \"Mô tả khoá học test\",\n  \"categoryId\": 1,\n  \"price\": 0\n}"
+            }
+          }
+        },
+        {
+          "name": "Create Chapter",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "const response = pm.response.json();",
+                  "if (response.success) {",
+                  "    pm.collectionVariables.set(\"chapter_id\", response.data.chapter.id);",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{teacher_token}}" }
+            ],
+            "url": "{{base_url}}/api/teacher/courses/{{course_id}}/chapters",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"title\": \"Chương 1: Mở đầu\",\n  \"order\": 1\n}"
+            }
+          }
+        },
+        {
+          "name": "Create Lecture (Video)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "const response = pm.response.json();",
+                  "if (response.success) {",
+                  "    pm.collectionVariables.set(\"lecture_id\", response.data.lecture.id);",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{teacher_token}}" }
+            ],
+            "url": "{{base_url}}/api/teacher/chapters/{{chapter_id}}/lectures",
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                { "key": "title", "value": "Bài học 1", "type": "text" },
+                { "key": "type", "value": "video", "type": "text" },
+                { "key": "order", "value": "1", "type": "text" },
+                { "key": "duration", "value": "600", "type": "text" }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Publish Course",
+          "request": {
+            "method": "PUT",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{teacher_token}}" }
+            ],
+            "url": "{{base_url}}/api/teacher/courses/{{course_id}}/publish",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"published\": true\n}"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "2. Student Enrollment",
+      "item": [
+        {
+          "name": "Enroll Course",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{student_token}}" }
+            ],
+            "url": "{{base_url}}/api/student/enroll/{{course_id}}"
+          }
+        }
+      ]
+    },
+    {
+      "name": "3. Student Progress Tracking",
+      "item": [
+        {
+          "name": "Update Progress (50%)",
+          "request": {
+            "method": "PUT",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{student_token}}" }
+            ],
+            "url": "{{base_url}}/api/student/lectures/{{lecture_id}}/progress",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"watchedPercent\": 50\n}"
+            }
+          }
+        },
+        {
+          "name": "Update Progress (90% - Auto Complete)",
+          "request": {
+            "method": "PUT",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{student_token}}" }
+            ],
+            "url": "{{base_url}}/api/student/lectures/{{lecture_id}}/progress",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"watchedPercent\": 90\n}"
+            }
+          }
+        },
+        {
+          "name": "Get My Course Progress",
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{student_token}}" }
+            ],
+            "url": "{{base_url}}/api/student/student-courses/{{course_id}}/progress"
+          }
+        }
+      ]
+    },
+    {
+      "name": "4. Teacher Monitoring",
+      "item": [
+        {
+          "name": "Get All Students Progress",
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{teacher_token}}" }
+            ],
+            "url": "{{base_url}}/api/teacher/courses/{{course_id}}/progress"
+          }
+        },
+        {
+          "name": "Get Specific Student Detail",
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{teacher_token}}" }
+            ],
+            "url": "{{base_url}}/api/teacher/courses/{{course_id}}/students/{{student_id}}/progress"
+          }
+        }
+      ]
+    }
+  ],
+  "variable": [
+    { "key": "base_url", "value": "http://localhost:3000" },
+    { "key": "teacher_token", "value": "" },
+    { "key": "student_token", "value": "" },
+    { "key": "course_id", "value": "" },
+    { "key": "chapter_id", "value": "" },
+    { "key": "lecture_id", "value": "" },
+    { "key": "student_id", "value": "" }
+  ]
+}

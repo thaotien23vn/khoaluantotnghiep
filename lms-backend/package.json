@@ -7,6 +7,7 @@
     "dev": "nodemon src/server.js",
     "start": "node src/server.js",
     "db:sync": "node src/models/sync.js",
+    "db:sync:prod": "node src/models/sync.js",
     "db:seed": "node src/models/seed.js",
     "db:reset": "set CLEANUP_DB=true&& node src/models/seed.js",
     "security-test": "bash test-security.sh",
