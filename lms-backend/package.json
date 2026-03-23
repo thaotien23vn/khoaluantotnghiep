@@ -8,6 +8,7 @@
     "start": "node src/server.js",
     "db:sync": "node src/models/sync.js",
     "db:sync:prod": "node src/models/sync.js",
+    "prestart": "npm run db:sync:prod",
     "db:seed": "node src/models/seed.js",
     "db:reset": "set CLEANUP_DB=true&& node src/models/seed.js",
     "security-test": "bash test-security.sh",
