@@ -49,7 +49,7 @@ describe('Enrollment and Course Access Integration Test', () => {
   it('should allow access to course detail after enrollment', async () => {
     // 1. Student enrolls (free course)
     const enrollRes = await request(app)
-      .post(`/api/student/courses/${testCourse.id}/enroll`)
+      .post(`/api/student/enroll/${testCourse.id}`)
       .set('Authorization', `Bearer ${studentToken}`);
     
     expect(enrollRes.statusCode).toBe(201);

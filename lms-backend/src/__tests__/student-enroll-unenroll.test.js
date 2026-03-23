@@ -27,7 +27,7 @@ describe('Student enroll/unenroll', () => {
     });
 
     const enrollRes = await request(app)
-      .post(`/api/student/courses/${seeded.course.id}/enroll`)
+      .post(`/api/student/enroll/${seeded.course.id}`)
       .set('Authorization', `Bearer ${token}`);
 
     expect([200, 201]).toContain(enrollRes.statusCode);
@@ -39,7 +39,7 @@ describe('Student enroll/unenroll', () => {
     expect(enrollment).toBeTruthy();
 
     const unenrollRes = await request(app)
-      .delete(`/api/student/courses/${seeded.course.id}/enroll`)
+      .delete(`/api/student/enroll/${seeded.course.id}`)
       .set('Authorization', `Bearer ${token}`);
 
     expect(unenrollRes.statusCode).toBe(200);

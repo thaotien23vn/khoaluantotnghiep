@@ -45,7 +45,7 @@ describe('AI Tutor Flow Integration Test', () => {
 
     // 2. Student enrolls
     await request(app)
-      .post(`/api/student/courses/${testCourse.id}/enroll`)
+      .post(`/api/student/enroll/${testCourse.id}`)
       .set('Authorization', `Bearer ${studentToken}`);
 
     // 3. Ingest lecture for AI (Teacher)

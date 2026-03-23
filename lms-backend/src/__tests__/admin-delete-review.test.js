@@ -43,7 +43,7 @@ describe('Admin delete review (test-created only)', () => {
     await db.models.Enrollment.destroy({ where: { userId: me.id, courseId } });
 
     const enrollRes = await request(app)
-      .post(`/api/student/courses/${courseId}/enroll`)
+      .post(`/api/student/enroll/${courseId}`)
       .set('Authorization', `Bearer ${studentToken}`);
 
     if (![200, 201].includes(enrollRes.statusCode)) {
