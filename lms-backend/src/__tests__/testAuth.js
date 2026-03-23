@@ -77,20 +77,15 @@ async function loginByRole(role) {
 // Setup test accounts before all tests
 beforeAll(async () => {
   try {
-    // Ensure database is connected and synced
-    if (process.env.NODE_ENV === 'test') {
-      await db.sequelize.sync({ force: true });
-      console.log('✅ Test database synced');
-    }
-
+    // Ensure database tables exist
+    await db.sequelize.sync();
+    
     // Create all test accounts
-    console.log('🔧 Creating test accounts...');
     await Promise.all([
       ensureTestAccount('admin'),
       ensureTestAccount('teacher'),
       ensureTestAccount('student'),
     ]);
-    console.log('✅ Test accounts created successfully');
   } catch (error) {
     console.error('❌ Failed to setup test accounts:', error.message);
     throw error;

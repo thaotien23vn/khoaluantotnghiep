@@ -1,7 +1,7 @@
 const request = require('supertest');
 const app = require('../app');
 const db = require('../models');
-const { loginByRole } = require('./testAuth');
+const { loginByRole, TEST_ACCOUNTS } = require('./testAuth');
 
 /**
  * Lecture Progress API Tests
@@ -17,14 +17,19 @@ describe('Lecture Progress API', () => {
   let chapterId;
 
   beforeAll(async () => {
-    // Use test accounts from testAuth
+    // Use standard test accounts from testAuth
     studentToken = await loginByRole('student');
     teacherToken = await loginByRole('teacher');
 
-    // Get user IDs from database
+    // Get user IDs from database using emails from testAuth
     const { User } = db.models;
     const student = await User.findOne({ where: { email: 'student@gmail.com' } });
     const teacher = await User.findOne({ where: { email: 'teacher@gmail.com' } });
+    
+    if (!student || !teacher) {
+      throw new Error('Test accounts not found in database');
+    }
+    
     studentId = student.id;
     teacherId = teacher.id;
 
@@ -46,6 +51,9 @@ describe('Lecture Progress API', () => {
       .set('Authorization', `Bearer ${teacherToken}`)
       .send({ published: true });
 
+    // Verify course ownership
+    const course = await db.models.Course.findByPk(courseId);
+    
     // Create chapter
     const chapterRes = await request(app)
       .post(`/api/teacher/courses/${courseId}/chapters`)
@@ -73,7 +81,7 @@ describe('Lecture Progress API', () => {
 
     // Enroll student
     await request(app)
-      .post(`/api/student/courses/${courseId}/enroll`)
+      .post(`/api/student/enroll/${courseId}`)
       .set('Authorization', `Bearer ${studentToken}`);
   });
 
@@ -109,7 +117,7 @@ describe('Lecture Progress API', () => {
     it('should auto-update course progress percentage', async () => {
       // First check course progress
       const progressRes = await request(app)
-        .get(`/api/student/courses/${courseId}/progress`)
+        .get(`/api/student/student-courses/${courseId}/progress`)
         .set('Authorization', `Bearer ${studentToken}`);
 
       expect(progressRes.status).toBe(200);
@@ -156,10 +164,10 @@ describe('Lecture Progress API', () => {
     });
   });
 
-  describe('GET /api/student/courses/:courseId/progress', () => {
+  describe('GET /api/student/student-courses/:courseId/progress', () => {
     it('should get student course progress with lecture details', async () => {
       const res = await request(app)
-        .get(`/api/student/courses/${courseId}/progress`)
+        .get(`/api/student/student-courses/${courseId}/progress`)
         .set('Authorization', `Bearer ${studentToken}`);
 
       expect(res.status).toBe(200);
@@ -171,7 +179,7 @@ describe('Lecture Progress API', () => {
 
     it('should fail if not enrolled', async () => {
       const res = await request(app)
-        .get('/api/student/courses/99999/progress')
+        .get('/api/student/student-courses/99999/progress')
         .set('Authorization', `Bearer ${studentToken}`);
 
       expect(res.status).toBe(404);
@@ -179,22 +187,76 @@ describe('Lecture Progress API', () => {
   });
 
   describe('GET /api/teacher/courses/:courseId/progress', () => {
-    it.skip('should get all students progress for course', async () => {
-      // TODO: Fix teacher ownership check in test environment
+    it('should get all students progress for course', async () => {
+      const res = await request(app)
+        .get(`/api/teacher/courses/${courseId}/progress`)
+        .set('Authorization', `Bearer ${teacherToken}`);
+
+      expect(res.status).toBe(200);
+      expect(res.body.success).toBe(true);
+      expect(res.body.data.totalStudents).toBeGreaterThanOrEqual(1);
+      expect(res.body.data.studentsProgress).toBeDefined();
+      expect(Array.isArray(res.body.data.studentsProgress)).toBe(true);
     });
 
-    it.skip('should fail if teacher does not own the course', async () => {
-      // Skip due to user registration conflicts in test environment
+    it('should fail if teacher does not own the course', async () => {
+      // Use Admin to create another teacher because public registration is student-only
+      const adminToken = await loginByRole('admin');
+      
+      const uniqueSuffix = `${Date.now()}_${Math.floor(Math.random() * 1000)}`;
+      const uniqueUsername = `teacher_${uniqueSuffix}`;
+      const uniqueEmail = `teacher_${uniqueSuffix}@test.com`;
+      
+      const otherTeacherRes = await request(app)
+        .post('/api/admin/users')
+        .set('Authorization', `Bearer ${adminToken}`)
+        .send({
+          username: uniqueUsername,
+          email: uniqueEmail,
+          password: 'Password123@',
+          name: 'Other Teacher',
+          role: 'teacher',
+        });
+
+      expect(otherTeacherRes.status).toBe(201);
+      
+      // Login as the new teacher to get token
+      const loginRes = await request(app)
+        .post('/api/auth/login')
+        .send({
+          email: uniqueEmail,
+          password: 'Password123@'
+        });
+        
+      const otherTeacherToken = loginRes.body.data.token;
+
+      const res = await request(app)
+        .get(`/api/teacher/courses/${courseId}/progress`)
+        .set('Authorization', `Bearer ${otherTeacherToken}`);
+
+      expect(res.status).toBe(403);
     });
   });
 
   describe('GET /api/teacher/courses/:courseId/students/:studentId/progress', () => {
-    it.skip('should get specific student progress detail', async () => {
-      // TODO: Fix route matching in test environment  
+    it('should get specific student progress detail', async () => {
+      const res = await request(app)
+        .get(`/api/teacher/courses/${courseId}/students/${studentId}/progress`)
+        .set('Authorization', `Bearer ${teacherToken}`);
+
+      expect(res.status).toBe(200);
+      expect(res.body.success).toBe(true);
+      expect(res.body.data.student).toBeDefined();
+      expect(res.body.data.enrollment).toBeDefined();
     });
 
-    it.skip('should include last accessed timestamp', async () => {
-      // TODO: Fix route matching in test environment
+    it('should include last accessed timestamp', async () => {
+      const res = await request(app)
+        .get(`/api/teacher/courses/${courseId}/students/${studentId}/progress`)
+        .set('Authorization', `Bearer ${teacherToken}`);
+
+      expect(res.status).toBe(200);
+      expect(res.body.data.lastAccessed).toBeDefined();
     });
   });
 });

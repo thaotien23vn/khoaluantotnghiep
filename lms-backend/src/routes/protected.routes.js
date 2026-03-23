@@ -305,6 +305,41 @@ router.post(
   courseController.createCourse
 );
 
+// ---------- Progress Tracking (MUST be before /courses/:id) ----------
+const progressController = require('../modules/progress/progress.controller');
+const {
+  updateLectureProgressValidation,
+  getStudentCourseProgressValidation,
+  getTeacherStudentProgressValidation,
+  getCourseStudentsProgressValidation,
+} = require('../modules/progress/progress.validation');
+
+/**
+ * @route   GET /api/teacher/courses/:courseId/progress
+ * @desc    Get all students progress for a course
+ * @access  Private (Teacher)
+ */
+router.get(
+  '/courses/:courseId/progress',
+  authMiddleware,
+  authorizeRole('teacher'),
+  getCourseStudentsProgressValidation,
+  progressController.getCourseStudentsProgress
+);
+
+/**
+ * @route   GET /api/teacher/courses/:courseId/students/:studentId/progress
+ * @desc    Get specific student progress detail
+ * @access  Private (Teacher)
+ */
+router.get(
+  '/courses/:courseId/students/:studentId/progress',
+  authMiddleware,
+  authorizeRole('teacher'),
+  getTeacherStudentProgressValidation,
+  progressController.getTeacherStudentProgress
+);
+
 /**
  * @route   GET /api/teacher/courses/:id
  * @desc    Get a specific course (teacher's own or any for admin)
@@ -517,12 +552,12 @@ router.get(
 // ---------- Enrollment (Student & Admin) ----------
 
 /**
- * @route   POST /api/student/courses/:courseId/enroll
+ * @route   POST /api/student/enroll
  * @desc    Enroll in a course
  * @access  Private (Student)
  */
 router.post(
-  '/courses/:courseId/enroll',
+  '/enroll/:courseId',
   authMiddleware,
   authorizeRole('student'),
   enrollCourseValidation,
@@ -530,12 +565,12 @@ router.post(
 );
 
 /**
- * @route   DELETE /api/student/courses/:courseId/enroll
+ * @route   DELETE /api/student/enroll/:courseId
  * @desc    Unenroll from a course
  * @access  Private (Student)
  */
 router.delete(
-  '/courses/:courseId/enroll',
+  '/enroll/:courseId',
   authMiddleware,
   authorizeRole('student'),
   unenrollCourseValidation,
@@ -605,14 +640,7 @@ router.put(
   enrollmentController.updateProgress
 );
 
-// ---------- Progress Tracking ----------
-const progressController = require('../modules/progress/progress.controller');
-const {
-  updateLectureProgressValidation,
-  getStudentCourseProgressValidation,
-  getTeacherStudentProgressValidation,
-  getCourseStudentsProgressValidation,
-} = require('../modules/progress/progress.validation');
+// ---------- Student Progress Tracking (MUST NOT be prefixed by student in app.js or must handle it) ----------
 
 /**
  * @route   PUT /api/student/lectures/:lectureId/progress
@@ -633,37 +661,11 @@ router.put(
  * @access  Private (Student)
  */
 router.get(
-  '/courses/:courseId/progress',
+  '/student-courses/:courseId/progress',
   authMiddleware,
   authorizeRole('student'),
   getStudentCourseProgressValidation,
   progressController.getStudentCourseProgress
-);
-
-/**
- * @route   GET /api/teacher/courses/:courseId/progress
- * @desc    Get all students progress for a course
- * @access  Private (Teacher)
- */
-router.get(
-  '/teacher/courses/:courseId/progress',
-  authMiddleware,
-  authorizeRole('teacher'),
-  getCourseStudentsProgressValidation,
-  progressController.getCourseStudentsProgress
-);
-
-/**
- * @route   GET /api/teacher/courses/:courseId/students/:studentId/progress
- * @desc    Get specific student progress detail
- * @access  Private (Teacher)
- */
-router.get(
-  '/teacher/courses/:courseId/students/:studentId/progress',
-  authMiddleware,
-  authorizeRole('teacher'),
-  getTeacherStudentProgressValidation,
-  progressController.getTeacherStudentProgress
 );
 
 // ---------- Payment (Student & Admin) ----------
