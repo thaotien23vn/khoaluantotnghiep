@@ -10,7 +10,6 @@ CREATE TABLE IF NOT EXISTS lecture_progress (
   completed_at TIMESTAMP NULL,
   
   CONSTRAINT unique_user_lecture_progress UNIQUE (user_id, lecture_id),
-  status VARCHAR(20) DEFAULT 'active',
   CONSTRAINT fk_lecture_progress_user_id FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
   CONSTRAINT fk_lecture_progress_lecture_id FOREIGN KEY (lecture_id) REFERENCES lectures(id) ON DELETE CASCADE,
   CONSTRAINT fk_lecture_progress_course_id FOREIGN KEY (course_id) REFERENCES courses(id) ON DELETE CASCADE

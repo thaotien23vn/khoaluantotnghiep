@@ -27,11 +27,6 @@ module.exports = (sequelize) => {
       field: 'watched_percent',
       defaultValue: 0.0,
     },
-    status: {
-      type: DataTypes.ENUM('active', 'completed', 'reset', 'force_completed'),
-      defaultValue: 'active',
-      field: 'status',
-    },
     isCompleted: {
       type: DataTypes.BOOLEAN,
       field: 'is_completed',
