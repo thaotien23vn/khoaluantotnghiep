@@ -216,7 +216,7 @@ router.get(
 );
 
 /**
- * @route   DELETE /api/admin/reviews/:id
+ * @route   GET /api/admin/reviews/:id
  * @desc    Delete a review
  * @access  Private (Admin only)
  */
@@ -226,6 +226,80 @@ router.delete(
   authorizeRole('admin'),
   deleteReviewValidation,
   adminController.deleteReview
+);
+
+// ---------- Admin Progress Management ----------
+
+/**
+ * @route   GET /api/admin/progress/statistics
+ * @desc    Get overall progress statistics
+ * @access  Private (Admin only)
+ */
+router.get(
+  '/progress/statistics',
+  authMiddleware,
+  authorizeRole('admin'),
+  progressController.getAdminStatistics
+);
+
+/**
+ * @route   GET /api/admin/progress/courses/:courseId
+ * @desc    Get progress detail for any course
+ * @access  Private (Admin only)
+ */
+router.get(
+  '/progress/courses/:courseId',
+  authMiddleware,
+  authorizeRole('admin'),
+  progressController.getAdminCourseProgress
+);
+
+/**
+ * @route   DELETE /api/admin/progress/users/:userId
+ * @desc    Reset student progress
+ * @access  Private (Admin only)
+ */
+router.delete(
+  '/progress/users/:userId',
+  authMiddleware,
+  authorizeRole('admin'),
+  progressController.resetUserProgress
+);
+
+/**
+ * @route   PATCH /api/admin/progress/bulk-update
+ * @desc    Bulk update/Force complete progress
+ * @access  Private (Admin only)
+ */
+router.patch(
+  '/progress/bulk-update',
+  authMiddleware,
+  authorizeRole('admin'),
+  progressController.bulkUpdateProgress
+);
+
+/**
+ * @route   GET /api/admin/progress/logs
+ * @desc    Get progress audit logs
+ * @access  Private (Admin only)
+ */
+router.get(
+  '/progress/logs',
+  authMiddleware,
+  authorizeRole('admin'),
+  progressController.getAuditLogs
+);
+
+/**
+ * @route   GET /api/admin/progress/courses/:courseId/export
+ * @desc    Export progress to CSV
+ * @access  Private (Admin only)
+ */
+router.get(
+  '/progress/courses/:courseId/export',
+  authMiddleware,
+  authorizeRole('admin'),
+  progressController.exportProgress
 );
 
 /**
