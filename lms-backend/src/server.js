@@ -1,5 +1,6 @@
 require('dotenv').config();
 const app = require('./app');
+const { sequelize } = require('./models');
 const { connectDB } = require('./models');
 const { autoSeed } = require('./models/seed');
 const emailService = require('./services/email.service');
@@ -45,6 +46,18 @@ const validateEnv = () => {
 
     // Kết nối database
     await connectDB();
+
+    // Auto-sync database cho production (Render free tier)
+    if (process.env.NODE_ENV === 'production') {
+      console.log('🔄 Auto-syncing database...');
+      try {
+        await sequelize.sync({ alter: true });
+        console.log('✅ Database sync completed');
+      } catch (syncErr) {
+        console.error('❌ Database sync failed:', syncErr.message);
+        // Không exit, vẫn tiếp tục chạy
+      }
+    }
 
     // Tự động tạo admin nếu chưa có (không cần biến env)
     console.log('🌱 Kiểm tra và tạo admin user nếu cần...');
