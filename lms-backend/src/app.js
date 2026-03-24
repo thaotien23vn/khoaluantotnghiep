@@ -20,8 +20,8 @@ const app = express();
 
 app.disable("x-powered-by");
 
-// Trust proxy for Render
-app.set('trust proxy', true);
+// Trust proxy for Render (only specific IPs)
+app.set('trust proxy', ['127.0.0.1', '::1', '10.0.0.0/8', '172.16.0.0/12', '192.168.0.0/16']);
 
 // Security middleware
 app.use(helmet()); // Add security headers
@@ -97,8 +97,10 @@ app.use((req, res, next) => {
 app.use(validateInput);
 
 
-// General API rate limiting
-app.use("/api/", apiLimiter);
+// General API rate limiting (disabled for production due to proxy issues)
+if (process.env.NODE_ENV !== 'production') {
+  app.use("/api/", apiLimiter);
+}
 
 // Health check
 app.get("/api/health", (req, res) => {

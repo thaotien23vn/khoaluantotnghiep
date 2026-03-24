@@ -22,10 +22,41 @@ const handleValidationErrors = (req, res) => {
  */
 const handleServiceError = (error, res) => {
   console.error('Notification error:', error);
+  
+  // Handle specific database errors with user-friendly messages
+  if (error.name === 'SequelizeForeignKeyConstraintError') {
+    const field = error.index?.replace('_fkey', '') || 'user_id';
+    const value = error.parameters?.[1] || 'unknown';
+    
+    return res.status(400).json({
+      success: false,
+      message: `Không tìm thấy ${field} với giá trị ${value}`,
+      debug: {
+        field,
+        value,
+        table: error.table,
+        constraint: error.index,
+      },
+    });
+  }
+  
+  if (error.name === 'SequelizeDatabaseError' && error.parent?.code === '22P02') {
+    return res.status(400).json({
+      success: false,
+      message: 'Giá trị không hợp lệ cho trường dữ liệu',
+      debug: {
+        field: error.parent?.column,
+        value: error.parameters?.[1],
+        allowedValues: ['enrollment', 'quiz', 'review', 'payment', 'course_update', 'certificate', 'announcement', 'system', 'quiz_reminder', 'study_reminder', 'chapter_complete'],
+      },
+    });
+  }
+  
+  // Default error response
   res.status(500).json({
     success: false,
     message: 'Lỗi máy chủ',
-    error: error.message,
+    error: process.env.NODE_ENV === 'development' ? error.message : 'Internal server error',
   });
 };
 
@@ -102,11 +133,19 @@ class NotificationController {
       if (validationError) return;
 
       const { userIds, title, message, type } = req.body;
+      
+      console.log(`[DEBUG] Sending notification to users: ${userIds.join(', ')}`);
+      console.log(`[DEBUG] Notification data:`, { title, message, type });
+      
       const notifications = await Promise.all(
-        userIds.map(userId =>
-          notificationService.createNotification({ userId, title, message, type })
-        )
+        userIds.map(userId => {
+          console.log(`[DEBUG] Creating notification for userId: ${userId}`);
+          return notificationService.createNotification({ userId, title, message, type });
+        })
       );
+      
+      console.log(`[DEBUG] Successfully created ${notifications.length} notifications`);
+      
       res.status(201).json({
         success: true,
         message: `Đã gửi thông báo đến ${userIds.length} người dùng`,
