@@ -131,10 +131,13 @@ CREATE TABLE IF NOT EXISTS notifications (
     title VARCHAR(255) NOT NULL,
     message TEXT,
     payload JSON,
+    dedupe_key VARCHAR(255) NULL COMMENT 'Key for deduplication (e.g., quiz_deadline:123:24h)',
+    dedupe_until TIMESTAMP NULL COMMENT 'Timestamp until which this dedupeKey is valid',
     read BOOLEAN DEFAULT FALSE,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-    FOREIGN KEY (userId) REFERENCES users(id) ON DELETE CASCADE
+    FOREIGN KEY (userId) REFERENCES users(id) ON DELETE CASCADE,
+    UNIQUE KEY idx_notifications_user_dedupe (userId, dedupe_key)
 );
 
 -- Create schedule_events table
@@ -174,4 +177,5 @@ CREATE INDEX idx_assignments_lesson ON assignments(lesson_id);
 CREATE INDEX idx_submissions_assignment ON submissions(assignment_id);
 CREATE INDEX idx_submissions_user ON submissions(user_id);
 CREATE INDEX idx_notifications_userId ON notifications(userId);
+CREATE INDEX idx_notifications_dedupe_until ON notifications(dedupe_until);
 CREATE INDEX idx_schedule_events_courseId ON schedule_events(courseId);
