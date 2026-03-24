@@ -20,6 +20,9 @@ const app = express();
 
 app.disable("x-powered-by");
 
+// Trust proxy for Render
+app.set('trust proxy', true);
+
 // Security middleware
 app.use(helmet()); // Add security headers
 const allowedOrigins = (
