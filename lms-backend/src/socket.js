@@ -39,7 +39,6 @@ function initSocket(httpServer) {
     const userId = socket.user?.id;
     if (userId != null) {
       socket.join(String(userId));
-      socket.join(`user:${userId}`);
     }
 
     socket.on('join', (room) => {
@@ -73,7 +72,6 @@ function getIO() {
 function emitNotification(userId, notification) {
   if (!io) return;
   io.to(String(userId)).emit('new_notification', notification);
-  io.to(`user:${userId}`).emit('new_notification', notification);
 }
 
 module.exports = {
