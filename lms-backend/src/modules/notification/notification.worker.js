@@ -8,11 +8,17 @@ const isTest = process.env.NODE_ENV === 'test';
 let notificationWorker;
 
 if (!isTest) {
-  const redisConnection = new Redis({
-    host: process.env.REDIS_HOST || 'localhost',
-    port: process.env.REDIS_PORT || 6379,
-    maxRetriesPerRequest: null,
-  });
+  // Use REDIS_URL for production, fallback to host/port for development
+  let redisConnection;
+  if (process.env.REDIS_URL) {
+    redisConnection = new Redis(process.env.REDIS_URL);
+  } else {
+    redisConnection = new Redis({
+      host: process.env.REDIS_HOST || 'localhost',
+      port: process.env.REDIS_PORT || 6379,
+      maxRetriesPerRequest: null,
+    });
+  }
 
   notificationWorker = new Worker(
     'notificationQueue',

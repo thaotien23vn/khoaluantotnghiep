@@ -61,6 +61,11 @@ module.exports = (sequelize) => {
       },
       {
         fields: ['created_at']
+      },
+      {
+        fields: ['user_id', 'dedupe_key'],
+        unique: true,
+        name: 'notifications_user_dedupe_unique'
       }
     ]
   });
