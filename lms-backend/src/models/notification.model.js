@@ -61,9 +61,6 @@ module.exports = (sequelize) => {
       },
       {
         fields: ['created_at']
-      },
-      {
-        fields: ['dedupe_key']
       }
     ]
   });
