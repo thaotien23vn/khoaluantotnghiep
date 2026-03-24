@@ -7,17 +7,33 @@ let notificationQueue;
 let redisConnection;
 
 if (!isTest) {
-  // Use REDIS_URL for production, fallback to host/port for development
+  // Cấu hình Redis chung
+  const redisOptions = {
+    maxRetriesPerRequest: null, 
+    ...(process.env.REDIS_URL && process.env.REDIS_URL.startsWith('rediss') && {
+      tls: {
+        rejectUnauthorized: false,
+      },
+    }),
+  };
+
+  // Khởi tạo connection
   if (process.env.REDIS_URL) {
-    redisConnection = new Redis(process.env.REDIS_URL);
+    redisConnection = new Redis(process.env.REDIS_URL, redisOptions);
   } else {
     redisConnection = new Redis({
-      host: process.env.REDIS_HOST || 'localhost',
+      host: process.env.REDIS_HOST || '127.0.0.1',
       port: process.env.REDIS_PORT || 6379,
-      maxRetriesPerRequest: null,
+      ...redisOptions,
     });
   }
 
+  // Lắng nghe lỗi để không làm sập App khi Redis mất kết nối
+  redisConnection.on('error', (err) => {
+    console.error('❌ Redis Queue Connection Error:', err.message);
+  });
+
+  // Khởi tạo BullMQ Queue
   notificationQueue = new Queue('notificationQueue', {
     connection: redisConnection,
     defaultJobOptions: {
@@ -30,14 +46,15 @@ if (!isTest) {
       },
     },
   });
+
+  console.log('🚀 Notification Queue initialized');
 } else {
-  // Mock queue for test environment
+  // Mock cho môi trường Test
   notificationQueue = {
-    add: async (name, data, opts) => {
-      // In test mode, directly call notification service
+    add: async (name, data) => {
       const notificationService = require('./notification.service');
       const result = await notificationService.createNotification(data);
-      return { id: result.notification.id, data: result };
+      return { id: result.notification?.id || 'test-id', data: result };
     },
   };
   redisConnection = null;
