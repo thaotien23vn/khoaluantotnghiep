@@ -1,5 +1,6 @@
 const { validationResult } = require('express-validator');
 const notificationService = require('./notification.service');
+const NotificationScheduler = require('./notification.scheduler');
 
 /**
  * Handle validation errors
@@ -120,6 +121,19 @@ class NotificationController {
     try {
       const result = await notificationService.getUserNotifications(null, req.query);
       res.json({ success: true, data: result });
+    } catch (error) {
+      handleServiceError(error, res);
+    }
+  }
+
+  async triggerScheduler(req, res) {
+    try {
+      const result = await NotificationScheduler.scheduleQuizReminders();
+      res.json({
+        success: true,
+        message: 'Đã kích hoạt scheduler',
+        data: result,
+      });
     } catch (error) {
       handleServiceError(error, res);
     }

@@ -5,6 +5,8 @@ const { autoSeed } = require('./models/seed');
 const emailService = require('./services/email.service');
 const http = require('http');
 const { initSocket } = require('./socket');
+const notificationCron = require('./modules/notification/notification.cron');
+require('./modules/notification/notification.worker');
 
 const PORT = process.env.PORT || 5000;
 
@@ -65,6 +67,9 @@ const validateEnv = () => {
     server.listen(PORT, () => {
       console.log(`✓ Server chạy trên port ${PORT}`);
       console.log(`✓ API: http://localhost:${PORT}/api`);
+      
+      // Start notification scheduler cron jobs
+      notificationCron.start();
     });
   } catch (error) {
     console.error('✗ Lỗi khởi động server:', error.message);

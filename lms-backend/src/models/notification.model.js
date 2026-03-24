@@ -28,6 +28,18 @@ module.exports = (sequelize) => {
       type: DataTypes.JSON,
       defaultValue: {},
     },
+    dedupeKey: {
+      type: DataTypes.STRING(255),
+      allowNull: true,
+      field: 'dedupe_key',
+      comment: 'Key for deduplication (e.g., quiz_deadline:123:24h)',
+    },
+    dedupeUntil: {
+      type: DataTypes.DATE,
+      allowNull: true,
+      field: 'dedupe_until',
+      comment: 'Timestamp until which this dedupeKey is valid',
+    },
     read: {
       type: DataTypes.BOOLEAN,
       defaultValue: false,
@@ -49,6 +61,11 @@ module.exports = (sequelize) => {
       },
       {
         fields: ['created_at']
+      },
+      {
+        fields: ['user_id', 'dedupe_key'],
+        unique: true,
+        name: 'notifications_user_dedupe_unique'
       }
     ]
   });

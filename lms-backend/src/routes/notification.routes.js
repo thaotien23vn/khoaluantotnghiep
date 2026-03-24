@@ -155,6 +155,18 @@ router.get(
   notificationController.getAllNotifications
 );
 
+/**
+ * @route   POST /api/admin/notifications/schedule
+ * @desc    Manually trigger quiz reminder scheduler (Admin)
+ * @access  Private (Admin)
+ */
+router.post(
+  '/admin/notifications/schedule',
+  authMiddleware,
+  authorizeRole('admin'),
+  notificationController.triggerScheduler
+);
+
 // ========== ADMIN "MY" NOTIFICATIONS (for FE compatibility) ==========
 
 router.get(
