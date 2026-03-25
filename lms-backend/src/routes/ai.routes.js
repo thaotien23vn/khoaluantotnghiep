@@ -11,6 +11,25 @@ const {
   upsertAdminAiSettingsValidation,
   createAdminAiPolicyValidation,
   createAdminPromptTemplateValidation,
+  // Student enhancements
+  getStudentLearningPathValidation,
+  getStudentRecommendationsValidation,
+  updateRecommendationStatusValidation,
+  getStudentKnowledgeGapsValidation,
+  getStudentLearningAnalyticsValidation,
+  trackLearningEventValidation,
+  getStudentStudyScheduleValidation,
+  // Teacher enhancements
+  generateTeacherContentValidation,
+  generateTeacherQuizValidation,
+  generateTeacherExercisesValidation,
+  analyzeTeacherContentQualityValidation,
+  getTeacherCourseAnalyticsValidation,
+  getTeacherQualityReportValidation,
+  // Admin enhancements
+  getAdminPlatformAnalyticsValidation,
+  getAdminContentQualityReportValidation,
+  triggerAdminRecommendationsValidation,
 } = require('../modules/ai/ai.validation');
 
 const router = express.Router();
@@ -100,6 +119,169 @@ router.get(
   authMiddleware,
   authorizeRole('admin'),
   aiController.getAdminAiAuditLogs
+);
+
+// ==========================================
+// STUDENT AI ENHANCEMENT ROUTES
+// ==========================================
+
+// Learning Path
+router.get(
+  '/student/ai/learning-path',
+  authMiddleware,
+  authorizeRole('student', 'admin'),
+  getStudentLearningPathValidation,
+  aiController.getStudentLearningPath
+);
+
+// AI Recommendations
+router.get(
+  '/student/ai/recommendations',
+  authMiddleware,
+  authorizeRole('student', 'admin'),
+  getStudentRecommendationsValidation,
+  aiController.getStudentRecommendations
+);
+
+router.put(
+  '/student/ai/recommendations/:id/status',
+  authMiddleware,
+  authorizeRole('student', 'admin'),
+  updateRecommendationStatusValidation,
+  aiController.updateStudentRecommendationStatus
+);
+
+// Knowledge Gaps
+router.get(
+  '/student/ai/knowledge-gaps',
+  authMiddleware,
+  authorizeRole('student', 'admin'),
+  getStudentKnowledgeGapsValidation,
+  aiController.getStudentKnowledgeGaps
+);
+
+// Learning Analytics
+router.get(
+  '/student/ai/analytics',
+  authMiddleware,
+  authorizeRole('student', 'admin'),
+  getStudentLearningAnalyticsValidation,
+  aiController.getStudentLearningAnalytics
+);
+
+// Track Learning Event
+router.post(
+  '/student/ai/track-event',
+  authMiddleware,
+  authorizeRole('student', 'admin'),
+  trackLearningEventValidation,
+  aiController.trackStudentLearningEvent
+);
+
+// Study Schedule
+router.get(
+  '/student/ai/study-schedule',
+  authMiddleware,
+  authorizeRole('student', 'admin'),
+  getStudentStudyScheduleValidation,
+  aiController.getStudentStudySchedule
+);
+
+// ==========================================
+// TEACHER AI ENHANCEMENT ROUTES
+// ==========================================
+
+// Content Generation
+router.post(
+  '/teacher/ai/generate-content',
+  authMiddleware,
+  authorizeRole('teacher', 'admin'),
+  generateTeacherContentValidation,
+  aiController.generateTeacherLectureContent
+);
+
+// Quiz Generation
+router.post(
+  '/teacher/ai/generate-quiz',
+  authMiddleware,
+  authorizeRole('teacher', 'admin'),
+  generateTeacherQuizValidation,
+  aiController.generateTeacherQuizQuestions
+);
+
+// Practice Exercises Generation
+router.post(
+  '/teacher/ai/generate-exercises',
+  authMiddleware,
+  authorizeRole('teacher', 'admin'),
+  generateTeacherExercisesValidation,
+  aiController.generateTeacherPracticeExercises
+);
+
+// Content Quality Analysis
+router.get(
+  '/teacher/ai/content-quality',
+  authMiddleware,
+  authorizeRole('teacher', 'admin'),
+  analyzeTeacherContentQualityValidation,
+  aiController.analyzeTeacherContentQuality
+);
+
+// Course Analytics
+router.get(
+  '/teacher/ai/course-analytics',
+  authMiddleware,
+  authorizeRole('teacher', 'admin'),
+  getTeacherCourseAnalyticsValidation,
+  aiController.getTeacherCourseAnalytics
+);
+
+// Content Quality Report
+router.get(
+  '/teacher/ai/quality-report',
+  authMiddleware,
+  authorizeRole('teacher', 'admin'),
+  getTeacherQualityReportValidation,
+  aiController.getTeacherContentQualityReport
+);
+
+// ==========================================
+// ADMIN AI ENHANCEMENT ROUTES
+// ==========================================
+
+// Platform Analytics
+router.get(
+  '/admin/ai/platform-analytics',
+  authMiddleware,
+  authorizeRole('admin'),
+  getAdminPlatformAnalyticsValidation,
+  aiController.getAdminPlatformAnalytics
+);
+
+// Content Quality Report (Admin - all courses)
+router.get(
+  '/admin/ai/content-quality-report',
+  authMiddleware,
+  authorizeRole('admin'),
+  getAdminContentQualityReportValidation,
+  aiController.getAdminContentQualityReport
+);
+
+// Trigger Recommendations Generation
+router.post(
+  '/admin/ai/generate-recommendations',
+  authMiddleware,
+  authorizeRole('admin'),
+  triggerAdminRecommendationsValidation,
+  aiController.triggerAdminRecommendationsGeneration
+);
+
+// System Health
+router.get(
+  '/admin/ai/system-health',
+  authMiddleware,
+  authorizeRole('admin'),
+  aiController.getAdminSystemHealth
 );
 
 module.exports = router;

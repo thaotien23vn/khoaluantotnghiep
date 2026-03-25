@@ -65,6 +65,10 @@ const models = {};
   'notification',
   'scheduleEvent',
   'lectureProgress',
+  'userLearningProfile',
+  'aiRecommendation',
+  'learningAnalytics',
+  'contentQualityScore',
 ].forEach((name) => {
   models[name.charAt(0).toUpperCase() + name.slice(1)] = require(`./${name}.model`)(sequelize);
 });
@@ -96,6 +100,10 @@ const {
   Notification,
   ScheduleEvent,
   LectureProgress,
+  UserLearningProfile,
+  AiRecommendation,
+  LearningAnalytics,
+  ContentQualityScore,
 } = models;
 
 User.hasMany(Course, { foreignKey: 'createdBy', as: 'createdCourses' });
@@ -195,6 +203,28 @@ User.hasMany(Attempt, { foreignKey: 'userId', as: 'attempts' });
 User.hasMany(Review, { foreignKey: 'userId', as: 'reviews' });
 Course.hasMany(Review, { foreignKey: 'courseId', as: 'reviews' });
 User.hasMany(Notification, { foreignKey: 'userId', as: 'notifications' });
+
+// AI Enhancement Models Associations
+User.hasMany(UserLearningProfile, { foreignKey: 'userId', as: 'learningProfiles' });
+UserLearningProfile.belongsTo(User, { foreignKey: 'userId', as: 'user' });
+
+Course.hasMany(UserLearningProfile, { foreignKey: 'courseId', as: 'userProfiles' });
+UserLearningProfile.belongsTo(Course, { foreignKey: 'courseId', as: 'course' });
+
+User.hasMany(AiRecommendation, { foreignKey: 'userId', as: 'aiRecommendations' });
+AiRecommendation.belongsTo(User, { foreignKey: 'userId', as: 'user' });
+
+Course.hasMany(AiRecommendation, { foreignKey: 'courseId', as: 'aiRecommendations' });
+AiRecommendation.belongsTo(Course, { foreignKey: 'courseId', as: 'course' });
+
+User.hasMany(LearningAnalytics, { foreignKey: 'userId', as: 'learningAnalytics' });
+LearningAnalytics.belongsTo(User, { foreignKey: 'userId', as: 'user' });
+
+Course.hasMany(LearningAnalytics, { foreignKey: 'courseId', as: 'learningAnalytics' });
+LearningAnalytics.belongsTo(Course, { foreignKey: 'courseId', as: 'course' });
+
+Lecture.hasMany(LearningAnalytics, { foreignKey: 'lectureId', as: 'learningEvents' });
+LearningAnalytics.belongsTo(Lecture, { foreignKey: 'lectureId', as: 'lecture' });
 
 const connectDB = async () => {
   await sequelize.authenticate();

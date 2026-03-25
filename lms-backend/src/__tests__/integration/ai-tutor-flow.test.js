@@ -70,7 +70,7 @@ describe('AI Tutor Flow Integration Test', () => {
     expect(convRes.body.success).toBe(true);
     conversationId = convRes.body.data.conversation.id;
 
-    // 2. Send message (may return 201 on success or 500 if AI service not configured)
+    // 2. Send message (may return 201 on success or 500/503 if AI service not configured)
     const msgRes = await request(app)
       .post(`/api/student/ai/conversations/${conversationId}/messages`)
       .set('Authorization', `Bearer ${studentToken}`)
@@ -78,13 +78,13 @@ describe('AI Tutor Flow Integration Test', () => {
         message: 'What are React hooks?'
       });
 
-    // If AI service is configured: 201 with answer, otherwise may return 500
-    expect([201, 500]).toContain(msgRes.statusCode);
+    // If AI service is configured: 201 with answer, otherwise may return 500/503
+    expect([201, 500, 503]).toContain(msgRes.statusCode);
     if (msgRes.statusCode === 201) {
       expect(msgRes.body.success).toBe(true);
       expect(msgRes.body.data).toHaveProperty('answer');
     }
-  });
+  }, 15000);
 
   it('should deny AI access if student is not enrolled', async () => {
     // Create a new course but DON'T enroll the student

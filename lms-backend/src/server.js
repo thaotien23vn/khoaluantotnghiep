@@ -51,7 +51,7 @@ const validateEnv = () => {
     if (process.env.NODE_ENV === 'production') {
       console.log('🔄 Auto-syncing database...');
       try {
-        await sequelize.sync();
+        await sequelize.sync({ alter: true });
         console.log('✅ Database sync completed');
       } catch (syncErr) {
         console.error('❌ Database sync failed:', syncErr.message);

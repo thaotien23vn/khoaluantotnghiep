@@ -3,7 +3,7 @@ const { sequelize } = require('./index');
 
 (async () => {
   try {
-    await sequelize.sync();
+    await sequelize.sync({ alter: true });
     console.log('✅ All models were synchronized successfully.');
     process.exit(0);
   } catch (err) {

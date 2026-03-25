@@ -28,6 +28,10 @@ module.exports = (sequelize) => {
       allowNull: true,
       defaultValue: 'Mọi cấp độ',
     },
+    category: {
+      type: DataTypes.STRING,
+      allowNull: true,
+    },
     price: {
       type: DataTypes.DECIMAL(10,2),
       defaultValue: 0.0,

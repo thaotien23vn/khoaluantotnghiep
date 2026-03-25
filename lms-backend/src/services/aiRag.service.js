@@ -46,12 +46,12 @@ function cosineSimilarity(a, b) {
 
 async function buildLectureSourceText(lectureId, options = {}) {
   const lecture = await Lecture.findByPk(lectureId, {
-    include: [{ model: Chapter, attributes: ['id', 'title', 'courseId'], required: true }],
+    include: [{ model: Chapter, as: 'chapter', attributes: ['id', 'title', 'courseId'], required: true }],
     transaction: options.transaction,
   });
   if (!lecture) return null;
 
-  const course = await Course.findByPk(lecture.Chapter.courseId, {
+  const course = await Course.findByPk(lecture.chapter.courseId, {
     attributes: ['id', 'title', 'description'],
     transaction: options.transaction,
   });
@@ -59,14 +59,14 @@ async function buildLectureSourceText(lectureId, options = {}) {
   const parts = [];
   parts.push(`Course: ${course?.title || ''}`);
   if (course?.description) parts.push(`Course description: ${course.description}`);
-  parts.push(`Chapter: ${lecture.Chapter.title || ''}`);
+  parts.push(`Chapter: ${lecture.chapter.title || ''}`);
   parts.push(`Lecture: ${lecture.title || ''}`);
   if (lecture.aiNotes) parts.push(`Lecture notes: ${lecture.aiNotes}`);
 
   return {
-    courseId: Number(lecture.Chapter.courseId),
+    courseId: Number(lecture.chapter.courseId),
     lectureId: Number(lecture.id),
-    chapterId: Number(lecture.Chapter.id),
+    chapterId: Number(lecture.chapter.id),
     text: normalizeText(parts.join('\n')),
   };
 }

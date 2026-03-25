@@ -1,15 +1,22 @@
 const db = require('../../models');
+const logger = require('../../utils/logger');
 const aiPolicy = require('../../services/aiPolicy.service');
 const aiPrompt = require('../../services/aiPrompt.service');
 const aiRag = require('../../services/aiRag.service');
 const aiGateway = require('../../services/aiGateway.service');
 const aiAudit = require('../../services/aiAudit.service');
+const aiPersonalization = require('../../services/aiPersonalization.service');
+const aiAnalytics = require('../../services/aiAnalytics.service');
+const aiContent = require('../../services/aiContent.service');
+const aiLearningPath = require('../../services/aiLearningPath.service');
 
 const {
   Enrollment,
   Course,
   Chapter,
   Lecture,
+  Quiz,
+  Question,
   AiConversation,
   AiMessage,
   AiSetting,
@@ -34,8 +41,32 @@ class AiService {
   ingestLecture = aiRag.ingestLecture;
   retrieveTopChunks = aiRag.retrieveTopChunks;
 
-  // Audit
-  logAiCall = aiAudit.logAiCall;
+  // New enhanced services
+  // Personalization
+  generateRecommendations = (...args) => aiPersonalization.generateRecommendations(...args);
+  getUserRecommendations = aiPersonalization.getUserRecommendations;
+  updateRecommendationStatus = aiPersonalization.updateRecommendationStatus;
+  upsertUserLearningProfile = aiPersonalization.upsertUserLearningProfile;
+  updateProfileFromAnalytics = aiPersonalization.updateProfileFromAnalytics;
+
+  // Analytics
+  trackLearningEvent = (...args) => aiAnalytics.trackLearningEvent(...args);
+  getUserLearningAnalytics = (...args) => aiAnalytics.getUserLearningAnalytics(...args);
+  getCourseAnalytics = (...args) => aiAnalytics.getCourseAnalytics(...args);
+  getPlatformAnalytics = (...args) => aiAnalytics.getPlatformAnalytics(...args);
+
+  // Content
+  generateLectureContent = aiContent.generateLectureContent;
+  generateQuizQuestions = (...args) => aiContent.generateQuizQuestions(...args);
+  generatePracticeExercises = (...args) => aiContent.generatePracticeExercises(...args);
+  analyzeContentQuality = aiContent.analyzeContentQuality;
+  getContentQualityReport = (...args) => aiContent.getContentQualityReport(...args);
+
+  // Learning Path
+  generateLearningPath = aiLearningPath.generateLearningPath;
+  getUserLearningPath = aiLearningPath.generateLearningPath.bind(aiLearningPath);
+  analyzeKnowledgeGaps = aiLearningPath.analyzeKnowledgeGaps;
+  getStudyScheduleRecommendation = aiLearningPath.getStudyScheduleRecommendation;
 
   // Helpers
   async ensureStudentEnrolled(userId, courseId) {
@@ -307,6 +338,414 @@ class AiService {
       limit: 200,
     });
     return { logs: rows };
+  }
+
+  // ==========================================
+  // STUDENT AI ENHANCEMENT METHODS
+  // ==========================================
+
+  /**
+   * Get personalized learning path for student
+   */
+  async getStudentLearningPath(userId, courseId) {
+    const setting = await this.getAiSetting();
+    if (!setting?.enabled) {
+      throw { status: 503, message: 'AI đang tạm tắt' };
+    }
+
+    // Check if course exists first
+    const course = await Course.findByPk(courseId);
+    if (!course) {
+      throw { status: 404, message: 'Không tìm thấy khóa học' };
+    }
+
+    const enrolled = await this.ensureStudentEnrolled(userId, courseId);
+    if (!enrolled) {
+      throw { status: 403, message: 'Bạn chưa đăng ký khóa học này' };
+    }
+
+    return this.getUserLearningPath(userId, courseId);
+  }
+
+  /**
+   * Get AI recommendations for student
+   */
+  async getStudentRecommendations(userId, options = {}) {
+    const setting = await this.getAiSetting();
+    if (!setting?.enabled) {
+      throw { status: 503, message: 'AI đang tạm tắt' };
+    }
+
+    const { courseId, type, status, page, limit } = options;
+    
+    if (courseId) {
+      const enrolled = await this.ensureStudentEnrolled(userId, courseId);
+      if (!enrolled) {
+        throw { status: 403, message: 'Bạn chưa đăng ký khóa học này' };
+      }
+    }
+
+    return this.getUserRecommendations(userId, { courseId, type, status, page, limit });
+  }
+
+  /**
+   * Update recommendation status
+   */
+  async updateStudentRecommendationStatus(userId, recommendationId, status) {
+    const setting = await this.getAiSetting();
+    if (!setting?.enabled) {
+      throw { status: 503, message: 'AI đang tạm tắt' };
+    }
+
+    return this.updateRecommendationStatus(userId, recommendationId, status);
+  }
+
+  /**
+   * Get knowledge gap analysis
+   */
+  async getStudentKnowledgeGaps(userId, courseId) {
+    const setting = await this.getAiSetting();
+    if (!setting?.enabled) {
+      throw { status: 503, message: 'AI đang tạm tắt' };
+    }
+
+    const enrolled = await this.ensureStudentEnrolled(userId, courseId);
+    if (!enrolled) {
+      throw { status: 403, message: 'Bạn chưa đăng ký khóa học này' };
+    }
+
+    return this.analyzeKnowledgeGaps(userId, courseId);
+  }
+
+  /**
+   * Get student's learning analytics
+   */
+  async getStudentLearningAnalytics(userId, courseId, options = {}) {
+    const setting = await this.getAiSetting();
+    if (!setting?.enabled) {
+      throw { status: 503, message: 'AI đang tạm tắt' };
+    }
+
+    const enrolled = await this.ensureStudentEnrolled(userId, courseId);
+    if (!enrolled) {
+      throw { status: 403, message: 'Bạn chưa đăng ký khóa học này' };
+    }
+
+    return this.getUserLearningAnalytics(userId, courseId, options);
+  }
+
+  /**
+   * Track learning event
+   */
+  async trackStudentLearningEvent(userId, courseId, eventData) {
+    const setting = await this.getAiSetting();
+    if (!setting?.enabled) {
+      throw { status: 503, message: 'AI đang tạm tắt' };
+    }
+
+    const enrolled = await this.ensureStudentEnrolled(userId, courseId);
+    if (!enrolled) {
+      throw { status: 403, message: 'Bạn chưa đăng ký khóa học này' };
+    }
+
+    return this.trackLearningEvent(userId, courseId, eventData);
+  }
+
+  /**
+   * Get study schedule recommendation
+   */
+  async getStudentStudySchedule(userId, courseId, constraints = {}) {
+    const setting = await this.getAiSetting();
+    if (!setting?.enabled) {
+      throw { status: 503, message: 'AI đang tạm tắt' };
+    }
+
+    const enrolled = await this.ensureStudentEnrolled(userId, courseId);
+    if (!enrolled) {
+      throw { status: 403, message: 'Bạn chưa đăng ký khóa học này' };
+    }
+
+    return this.getStudyScheduleRecommendation(userId, courseId, constraints);
+  }
+
+  // ==========================================
+  // TEACHER AI ENHANCEMENT METHODS
+  // ==========================================
+
+  /**
+   * Generate lecture content from outline
+   */
+  async generateTeacherLectureContent(reqUser, courseId, chapterId, outlineData) {
+    const setting = await this.getAiSetting();
+    if (!setting?.enabled) {
+      throw { status: 503, message: 'AI đang tạm tắt' };
+    }
+
+    const policy = await this.getRolePolicy(reqUser.role);
+    if (!policy?.enabled) {
+      throw { status: 403, message: 'Role không được phép sử dụng AI' };
+    }
+
+    const course = await Course.findByPk(courseId);
+    const allowed = await this.ensureTeacherOwnsCourseOrAdmin(reqUser, course);
+    if (!allowed) {
+      throw { status: 403, message: 'Bạn không có quyền tạo content cho course này' };
+    }
+
+    return this.generateLectureContent(courseId, chapterId, outlineData);
+  }
+
+  /**
+   * Generate quiz questions for lecture
+   */
+  async generateTeacherQuizQuestions(reqUser, lectureId, options = {}) {
+    const setting = await this.getAiSetting();
+    if (!setting?.enabled) {
+      throw { status: 503, message: 'AI đang tạm tắt' };
+    }
+
+    const policy = await this.getRolePolicy(reqUser.role);
+    if (!policy?.enabled) {
+      throw { status: 403, message: 'Role không được phép sử dụng AI' };
+    }
+
+    // Verify teacher owns the lecture's course
+    const lecture = await Lecture.findByPk(lectureId, {
+      include: [{ model: Chapter, attributes: ['courseId'], required: true }],
+    });
+    
+    if (!lecture) {
+      throw { status: 404, message: 'Không tìm thấy lecture' };
+    }
+
+    const course = await Course.findByPk(lecture.Chapter.courseId);
+    const allowed = await this.ensureTeacherOwnsCourseOrAdmin(reqUser, course);
+    if (!allowed) {
+      throw { status: 403, message: 'Bạn không có quyền tạo quiz cho lecture này' };
+    }
+
+    return this.generateQuizQuestions(lectureId, options);
+  }
+
+  /**
+   * Generate practice exercises
+   */
+  async generateTeacherPracticeExercises(reqUser, lectureId, options = {}) {
+    const setting = await this.getAiSetting();
+    if (!setting?.enabled) {
+      throw { status: 503, message: 'AI đang tạm tắt' };
+    }
+
+    const policy = await this.getRolePolicy(reqUser.role);
+    if (!policy?.enabled) {
+      throw { status: 403, message: 'Role không được phép sử dụng AI' };
+    }
+
+    const lecture = await Lecture.findByPk(lectureId, {
+      include: [{ model: Chapter, attributes: ['courseId'], required: true }],
+    });
+    
+    if (!lecture) {
+      throw { status: 404, message: 'Không tìm thấy lecture' };
+    }
+
+    const course = await Course.findByPk(lecture.Chapter.courseId);
+    const allowed = await this.ensureTeacherOwnsCourseOrAdmin(reqUser, course);
+    if (!allowed) {
+      throw { status: 403, message: 'Bạn không có quyền tạo exercises cho lecture này' };
+    }
+
+    return this.generatePracticeExercises(lectureId, options);
+  }
+
+  /**
+   * Analyze content quality
+   */
+  async analyzeTeacherContentQuality(reqUser, contentId, contentType) {
+    const setting = await this.getAiSetting();
+    if (!setting?.enabled) {
+      throw { status: 503, message: 'AI đang tạm tắt' };
+    }
+
+    const policy = await this.getRolePolicy(reqUser.role);
+    if (!policy?.enabled) {
+      throw { status: 403, message: 'Role không được phép sử dụng AI' };
+    }
+
+    // Get content based on type
+    let content;
+    if (contentType === 'lecture') {
+      const lecture = await Lecture.findByPk(contentId);
+      content = lecture?.content || lecture?.aiNotes || '';
+    } else if (contentType === 'quiz') {
+      const quiz = await Quiz.findByPk(contentId, { include: [Question] });
+      content = JSON.stringify(quiz, null, 2);
+    } else {
+      throw { status: 400, message: 'Content type không được hỗ trợ' };
+    }
+
+    return this.analyzeContentQuality(contentId, content, contentType);
+  }
+
+  /**
+   * Get course analytics for teacher
+   */
+  async getTeacherCourseAnalytics(reqUser, courseId, options = {}) {
+    const setting = await this.getAiSetting();
+    if (!setting?.enabled) {
+      throw { status: 503, message: 'AI đang tạm tắt' };
+    }
+
+    const policy = await this.getRolePolicy(reqUser.role);
+    if (!policy?.enabled) {
+      throw { status: 403, message: 'Role không được phép sử dụng AI' };
+    }
+
+    const course = await Course.findByPk(courseId);
+    const allowed = await this.ensureTeacherOwnsCourseOrAdmin(reqUser, course);
+    if (!allowed) {
+      throw { status: 403, message: 'Bạn không có quyền xem analytics của course này' };
+    }
+
+    return this.getCourseAnalytics(courseId, options);
+  }
+
+  /**
+   * Get content quality report for teacher's course
+   */
+  async getTeacherContentQualityReport(reqUser, courseId, options = {}) {
+    const setting = await this.getAiSetting();
+    if (!setting?.enabled) {
+      throw { status: 503, message: 'AI đang tạm tắt' };
+    }
+
+    const policy = await this.getRolePolicy(reqUser.role);
+    if (!policy?.enabled) {
+      throw { status: 403, message: 'Role không được phép sử dụng AI' };
+    }
+
+    const course = await Course.findByPk(courseId);
+    const allowed = await this.ensureTeacherOwnsCourseOrAdmin(reqUser, course);
+    if (!allowed) {
+      throw { status: 403, message: 'Bạn không có quyền xem quality report của course này' };
+    }
+
+    return this.getContentQualityReport(courseId, options);
+  }
+
+  // ==========================================
+  // ADMIN AI ENHANCEMENT METHODS
+  // ==========================================
+
+  /**
+   * Get platform analytics
+   */
+  async getAdminPlatformAnalytics(options = {}) {
+    const setting = await this.getAiSetting();
+    if (!setting?.enabled) {
+      throw { status: 503, message: 'AI đang tạm tắt' };
+    }
+
+    return this.getPlatformAnalytics(options);
+  }
+
+  /**
+   * Get comprehensive content quality report
+   */
+  async getAdminContentQualityReport(options = {}) {
+    const setting = await this.getAiSetting();
+    if (!setting?.enabled) {
+      throw { status: 503, message: 'AI đang tạm tắt' };
+    }
+
+    const { courseId, minScore, maxScore, page, limit } = options;
+
+    if (courseId) {
+      return this.getContentQualityReport(courseId, { minScore, maxScore, page, limit });
+    }
+
+    // Get quality reports for all courses
+    const courses = await Course.findAll({ attributes: ['id', 'title'] });
+    const reports = [];
+
+    for (const course of courses) {
+      try {
+        const report = await this.getContentQualityReport(course.id, { minScore, maxScore, page, limit });
+        reports.push({
+          courseId: course.id,
+          courseTitle: course.title,
+          ...report,
+        });
+      } catch (err) {
+        // Skip courses with errors
+        logger.warn('CONTENT_QUALITY_REPORT_COURSE_FAILED', { courseId: course.id, error: err.message });
+      }
+    }
+
+    return { reports };
+  }
+
+  /**
+   * Trigger AI recommendations generation for all users
+   */
+  async triggerAdminRecommendationsGeneration(courseId) {
+    const setting = await this.getAiSetting();
+    if (!setting?.enabled) {
+      throw { status: 503, message: 'AI đang tạm tắt' };
+    }
+
+    const enrollments = await Enrollment.findAll({
+      where: { courseId, status: 'enrolled' },
+      attributes: ['userId'],
+    });
+
+    const results = {
+      totalUsers: enrollments.length,
+      success: 0,
+      failed: 0,
+      errors: [],
+    };
+
+    for (const enrollment of enrollments) {
+      try {
+        await this.generateRecommendations(enrollment.userId, courseId);
+        results.success++;
+      } catch (err) {
+        results.failed++;
+        results.errors.push({ userId: enrollment.userId, error: err.message });
+      }
+    }
+
+    return { results };
+  }
+
+  /**
+   * Get system health status
+   */
+  async getAdminSystemHealth() {
+    const setting = await this.getAiSetting();
+    
+    const health = {
+      aiEnabled: setting?.enabled || false,
+      provider: setting?.provider || 'unknown',
+      model: setting?.model || 'unknown',
+      timestamp: new Date().toISOString(),
+    };
+
+    // Test AI gateway
+    try {
+      await this.generateText({
+        system: 'Health check',
+        prompt: 'Test',
+        maxOutputTokens: 10,
+      });
+      health.aiGatewayStatus = 'operational';
+    } catch (err) {
+      health.aiGatewayStatus = 'degraded';
+      health.aiGatewayError = err.message;
+    }
+
+    return { health };
   }
 }
 

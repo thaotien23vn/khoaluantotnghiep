@@ -1,0 +1,834 @@
+const db = require('../models');
+const { Op } = require('sequelize');
+const aiGateway = require('./aiGateway.service');
+const logger = require('../utils/logger');
+
+const {
+  ContentQualityScore,
+  Course,
+  Chapter,
+  Lecture,
+  Quiz,
+  Question,
+  UserLearningProfile,
+  LearningAnalytics,
+} = db.models;
+
+class AiContentService {
+  /**
+   * Generate lecture content from outline
+   */
+  async generateLectureContent(courseId, chapterId, outlineData) {
+    try {
+      const {
+        title,
+        outline,
+        targetAudience,
+        difficulty = 'intermediate',
+        estimatedDuration = 60,
+        learningObjectives = [],
+      } = outlineData;
+
+      // Get course context
+      const course = await Course.findByPk(courseId, {
+        attributes: ['title'],
+      });
+
+      if (!course) {
+        throw {
+          status: 404,
+          message: 'Không tìm thấy khóa học',
+          code: 'COURSE_NOT_FOUND',
+        };
+      }
+
+      const chapter = await Chapter.findByPk(chapterId, {
+        attributes: ['title'],
+      });
+
+      if (!chapter) {
+        throw {
+          status: 404,
+          message: 'Không tìm thấy chương',
+          code: 'CHAPTER_NOT_FOUND',
+        };
+      }
+
+      const systemPrompt = `Bạn là một chuyên gia giáo dục có kinh nghiệm trong việc tạo nội dung học tập chất lượng cao. Hãy tạo nội dung lecture chi tiết dựa trên outline được cung cấp.
+
+Yêu cầu:
+- Nội dung phải rõ ràng, có cấu trúc logic
+- Phù hợp với cấp độ: ${difficulty}
+- Thời lượng ước tính: ${estimatedDuration} phút
+- Đối tượng mục tiêu: ${targetAudience || 'Học viên chung'}
+- Bao gồm examples và case studies khi appropriate
+- Có tính tương tác và engagement`;
+
+      const prompt = `Tạo nội dung lecture với thông tin sau:
+
+COURSE: ${course.title}
+${course.description ? `COURSE DESCRIPTION: ${course.description}` : ''}
+
+CHAPTER: ${chapter.title}
+${chapter.description ? `CHAPTER DESCRIPTION: ${chapter.description}` : ''}
+
+LECTURE TITLE: ${title}
+OUTLINE:
+${outline}
+
+LEARNING OBJECTIVES:
+${learningObjectives.length > 0 ? learningObjectives.join('\n') : 'Chưa xác định'}
+
+Hãy tạo nội dung chi tiết bao gồm:
+1. Introduction (5-10 phút)
+2. Main content (40-50 phút) - chia thành các sections theo outline
+3. Examples và demonstrations
+4. Summary và key takeaways (5-10 phút)
+5. Practice exercises hoặc discussion questions
+
+Format response theo markdown với clear headings.`;
+
+      const aiResponse = await aiGateway.generateText({
+        system: systemPrompt,
+        prompt,
+        maxOutputTokens: 4096,
+      });
+
+      const content = aiResponse.text;
+
+      // Analyze content quality
+      const qualityScore = await this.analyzeContentQuality(content, 'lecture');
+
+      return {
+        content,
+        qualityScore,
+        metadata: {
+          estimatedDuration,
+          difficulty,
+          targetAudience,
+          learningObjectives,
+          generatedAt: new Date(),
+        },
+      };
+    } catch (error) {
+      logger.error('LECTURE_CONTENT_GENERATION_FAILED', {
+        courseId,
+        chapterId,
+        outlineData,
+        error: error.message,
+        stack: error.stack,
+        code: error.code,
+      });
+      throw {
+        status: error.status || 500,
+        message: error.message || 'Không thể tạo lecture content',
+        code: error.code || 'LECTURE_CONTENT_GENERATION_FAILED',
+      };
+    }
+  }
+
+  /**
+   * Generate quiz questions from lecture content
+   */
+  async generateQuizQuestions(lectureId, options = {}) {
+    try {
+      const {
+        questionCount = 10,
+        questionTypes = ['multiple_choice', 'true_false', 'short_answer'],
+        difficulty = 'mixed',
+      } = options;
+
+      // Get lecture content
+      const lecture = await Lecture.findByPk(lectureId, {
+        include: [
+          {
+            model: Chapter,
+            include: [
+              {
+                model: Course,
+                attributes: ['title', 'category'],
+              },
+            ],
+          },
+        ],
+      });
+
+      if (!lecture) {
+        throw {
+          status: 404,
+          message: 'Lecture not found',
+          code: 'LECTURE_NOT_FOUND',
+        };
+      }
+
+      const chapter = lecture.Chapter;
+
+      const systemPrompt = `Bạn là một chuyên gia giáo dục trong việc tạo câu hỏi kiểm tra chất lượng cao. Tạo câu hỏi dựa trên nội dung lecture được cung cấp.
+
+Yêu cầu:
+- Câu hỏi phải rõ ràng và không ambiguous
+- Đáp án phải chính xác
+- Phù hợp với mục tiêu learning objectives
+- Test cả comprehension và application`;
+
+      const prompt = `Tạo ${questionCount} câu hỏi quiz từ nội dung lecture sau:
+
+COURSE: ${lecture.Chapter?.Course?.title}
+CHAPTER: ${lecture.Chapter?.title}
+LECTURE: ${lecture.title}
+
+LECTURE CONTENT:
+${lecture.content || lecture.aiNotes || 'Nội dung không available'}
+
+Yêu cầu:
+- Số lượng câu hỏi: ${questionCount}
+- Loại câu hỏi: ${questionTypes.join(', ')}
+- Độ khó: ${difficulty}
+
+Format mỗi câu hỏi như sau:
+{
+  "type": "multiple_choice|true_false|short_answer",
+  "question": "Nội dung câu hỏi",
+  "options": ["A. Option 1", "B. Option 2", "C. Option 3", "D. Option 4"],
+  "correctAnswer": "A hoặc true/false hoặc text answer",
+  "explanation": "Giải thích tại sao đáp án đúng",
+  "difficulty": "easy|medium|hard",
+  "topic": "Chủ đề liên quan"
+}
+
+Trả về danh sách các câu hỏi trong format JSON array.`;
+
+      const aiResponse = await aiGateway.generateText({
+        system: systemPrompt,
+        prompt,
+        maxOutputTokens: 4096,
+      });
+
+      let questions;
+      try {
+        // Extract JSON from response
+        const jsonMatch = aiResponse.text.match(/\[[\s\S]*\]/);
+        if (jsonMatch) {
+          questions = JSON.parse(jsonMatch[0]);
+        } else {
+          questions = JSON.parse(aiResponse.text);
+        }
+      } catch (parseError) {
+        logger.error('QUIZ_QUESTIONS_PARSE_FAILED', {
+          lectureId,
+          response: aiResponse.text,
+          error: parseError.message,
+        });
+        throw {
+          status: 500,
+          message: 'Không thể parse quiz questions',
+          code: 'QUIZ_QUESTIONS_PARSE_FAILED',
+        };
+      }
+
+      // Validate and enhance questions
+      const validatedQuestions = await this.validateQuizQuestions(questions, lectureId);
+
+      return {
+        questions: validatedQuestions,
+        metadata: {
+          questionCount: validatedQuestions.length,
+          questionTypes,
+          difficulty,
+          generatedAt: new Date(),
+        },
+      };
+    } catch (error) {
+      logger.error('QUIZ_GENERATION_FAILED', {
+        lectureId,
+        options,
+        error: error.message,
+        stack: error.stack,
+        name: error.name,
+      });
+      throw {
+        status: error.status || 500,
+        message: error.message || 'Không thể tạo quiz questions',
+        code: error.code || 'QUIZ_GENERATION_FAILED',
+      };
+    }
+  }
+
+  /**
+   * Generate practice exercises
+   */
+  async generatePracticeExercises(lectureId, options = {}) {
+    try {
+      const {
+        exerciseCount = 5,
+        exerciseTypes = ['hands_on', 'case_study', 'discussion'],
+        difficulty = 'medium',
+      } = options;
+
+      const lecture = await Lecture.findByPk(lectureId, {
+        include: [
+          {
+            model: Chapter,
+            include: [
+              {
+                model: Course,
+                attributes: ['title', 'category'],
+              },
+            ],
+          },
+        ],
+      });
+
+      if (!lecture) {
+        throw {
+          status: 404,
+          message: 'Lecture not found',
+          code: 'LECTURE_NOT_FOUND',
+        };
+      }
+
+      const systemPrompt = `Bạn là một chuyên gia giáo dục trong việc tạo bài tập thực hành chất lượng cao. Tạo bài tập giúp học viên áp dụng kiến thức từ lecture.
+
+Yêu cầu:
+- Bài tập phải practical và applicable
+- Có clear instructions và expectations
+- Phù hợp với level của học viên
+- Thúc đẩy critical thinking`;
+
+      const prompt = `Tạo ${exerciseCount} bài tập thực hành từ nội dung lecture sau:
+
+COURSE: ${lecture.Chapter?.Course?.title}
+CHAPTER: ${lecture.Chapter?.title}
+LECTURE: ${lecture.title}
+
+LECTURE CONTENT:
+${lecture.content || lecture.aiNotes || 'Nội dung không available'}
+
+Yêu cầu:
+- Số lượng bài tập: ${exerciseCount}
+- Loại bài tập: ${exerciseTypes.join(', ')}
+- Độ khó: ${difficulty}
+
+Format mỗi bài tập như sau:
+{
+  "type": "hands_on|case_study|discussion|project",
+  "title": "Tiêu đề bài tập",
+  "description": "Mô tả chi tiết bài tập",
+  "instructions": "Hướng dẫn step-by-step",
+  "estimatedTime": "Thời gian ước tính (phút)",
+  "difficulty": "easy|medium|hard",
+  "deliverables": "Sản phẩm cần nộp",
+  "evaluationCriteria": ["Tiêu chí 1", "Tiêu chí 2"]
+}
+
+Trả về danh sách bài tập trong format JSON array.`;
+
+      const aiResponse = await aiGateway.generateText({
+        system: systemPrompt,
+        prompt,
+        maxOutputTokens: 4096,
+      });
+
+      let exercises;
+      try {
+        const jsonMatch = aiResponse.text.match(/\[[\s\S]*\]/);
+        if (jsonMatch) {
+          exercises = JSON.parse(jsonMatch[0]);
+        } else {
+          exercises = JSON.parse(aiResponse.text);
+        }
+      } catch (parseError) {
+        logger.error('PRACTICE_EXERCISES_PARSE_FAILED', {
+          lectureId,
+          response: aiResponse.text,
+          error: parseError.message,
+        });
+        throw {
+          status: 500,
+          message: 'Không thể parse practice exercises',
+          code: 'PRACTICE_EXERCISES_PARSE_FAILED',
+        };
+      }
+
+      const validatedExercises = await this.validatePracticeExercises(exercises, lectureId);
+
+      return {
+        exercises: validatedExercises,
+        metadata: {
+          exerciseCount: validatedExercises.length,
+          exerciseTypes,
+          difficulty,
+          generatedAt: new Date(),
+        },
+      };
+    } catch (error) {
+      logger.error('PRACTICE_EXERCISES_GENERATION_FAILED', {
+        lectureId,
+        options,
+        error: error.message,
+      });
+      throw {
+        status: 500,
+        message: 'Không thể tạo practice exercises',
+        code: 'PRACTICE_EXERCISES_GENERATION_FAILED',
+      };
+    }
+  }
+
+  /**
+   * Analyze content quality
+   */
+  async analyzeContentQuality(contentId, content, contentType) {
+    try {
+      const systemPrompt = `Bạn là một chuyên gia đánh giá chất lượng nội dung giáo dục. Phân tích nội dung được cung cấp và cho điểm các tiêu chí sau:
+
+1. Clarity (1-10): Nội dung có rõ ràng, dễ hiểu không?
+2. Completeness (1-10): Nội dung có đầy đủ, comprehensive không?
+3. Engagement (1-10): Nội dung có hấp dẫn, interesting không?
+4. Technical Accuracy (1-10): Thông tin có chính xác không?
+5. Pedagogical Value (1-10): Có giá trị giáo dục không?
+
+Format response JSON:
+{
+  "clarityScore": 8.5,
+  "completenessScore": 7.0,
+  "engagementScore": 6.5,
+  "technicalAccuracyScore": 9.0,
+  "pedagogicalScore": 8.0,
+  "overallScore": 7.8,
+  "strengths": ["Điểm mạnh 1", "Điểm mạnh 2"],
+  "improvements": ["Cần cải thiện 1", "Cần cải thiện 2"],
+  "issues": ["Vấn đề 1 nếu có"]
+}`;
+
+      const safeContent = String(content || '');
+      const prompt = `Phân tích chất lượng nội dung ${contentType} sau:
+
+${safeContent.substring(0, 3000)}${safeContent.length > 3000 ? '...' : ''}
+
+Hãy đánh giá và cho điểm theo các tiêu chí đã nêu.`;
+
+      const aiResponse = await aiGateway.generateText({
+        system: systemPrompt,
+        prompt,
+        maxOutputTokens: 2048,
+      });
+
+      let analysis;
+      try {
+        const jsonMatch = aiResponse.text.match(/\{[\s\S]*\}/);
+        if (jsonMatch) {
+          analysis = JSON.parse(jsonMatch[0]);
+        } else {
+          analysis = JSON.parse(aiResponse.text);
+        }
+      } catch (parseError) {
+        // Fallback if JSON parsing fails
+        analysis = {
+          overallScore: 7.0,
+          clarityScore: 7.0,
+          completenessScore: 7.0,
+          engagementScore: 7.0,
+          technicalAccuracyScore: 7.0,
+          pedagogicalScore: 7.0,
+          strengths: ['Content generated'],
+          improvements: ['Review needed'],
+          issues: [],
+        };
+      }
+
+      // Save to database
+      try {
+        await this.updateContentQualityScore(contentId, contentType, analysis);
+      } catch (saveError) {
+        logger.error('SAVE_QUALITY_SCORE_FAILED', {
+          contentId,
+          contentType,
+          error: saveError.message,
+        });
+        // Continue to return analysis even if save fails
+      }
+
+      return analysis;
+    } catch (error) {
+      logger.error('CONTENT_QUALITY_ANALYSIS_FAILED', {
+        contentType,
+        contentId,
+        error: error.message,
+        stack: error.stack,
+        name: error.name,
+      });
+      // Return default scores if analysis fails
+      return {
+        overallScore: 5.0,
+        clarityScore: 5.0,
+        completenessScore: 5.0,
+        engagementScore: 5.0,
+        technicalAccuracyScore: 5.0,
+        pedagogicalScore: 5.0,
+        strengths: [],
+        improvements: ['Manual review required'],
+        issues: ['Analysis failed: ' + error.message],
+      };
+    }
+  }
+
+  /**
+   * Validate quiz questions
+   */
+  async validateQuizQuestions(questions, lectureId) {
+    return questions.filter((question, index) => {
+      // Basic validation
+      if (!question.question || !question.correctAnswer) {
+        logger.warn('INVALID_QUESTION_STRUCTURE', {
+          lectureId,
+          questionIndex: index,
+          question,
+        });
+        return false;
+      }
+
+      if (question.type === 'multiple_choice' && 
+          (!question.options || question.options.length < 2)) {
+        logger.warn('INVALID_MULTIPLE_CHOICE', {
+          lectureId,
+          questionIndex: index,
+          question,
+        });
+        return false;
+      }
+
+      return true;
+    }).map((question, index) => ({
+      ...question,
+      order: index + 1,
+      id: null, // Will be set when saved to database
+    }));
+  }
+
+  /**
+   * Validate practice exercises
+   */
+  async validatePracticeExercises(exercises, lectureId) {
+    return exercises.filter((exercise, index) => {
+      if (!exercise.title || !exercise.description || !exercise.instructions) {
+        logger.warn('INVALID_EXERCISE_STRUCTURE', {
+          lectureId,
+          exerciseIndex: index,
+          exercise,
+        });
+        return false;
+      }
+
+      return true;
+    }).map((exercise, index) => ({
+      ...exercise,
+      order: index + 1,
+      id: null, // Will be set when saved to database
+    }));
+  }
+
+  /**
+   * Update content quality score
+   */
+  async updateContentQualityScore(contentId, contentType, qualityAnalysis) {
+    try {
+      const [score, created] = await ContentQualityScore.findOrCreate({
+        where: {
+          contentId,
+          contentType,
+        },
+        defaults: {
+          contentId,
+          contentType,
+          overallScore: qualityAnalysis.overallScore,
+          clarityScore: qualityAnalysis.clarityScore,
+          completenessScore: qualityAnalysis.completenessScore,
+          engagementScore: qualityAnalysis.engagementScore,
+          technicalAccuracyScore: qualityAnalysis.technicalAccuracyScore,
+          pedagogicalScore: qualityAnalysis.pedagogicalScore,
+          issues: qualityAnalysis.issues || [],
+          suggestions: qualityAnalysis.improvements || [],
+          lastAnalyzedAt: new Date(),
+        },
+      });
+
+      if (!created) {
+        await score.update({
+          overallScore: qualityAnalysis.overallScore,
+          clarityScore: qualityAnalysis.clarityScore,
+          completenessScore: qualityAnalysis.completenessScore,
+          engagementScore: qualityAnalysis.engagementScore,
+          technicalAccuracyScore: qualityAnalysis.technicalAccuracyScore,
+          pedagogicalScore: qualityAnalysis.pedagogicalScore,
+          issues: qualityAnalysis.issues || [],
+          suggestions: qualityAnalysis.improvements || [],
+          lastAnalyzedAt: new Date(),
+        });
+      }
+
+      return { score };
+    } catch (error) {
+      logger.error('UPDATE_CONTENT_QUALITY_SCORE_FAILED', {
+        contentId,
+        contentType,
+        error: error.message,
+      });
+      throw {
+        status: 500,
+        message: 'Không thể cập nhật content quality score',
+        code: 'UPDATE_CONTENT_QUALITY_SCORE_FAILED',
+      };
+    }
+  }
+
+  /**
+   * Calculate quality summary
+   */
+  async calculateQualitySummary(qualityScores) {
+    if (qualityScores.length === 0) {
+      return {
+        averageOverallScore: 0,
+        averageClarityScore: 0,
+        averageCompletenessScore: 0,
+        averageEngagementScore: 0,
+        averageTechnicalAccuracyScore: 0,
+        averagePedagogicalScore: 0,
+        totalContent: 0,
+        lowQualityContent: 0,
+        highQualityContent: 0,
+      };
+    }
+
+    const totals = qualityScores.reduce((acc, score) => {
+      acc.overall += score.overallScore;
+      acc.clarity += score.clarityScore;
+      acc.completeness += score.completenessScore;
+      acc.engagement += score.engagementScore;
+      acc.technicalAccuracy += score.technicalAccuracyScore;
+      acc.pedagogical += score.pedagogicalScore;
+      acc.total++;
+      if (score.overallScore < 6) acc.lowQuality++;
+      if (score.overallScore >= 8) acc.highQuality++;
+      return acc;
+    }, {
+      overall: 0,
+      clarity: 0,
+      completeness: 0,
+      engagement: 0,
+      technicalAccuracy: 0,
+      pedagogical: 0,
+      total: 0,
+      lowQuality: 0,
+      highQuality: 0,
+    });
+
+    const count = totals.total;
+    return {
+      averageOverallScore: totals.overall / count,
+      averageClarityScore: totals.clarity / count,
+      averageCompletenessScore: totals.completeness / count,
+      averageEngagementScore: totals.engagement / count,
+      averageTechnicalAccuracyScore: totals.technicalAccuracy / count,
+      averagePedagogicalScore: totals.pedagogical / count,
+      totalContent: count,
+      lowQualityContent: totals.lowQuality,
+      highQualityContent: totals.highQuality,
+    };
+  }
+
+  /**
+   * Get content quality report
+   */
+  async getContentQualityReport(courseId, options = {}) {
+    try {
+      const {
+        contentType,
+        minScore,
+        maxScore,
+        page = 1,
+        limit = 20,
+      } = options;
+
+      const where = {};
+      if (contentType) where.contentType = contentType;
+      if (minScore) where.overallScore = { [Op.gte]: minScore };
+      if (maxScore) where.overallScore = { ...where.overallScore, [Op.lte]: maxScore };
+
+      // Get content IDs for this course
+      const lectureIds = await Lecture.findAll({
+        include: [
+          {
+            model: Chapter,
+            where: { courseId },
+          },
+        ],
+        attributes: ['id'],
+      }).then(lectures => lectures.map(l => l.id));
+
+      where.contentId = {
+        [Op.in]: lectureIds,
+      };
+
+      const { count, rows } = await ContentQualityScore.findAndCountAll({
+        where,
+        order: [['overallScore', 'ASC']],
+        limit: parseInt(limit),
+        offset: (parseInt(page) - 1) * parseInt(limit),
+      });
+
+      // Calculate summary statistics
+      const summary = await this.calculateQualitySummary(rows);
+
+      return {
+        qualityScores: rows,
+        summary,
+        pagination: {
+          page: parseInt(page),
+          limit: parseInt(limit),
+          total: count,
+          pages: Math.ceil(count / parseInt(limit)),
+        },
+      };
+    } catch (error) {
+      logger.error('GET_CONTENT_QUALITY_REPORT_FAILED', {
+        courseId,
+        options,
+        error: error.message,
+        stack: error.stack,
+        name: error.name,
+      });
+      throw {
+        status: 500,
+        message: 'Không thể lấy content quality report',
+        code: 'GET_CONTENT_QUALITY_REPORT_FAILED',
+      };
+    }
+  }
+
+  /**
+   * Generate content improvement suggestions
+   */
+  async generateContentImprovementSuggestions(contentId, contentType) {
+    try {
+      const qualityScore = await ContentQualityScore.findOne({
+        where: { contentId, contentType },
+      });
+
+      if (!qualityScore) {
+        throw {
+          status: 404,
+          message: 'Content quality score not found',
+          code: 'QUALITY_SCORE_NOT_FOUND',
+        };
+      }
+
+      const content = await this.getContentById(contentId, contentType);
+      
+      const systemPrompt = `Bạn là một chuyên gia cải thiện nội dung giáo dục. Dựa trên phân tích chất lượng và nội dung hiện tại, hãy đưa ra suggestions cụ thể để cải thiện.
+
+Focus on:
+1. Clarity improvements
+2. Adding missing content
+3. Making it more engaging
+4. Technical accuracy
+5. Better pedagogical approaches`;
+
+      const prompt = `Nội dung ${contentType} hiện tại:
+${content}
+
+Phân tích chất lượng hiện tại:
+- Overall Score: ${qualityScore.overallScore}/10
+- Clarity: ${qualityScore.clarityScore}/10
+- Completeness: ${qualityScore.completenessScore}/10
+- Engagement: ${qualityScore.engagementScore}/10
+- Technical Accuracy: ${qualityScore.technicalAccuracyScore}/10
+- Pedagogical Value: ${qualityScore.pedagogicalScore}/10
+
+Các vấn đề đã xác định:
+${qualityScore.issues?.join('\n') || 'Không có'}
+
+Hãy đưa ra 3-5 suggestions cụ thể và actionable để cải thiện nội dung này. Format response JSON:
+{
+  "suggestions": [
+    {
+      "category": "clarity|completeness|engagement|accuracy|pedagogy",
+      "priority": "high|medium|low",
+      "description": "Mô tả chi tiết suggestion",
+      "example": "Ví dụ cụ thể nếu applicable"
+    }
+  ]
+}`;
+
+      const aiResponse = await aiGateway.generateText({
+        system: systemPrompt,
+        prompt,
+        maxOutputTokens: 2048,
+      });
+
+      let suggestions;
+      try {
+        const jsonMatch = aiResponse.text.match(/\{[\s\S]*\}/);
+        if (jsonMatch) {
+          suggestions = JSON.parse(jsonMatch[0]);
+        } else {
+          suggestions = JSON.parse(aiResponse.text);
+        }
+      } catch (parseError) {
+        logger.error('IMPROVEMENT_SUGGESTIONS_PARSE_FAILED', {
+          contentId,
+          contentType,
+          response: aiResponse.text,
+          error: parseError.message,
+        });
+        suggestions = {
+          suggestions: [
+            {
+              category: 'general',
+              priority: 'medium',
+              description: 'Review and improve content manually',
+              example: 'Consider adding more examples and clarifications',
+            },
+          ],
+        };
+      }
+
+      return suggestions;
+    } catch (error) {
+      logger.error('CONTENT_IMPROVEMENT_SUGGESTIONS_FAILED', {
+        contentId,
+        contentType,
+        error: error.message,
+      });
+      throw {
+        status: 500,
+        message: 'Không thể tạo improvement suggestions',
+        code: 'CONTENT_IMPROVEMENT_SUGGESTIONS_FAILED',
+      };
+    }
+  }
+
+  /**
+   * Get content by ID and type
+   */
+  async getContentById(contentId, contentType) {
+    switch (contentType) {
+      case 'lecture':
+        const lecture = await Lecture.findByPk(contentId);
+        return lecture?.content || lecture?.aiNotes || '';
+      case 'quiz':
+        const quiz = await Quiz.findByPk(contentId, {
+          include: [Question],
+        });
+        return JSON.stringify(quiz, null, 2);
+      default:
+        throw {
+          status: 400,
+          message: 'Content type not supported',
+          code: 'UNSUPPORTED_CONTENT_TYPE',
+        };
+    }
+  }
+}
+
+module.exports = new AiContentService();
