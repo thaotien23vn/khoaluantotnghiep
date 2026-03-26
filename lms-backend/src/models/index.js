@@ -1,11 +1,31 @@
 const { Sequelize } = require('sequelize');
 
+// Parse DATABASE_URL if provided
+function parseDatabaseUrl(url) {
+  try {
+    const parsed = new URL(url);
+    return {
+      database: parsed.pathname.replace('/', ''),
+      username: parsed.username,
+      password: parsed.password,
+      host: parsed.hostname,
+      port: parsed.port || 5432
+    };
+  } catch (e) {
+    return null;
+  }
+}
+
 // Determine database dialect based on environment
 const isTest = process.env.NODE_ENV === 'test';
+const dbUrl = process.env.DATABASE_URL || process.env.DB_URL;
 const isPostgres = process.env.DB_DIALECT === 'postgres' || 
                    (process.env.DB_HOST && process.env.DB_HOST.includes('.render.com')) ||
                    (process.env.DB_HOST && process.env.DB_HOST.includes('.supabase.co')) ||
-                   (process.env.DB_HOST && process.env.DB_HOST.startsWith('dpg-'));
+                   (process.env.DB_HOST && process.env.DB_HOST.startsWith('dpg-')) ||
+                   (dbUrl && dbUrl.startsWith('postgresql://'));
+
+const parsedDb = dbUrl && dbUrl.startsWith('postgresql://') ? parseDatabaseUrl(dbUrl) : null;
 
 const sequelize = isTest 
   ? new Sequelize('sqlite::memory:', {
@@ -15,8 +35,10 @@ const sequelize = isTest
       }
     })
   : isPostgres
-    ? (process.env.DATABASE_URL || process.env.DB_URL
-        ? new Sequelize(process.env.DATABASE_URL || process.env.DB_URL, {
+    ? (parsedDb
+        ? new Sequelize(parsedDb.database, parsedDb.username, parsedDb.password, {
+            host: parsedDb.host,
+            port: parsedDb.port,
             dialect: 'postgres',
             logging: false,
             dialectOptions: {
