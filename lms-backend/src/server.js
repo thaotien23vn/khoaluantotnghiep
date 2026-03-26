@@ -23,11 +23,15 @@ const requireEnv = (name) => {
 
 const validateEnv = () => {
   const isProd = String(process.env.NODE_ENV || '').toLowerCase() === 'production';
+  const hasDatabaseUrl = !!process.env.DATABASE_URL;
+  const hasOldDbConfig = process.env.DB_NAME && process.env.DB_USER && process.env.DB_HOST;
 
-  // Required
-  requireEnv('DB_NAME');
-  requireEnv('DB_USER');
-  requireEnv('DB_HOST');
+  // Database config: either DATABASE_URL (Neon) or old DB_* variables
+  if (!hasDatabaseUrl && !hasOldDbConfig) {
+    throw new Error('Missing database configuration. Please set either DATABASE_URL (for Neon PostgreSQL) or DB_NAME, DB_USER, DB_HOST');
+  }
+
+  // JWT validation
   if (isProd) {
     requireEnv('JWT_SECRET');
   } else if (!process.env.JWT_SECRET) {
