@@ -1,83 +1,72 @@
 const { Sequelize } = require('sequelize');
 
-// Parse DATABASE_URL if provided
-function parseDatabaseUrl(url) {
-  try {
-    const parsed = new URL(url);
-    return {
-      database: parsed.pathname.replace('/', ''),
-      username: parsed.username,
-      password: parsed.password,
-      host: parsed.hostname,
-      port: parsed.port || 5432
-    };
-  } catch (e) {
-    return null;
-  }
-}
-
 // Determine database dialect based on environment
 const isTest = process.env.NODE_ENV === 'test';
-const dbUrl = process.env.DATABASE_URL || process.env.DB_URL;
 const isPostgres = process.env.DB_DIALECT === 'postgres' || 
+                   process.env.DATABASE_URL?.startsWith('postgres') ||
                    (process.env.DB_HOST && process.env.DB_HOST.includes('.render.com')) ||
-                   (process.env.DB_HOST && process.env.DB_HOST.includes('.supabase.co')) ||
                    (process.env.DB_HOST && process.env.DB_HOST.startsWith('dpg-')) ||
-                   (dbUrl && dbUrl.startsWith('postgresql://'));
+                   (process.env.DB_HOST && process.env.DB_HOST.includes('supabase.co'));
 
-const parsedDb = dbUrl && dbUrl.startsWith('postgresql://') ? parseDatabaseUrl(dbUrl) : null;
+let sequelize;
 
-const sequelize = isTest 
-  ? new Sequelize('sqlite::memory:', {
+if (isTest) {
+  sequelize = new Sequelize('sqlite::memory:', {
+    logging: false,
+    define: { timestamps: true }
+  });
+} else if (isPostgres) {
+  // Common dialectOptions for PostgreSQL (IPv4 + SSL)
+  const postgresDialectOptions = {
+    family: 4, // Force IPv4 (fix Supabase IPv6 blocked issue)
+    ssl: process.env.NODE_ENV === 'production' ? {
+      require: true,
+      rejectUnauthorized: false
+    } : false
+  };
+
+  if (process.env.DATABASE_URL) {
+    // Use DATABASE_URL if provided (Supabase, Render, etc.)
+    sequelize = new Sequelize(process.env.DATABASE_URL, {
+      dialect: 'postgres',
       logging: false,
-      define: {
-        timestamps: true
+      dialectOptions: postgresDialectOptions,
+      pool: {
+        max: 5,
+        min: 0,
+        acquire: 30000,
+        idle: 10000
       }
-    })
-  : isPostgres
-    ? (parsedDb
-        ? new Sequelize(parsedDb.database, parsedDb.username, parsedDb.password, {
-            host: parsedDb.host,
-            port: parsedDb.port,
-            dialect: 'postgres',
-            logging: false,
-            dialectOptions: {
-              ssl: {
-                require: true,
-                rejectUnauthorized: false
-              },
-              family: 4
-            }
-          })
-        : new Sequelize(process.env.DB_NAME, process.env.DB_USER, process.env.DB_PASSWORD, {
-            host: process.env.DB_HOST,
-            port: process.env.DB_PORT || 5432,
-            dialect: 'postgres',
-            logging: false,
-            dialectOptions: {
-              ssl: {
-                require: true,
-                rejectUnauthorized: false
-              },
-              family: 4
-            },
-            pool: {
-              max: 5,
-              min: 0,
-              acquire: 30000,
-              idle: 10000
-            }
-          }))
-    : new Sequelize(
-        process.env.DB_NAME,
-        process.env.DB_USER,
-        process.env.DB_PASSWORD,
-        {
-          host: process.env.DB_HOST,
-          dialect: 'mysql',
-          logging: false,
-        }
-      );
+    });
+  } else {
+    // Use individual DB_* variables
+    sequelize = new Sequelize(process.env.DB_NAME, process.env.DB_USER, process.env.DB_PASSWORD, {
+      host: process.env.DB_HOST,
+      port: process.env.DB_PORT || 5432,
+      dialect: 'postgres',
+      logging: false,
+      dialectOptions: postgresDialectOptions,
+      pool: {
+        max: 5,
+        min: 0,
+        acquire: 30000,
+        idle: 10000
+      }
+    });
+  }
+} else {
+  // MySQL fallback
+  sequelize = new Sequelize(
+    process.env.DB_NAME,
+    process.env.DB_USER,
+    process.env.DB_PASSWORD,
+    {
+      host: process.env.DB_HOST,
+      dialect: 'mysql',
+      logging: false,
+    }
+  );
+}
 
 // ----- models setup -----
 const models = {};
