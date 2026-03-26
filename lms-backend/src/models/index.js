@@ -4,6 +4,7 @@ const { Sequelize } = require('sequelize');
 const isTest = process.env.NODE_ENV === 'test';
 const isPostgres = process.env.DB_DIALECT === 'postgres' || 
                    (process.env.DB_HOST && process.env.DB_HOST.includes('.render.com')) ||
+                   (process.env.DB_HOST && process.env.DB_HOST.includes('.supabase.co')) ||
                    (process.env.DB_HOST && process.env.DB_HOST.startsWith('dpg-'));
 
 const sequelize = isTest 
