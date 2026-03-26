@@ -369,7 +369,7 @@ class CourseService {
       description: description || '',
       imageUrl: imageUrl || null,
       price: price != null ? price : 0,
-      published: userRole === 'admin' ? !!published : false,
+      published: !!published,
       categoryId: categoryId || null,
       createdBy: userId,
       level: level || 'Mọi cấp độ',

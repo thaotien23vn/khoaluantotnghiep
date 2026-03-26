@@ -28,8 +28,12 @@ const authorizeRole = (...allowedRoles) => {
       }
 
       const currentRole = user.role;
+      
+      // Check role không phân biệt hoa thường
+      const normalizedCurrentRole = currentRole?.toLowerCase();
+      const normalizedAllowedRoles = allowedRoles.map(r => r?.toLowerCase());
 
-      if (!allowedRoles.includes(currentRole)) {
+      if (!normalizedAllowedRoles.includes(normalizedCurrentRole)) {
         return res.status(403).json({
           success: false,
           message: `Bạn không có quyền truy cập. Yêu cầu role: ${allowedRoles.join(
