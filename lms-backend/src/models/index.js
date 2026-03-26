@@ -1,4 +1,30 @@
 const { Sequelize } = require('sequelize');
+const dns = require('dns');
+
+// Promisify dns.lookup for IPv4
+const dnsLookup = (hostname) => new Promise((resolve, reject) => {
+  dns.lookup(hostname, { family: 4 }, (err, address) => {
+    if (err) reject(err);
+    else resolve(address);
+  });
+});
+
+// Parse PostgreSQL connection string manually
+const parseDatabaseUrl = (url) => {
+  try {
+    const parsed = new URL(url);
+    return {
+      user: parsed.username,
+      password: parsed.password,
+      host: parsed.hostname,
+      port: parsed.port || 5432,
+      database: parsed.pathname.slice(1) // Remove leading /
+    };
+  } catch (err) {
+    console.error('Failed to parse DATABASE_URL:', err.message);
+    throw err;
+  }
+};
 
 // Determine database dialect based on environment
 const isTest = process.env.NODE_ENV === 'test';
@@ -15,45 +41,62 @@ if (isTest) {
     logging: false,
     define: { timestamps: true }
   });
+} else if (isPostgres && process.env.DATABASE_URL) {
+  // Parse DATABASE_URL and force IPv4 for Supabase
+  const parsed = parseDatabaseUrl(process.env.DATABASE_URL);
+  
+  sequelize = new Sequelize(parsed.database, parsed.user, parsed.password, {
+    host: parsed.host,
+    port: parsed.port || 5432,
+    dialect: 'postgres',
+    logging: false,
+    dialectOptions: {
+      ssl: process.env.NODE_ENV === 'production' ? {
+        require: true,
+        rejectUnauthorized: false
+      } : false
+    },
+    pool: {
+      max: 5,
+      min: 0,
+      acquire: 30000,
+      idle: 10000
+    },
+    // Force IPv4 lookup via hook
+    hooks: {
+      beforeConnect: async (config) => {
+        if (config.host && (config.host.includes('supabase.co') || process.env.FORCE_IPV4 === 'true')) {
+          try {
+            const ipv4 = await dnsLookup(config.host);
+            console.log(`🔌 Resolved ${config.host} → ${ipv4} (IPv4)`);
+            config.host = ipv4;
+          } catch (err) {
+            console.warn('⚠️  IPv4 lookup failed, using original host:', config.host);
+          }
+        }
+      }
+    }
+  });
 } else if (isPostgres) {
-  // Common dialectOptions for PostgreSQL (IPv4 + SSL)
-  const postgresDialectOptions = {
-    family: 4, // Force IPv4 (fix Supabase IPv6 blocked issue)
-    ssl: process.env.NODE_ENV === 'production' ? {
-      require: true,
-      rejectUnauthorized: false
-    } : false
-  };
-
-  if (process.env.DATABASE_URL) {
-    // Use DATABASE_URL if provided (Supabase, Render, etc.)
-    sequelize = new Sequelize(process.env.DATABASE_URL, {
-      dialect: 'postgres',
-      logging: false,
-      dialectOptions: postgresDialectOptions,
-      pool: {
-        max: 5,
-        min: 0,
-        acquire: 30000,
-        idle: 10000
-      }
-    });
-  } else {
-    // Use individual DB_* variables
-    sequelize = new Sequelize(process.env.DB_NAME, process.env.DB_USER, process.env.DB_PASSWORD, {
-      host: process.env.DB_HOST,
-      port: process.env.DB_PORT || 5432,
-      dialect: 'postgres',
-      logging: false,
-      dialectOptions: postgresDialectOptions,
-      pool: {
-        max: 5,
-        min: 0,
-        acquire: 30000,
-        idle: 10000
-      }
-    });
-  }
+  // Use individual DB_* variables for PostgreSQL
+  sequelize = new Sequelize(process.env.DB_NAME, process.env.DB_USER, process.env.DB_PASSWORD, {
+    host: process.env.DB_HOST,
+    port: process.env.DB_PORT || 5432,
+    dialect: 'postgres',
+    logging: false,
+    dialectOptions: {
+      ssl: process.env.NODE_ENV === 'production' ? {
+        require: true,
+        rejectUnauthorized: false
+      } : false
+    },
+    pool: {
+      max: 5,
+      min: 0,
+      acquire: 30000,
+      idle: 10000
+    }
+  });
 } else {
   // MySQL fallback
   sequelize = new Sequelize(
