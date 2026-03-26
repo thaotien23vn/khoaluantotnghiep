@@ -35,7 +35,7 @@ function buildGeminiUrl(model, action) {
   return `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(normalized)}:${action}`;
 }
 
-async function geminiGenerate({ system, prompt, maxOutputTokens }) {
+async function geminiGenerate({ system, prompt, maxOutputTokens, timeoutMs = 30000 }) {
   const apiKey = getGeminiApiKey();
   if (!apiKey) {
     const err = new Error('GEMINI_API_KEY is not configured');
@@ -63,13 +63,26 @@ async function geminiGenerate({ system, prompt, maxOutputTokens }) {
       },
       {
         params: { key: apiKey },
-        timeout: getEnvInt('AI_HTTP_TIMEOUT_MS', 30000),
+        timeout: timeoutMs,
       }
     );
   } catch (e) {
     const status = e?.response?.status;
     const detail = e?.response?.data;
-    const err = new Error(`Gemini generateContent failed status=${status || 'unknown'} url=${url} detail=${detail ? JSON.stringify(detail) : ''}`);
+    const errorMessage = e?.message;
+    const errorCode = e?.code;
+    
+    console.error('Gemini API Error:', {
+      status,
+      errorCode,
+      errorMessage,
+      detail,
+      url,
+      model: getModel(),
+      hasApiKey: !!getGeminiApiKey(),
+    });
+    
+    const err = new Error(`Gemini generateContent failed status=${status || 'unknown'} code=${errorCode || 'none'} message=${errorMessage} detail=${detail ? JSON.stringify(detail) : ''}`);
     err.statusCode = Number.isInteger(status) ? status : 502;
     throw err;
   }
@@ -128,14 +141,14 @@ async function geminiEmbed({ text }) {
   };
 }
 
-async function generateText({ system, prompt, maxOutputTokens }) {
+async function generateText({ system, prompt, maxOutputTokens, timeoutMs }) {
   if (!isEnabled()) {
     const err = new Error('AI is disabled');
     err.statusCode = 503;
     throw err;
   }
 
-  return geminiGenerate({ system, prompt, maxOutputTokens });
+  return geminiGenerate({ system, prompt, maxOutputTokens, timeoutMs });
 }
 
 async function embedText({ text }) {

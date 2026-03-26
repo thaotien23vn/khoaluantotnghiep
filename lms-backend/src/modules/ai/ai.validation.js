@@ -532,6 +532,37 @@ const triggerAdminRecommendationsValidation = [
 ];
 
 /**
+ * Generate Course Outline Validation
+ */
+const generateCourseOutlineValidation = [
+  body('topic')
+    .notEmpty()
+    .withMessage('topic là bắt buộc')
+    .isString()
+    .withMessage('topic phải là chuỗi'),
+  body('targetAudience')
+    .optional()
+    .isString(),
+  body('difficulty')
+    .optional()
+    .isIn(['beginner', 'intermediate', 'advanced'])
+    .withMessage('difficulty phải là beginner, intermediate, hoặc advanced'),
+  body('estimatedWeeks')
+    .optional()
+    .isInt({ min: 1, max: 52 })
+    .withMessage('estimatedWeeks phải từ 1-52'),
+  body('chaptersPerWeek')
+    .optional()
+    .isInt({ min: 1, max: 7 })
+    .withMessage('chaptersPerWeek phải từ 1-7'),
+  body('lecturesPerChapter')
+    .optional()
+    .isInt({ min: 1, max: 10 })
+    .withMessage('lecturesPerChapter phải từ 1-10'),
+  handleValidationErrors,
+];
+
+/**
  * Publish Quiz Validation
  */
 const publishQuizValidation = [
@@ -540,6 +571,52 @@ const publishQuizValidation = [
     .withMessage('quizId là bắt buộc')
     .isInt({ min: 1 })
     .withMessage('quizId phải là số nguyên dương'),
+  handleValidationErrors,
+];
+
+/**
+ * Save Course Outline Validation
+ */
+const saveCourseOutlineValidation = [
+  body('outline')
+    .notEmpty()
+    .withMessage('outline là bắt buộc')
+    .isObject()
+    .withMessage('outline phải là object'),
+  body('outline.title')
+    .notEmpty()
+    .withMessage('outline.title là bắt buộc'),
+  body('outline.chapters')
+    .isArray({ min: 1 })
+    .withMessage('outline.chapters phải là mảng có ít nhất 1 chapter'),
+  body('config')
+    .notEmpty()
+    .withMessage('config là bắt buộc')
+    .isObject()
+    .withMessage('config phải là object'),
+  handleValidationErrors,
+];
+
+/**
+ * Trigger Course Content Generation Validation
+ */
+const triggerCourseContentGenerationValidation = [
+  body('courseId')
+    .notEmpty()
+    .withMessage('courseId là bắt buộc')
+    .isInt({ min: 1 })
+    .withMessage('courseId phải là số nguyên dương'),
+  body('chapterIds')
+    .notEmpty()
+    .withMessage('chapterIds là bắt buộc')
+    .isArray({ min: 1 })
+    .withMessage('chapterIds phải là mảng có ít nhất 1 phần tử'),
+  body('chapterIds.*')
+    .isInt({ min: 1 })
+    .withMessage('Mỗi chapterId phải là số nguyên dương'),
+  body('options')
+    .optional()
+    .isObject(),
   handleValidationErrors,
 ];
 
@@ -568,6 +645,9 @@ module.exports = {
   getTeacherCourseAnalyticsValidation,
   getTeacherQualityReportValidation,
   publishQuizValidation,
+  generateCourseOutlineValidation,
+  triggerCourseContentGenerationValidation,
+  saveCourseOutlineValidation,
   // Admin enhancements
   getAdminPlatformAnalyticsValidation,
   getAdminContentQualityReportValidation,

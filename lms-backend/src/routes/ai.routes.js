@@ -27,6 +27,9 @@ const {
   getTeacherCourseAnalyticsValidation,
   getTeacherQualityReportValidation,
   publishQuizValidation,
+  generateCourseOutlineValidation,
+  triggerCourseContentGenerationValidation,
+  saveCourseOutlineValidation,
   // Admin enhancements
   getAdminPlatformAnalyticsValidation,
   getAdminContentQualityReportValidation,
@@ -262,6 +265,46 @@ router.get(
   authorizeRole('teacher', 'admin'),
   getTeacherQualityReportValidation,
   aiController.getTeacherContentQualityReport
+);
+
+// ==========================================
+// COURSE GENERATION ROUTES (Phase 1)
+// ==========================================
+
+// Generate and Save Course Outline (Gộp Step 1 + 2)
+router.post(
+  '/teacher/ai/generate-and-save-course-outline',
+  authMiddleware,
+  authorizeRole('teacher', 'admin'),
+  generateCourseOutlineValidation,
+  aiController.generateAndSaveTeacherCourseOutline
+);
+
+// Generate Course Outline (chỉ generate, chưa save)
+router.post(
+  '/teacher/ai/generate-course-outline',
+  authMiddleware,
+  authorizeRole('teacher', 'admin'),
+  generateCourseOutlineValidation,
+  aiController.generateTeacherCourseOutline
+);
+
+// Save Course Outline to Database (nếu đã có outline)
+router.post(
+  '/teacher/ai/save-course-outline',
+  authMiddleware,
+  authorizeRole('teacher', 'admin'),
+  saveCourseOutlineValidation,
+  aiController.saveTeacherCourseOutline
+);
+
+// Trigger Course Content Generation (Queue)
+router.post(
+  '/teacher/ai/generate-course-content',
+  authMiddleware,
+  authorizeRole('teacher', 'admin'),
+  triggerCourseContentGenerationValidation,
+  aiController.triggerTeacherCourseContentGeneration
 );
 
 // ==========================================

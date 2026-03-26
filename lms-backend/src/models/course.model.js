@@ -40,6 +40,18 @@ module.exports = (sequelize) => {
       type: DataTypes.BOOLEAN,
       defaultValue: false,
     },
+    aiGenerated: {
+      type: DataTypes.BOOLEAN,
+      defaultValue: false,
+    },
+    generationStatus: {
+      type: DataTypes.ENUM('draft', 'generating_outline', 'outline_ready', 'generating_content', 'completed', 'failed'),
+      defaultValue: 'draft',
+    },
+    generationConfig: {
+      type: DataTypes.JSON,
+      allowNull: true,
+    },
     // Thêm các field để khớp với frontend
     rating: {
       type: DataTypes.DECIMAL(3,2),

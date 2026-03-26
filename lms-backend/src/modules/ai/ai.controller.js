@@ -378,6 +378,97 @@ class AiController {
       handleServiceError(error, res);
     }
   }
+
+  // ===================== Course Generation (Phase 1) =====================
+
+  async generateAndSaveTeacherCourseOutline(req, res) {
+    try {
+      const { topic, targetAudience, difficulty, estimatedWeeks, chaptersPerWeek, lecturesPerChapter } = req.body;
+      const userId = Number(req.user.id);
+
+      const courseConfig = {
+        topic,
+        targetAudience,
+        difficulty,
+        estimatedWeeks,
+        chaptersPerWeek,
+        lecturesPerChapter,
+      };
+
+      const result = await aiService.generateAndSaveCourseOutline(courseConfig, userId);
+      res.status(201).json({ 
+        success: true, 
+        message: 'Course outline generated and saved successfully', 
+        data: result 
+      });
+    } catch (error) {
+      handleServiceError(error, res);
+    }
+  }
+
+  async generateTeacherCourseOutline(req, res) {
+    try {
+      const { topic, targetAudience, difficulty, estimatedWeeks, chaptersPerWeek, lecturesPerChapter } = req.body;
+      const userId = Number(req.user.id);
+
+      const courseConfig = {
+        topic,
+        targetAudience,
+        difficulty,
+        estimatedWeeks,
+        chaptersPerWeek,
+        lecturesPerChapter,
+      };
+
+      const result = await aiService.generateCourseOutline(courseConfig, userId);
+      res.status(201).json({ 
+        success: true, 
+        message: 'Course outline generated successfully', 
+        data: result 
+      });
+    } catch (error) {
+      handleServiceError(error, res);
+    }
+  }
+
+  async triggerTeacherCourseContentGeneration(req, res) {
+    try {
+      const { courseId, chapterIds, options } = req.body;
+      
+      const result = await aiService.triggerCourseContentGeneration(
+        req.user,
+        Number(courseId),
+        chapterIds,
+        options
+      );
+      
+      res.status(202).json({
+        success: true,
+        message: 'Course content generation đã được đưa vào hàng đợi',
+        data: result,
+      });
+    } catch (error) {
+      handleServiceError(error, res);
+    }
+  }
+
+  async saveTeacherCourseOutline(req, res) {
+    try {
+      const { outline, config } = req.body;
+      const userId = Number(req.user.id);
+
+      const outlineData = { outline, config };
+      const result = await aiService.saveCourseOutline(outlineData, userId);
+      
+      res.status(201).json({
+        success: true,
+        message: 'Course outline đã được lưu vào database',
+        data: result,
+      });
+    } catch (error) {
+      handleServiceError(error, res);
+    }
+  }
 }
 
 module.exports = new AiController();

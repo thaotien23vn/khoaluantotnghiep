@@ -8,6 +8,7 @@ const http = require('http');
 const { initSocket } = require('./socket');
 const notificationCron = require('./modules/notification/notification.cron');
 require('./modules/notification/notification.worker');
+require('./services/courseGeneration.worker'); // Khởi động course generation worker
 
 const PORT = process.env.PORT || 5000;
 

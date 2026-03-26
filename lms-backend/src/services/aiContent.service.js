@@ -1066,6 +1066,279 @@ Hãy đưa ra 3-5 suggestions cụ thể và actionable để cải thiện nộ
   }
 
   /**
+   * Generate course outline with chapters and lectures
+   */
+  async generateCourseOutline(courseConfig, userId) {
+    try {
+      const {
+        topic,
+        targetAudience = 'general',
+        difficulty = 'intermediate',
+        estimatedWeeks = 8,
+        chaptersPerWeek = 2,
+        lecturesPerChapter = 3,
+        language = 'vietnamese',
+      } = courseConfig;
+
+      const totalChapters = estimatedWeeks * chaptersPerWeek;
+      const totalLectures = totalChapters * lecturesPerChapter;
+
+      const systemPrompt = `Bạn là một chuyên gia giáo dục trong việc thiết kế khóa học chất lượng cao. Tạo outline chi tiết cho khóa học với cấu trúc rõ ràng.
+
+Yêu cầu:
+- Tổng số chapter: ${totalChapters}
+- Mỗi chapter có ${lecturesPerChapter} lectures
+- Phù hợp với cấp độ: ${difficulty}
+- Đối tượng: ${targetAudience}
+- Ngôn ngữ: ${language}
+- Nội dung từ cơ bản đến nâng cao (progressive learning)
+- Mỗi chapter có learning objectives rõ ràng`;
+
+      const prompt = `Tạo outline cho khóa học "${topic}"
+
+THÔNG TIN KHÓA HỌC:
+- Chủ đề: ${topic}
+- Cấp độ: ${difficulty}
+- Đối tượng: ${targetAudience}
+- Thời lượng: ${estimatedWeeks} tuần
+- Số chapter: ${totalChapters}
+- Số lectures mỗi chapter: ${lecturesPerChapter}
+
+Yêu cầu output JSON:
+{
+  "title": "Tên khóa học đầy đủ",
+  "description": "Mô tả tổng quan khóa học",
+  "learningObjectives": ["Mục tiêu 1", "Mục tiêu 2", ...],
+  "chapters": [
+    {
+      "order": 1,
+      "title": "Tên chapter",
+      "description": "Mô tả chapter",
+      "learningObjectives": ["Mục tiêu chapter"],
+      "lectures": [
+        {
+          "order": 1,
+          "title": "Tên lecture",
+          "description": "Mô tả ngắn",
+          "estimatedDuration": 45
+        }
+      ]
+    }
+  ],
+  "estimatedTotalDuration": "Thời lượng tổng (giờ)",
+  "prerequisites": ["Kiến thức cần có"],
+  "skillsGained": ["Kỹ năng đạt được"]
+}
+
+Lưu ý:
+- Chapter 1-2: Giới thiệu và cơ bản
+- Chapter giữa: Nội dung chính, thực hành
+- Chapter cuối: Nâng cao và tổng kết
+- Tên lecture phải cụ thể và hấp dẫn`;
+
+      const aiResponse = await aiGateway.generateText({
+        system: systemPrompt,
+        prompt,
+        maxOutputTokens: 8192,
+        timeoutMs: 120000, // 120s cho outline lớn
+      });
+
+      let outline;
+      try {
+        // Try multiple extraction methods
+        let jsonText = aiResponse.text;
+
+        // Method 1: Extract from markdown code block
+        const codeBlockMatch = jsonText.match(/```(?:json)?\s*([\s\S]*?)\s*```/);
+        if (codeBlockMatch) {
+          jsonText = codeBlockMatch[1];
+        }
+
+        // Method 2: Extract object pattern
+        const objectMatch = jsonText.match(/\{[\s\S]*\}/);
+        if (objectMatch) {
+          jsonText = objectMatch[0];
+        }
+
+        outline = JSON.parse(jsonText);
+
+        // Validate structure
+        if (!outline.title || !outline.chapters || !Array.isArray(outline.chapters)) {
+          throw new Error('Invalid outline structure');
+        }
+
+      } catch (parseError) {
+        logger.error('COURSE_OUTLINE_PARSE_FAILED', {
+          topic,
+          response: aiResponse.text?.substring(0, 500),
+          error: parseError.message,
+        });
+        throw {
+          status: 500,
+          message: 'Không thể parse course outline',
+          code: 'COURSE_OUTLINE_PARSE_FAILED',
+        };
+      }
+
+      logger.info('COURSE_OUTLINE_GENERATED', {
+        topic,
+        userId,
+        totalChapters: outline.chapters.length,
+        totalLectures: outline.chapters.reduce((acc, ch) => acc + (ch.lectures?.length || 0), 0),
+      });
+
+      return {
+        outline,
+        config: courseConfig,
+        metadata: {
+          generatedAt: new Date(),
+          aiGenerated: true,
+        },
+      };
+    } catch (error) {
+      logger.error('COURSE_OUTLINE_GENERATION_FAILED', {
+        courseConfig,
+        userId,
+        error: error.message,
+        stack: error.stack,
+      });
+      throw {
+        status: error.status || 500,
+        message: error.message || 'Không thể tạo course outline',
+        code: error.code || 'COURSE_OUTLINE_GENERATION_FAILED',
+      };
+    }
+  }
+
+  /**
+   * Save course outline to database as draft
+   */
+  async saveCourseOutline(outlineData, userId) {
+    const transaction = await db.sequelize.transaction();
+
+    try {
+      const { outline, config } = outlineData;
+
+      // Create course
+      const course = await Course.create({
+        title: outline.title,
+        description: outline.description,
+        slug: this.generateSlug(outline.title),
+        level: config.difficulty === 'beginner' ? 'Cơ bản' : config.difficulty === 'intermediate' ? 'Trung cấp' : 'Nâng cao',
+        category: config.topic,
+        duration: outline.estimatedTotalDuration || `${config.estimatedWeeks} tuần`,
+        totalLessons: outline.chapters?.reduce((acc, ch) => acc + (ch.lectures?.length || 0), 0) || 0,
+        willLearn: outline.learningObjectives || [],
+        requirements: outline.prerequisites || [],
+        tags: [config.targetAudience, config.topic].filter(Boolean),
+        published: false,
+        aiGenerated: true,
+        generationStatus: 'outline_ready',
+        generationConfig: config,
+        createdBy: userId,
+      }, { transaction });
+
+      // Create chapters and lectures
+      const chapterRecords = [];
+      for (const chapterData of outline.chapters || []) {
+        const chapter = await Chapter.create({
+          courseId: course.id,
+          title: chapterData.title,
+          description: chapterData.description,
+          order: chapterData.order,
+        }, { transaction });
+
+        // Create lectures for this chapter
+        const lectureRecords = [];
+        for (const lectureData of chapterData.lectures || []) {
+          const lecture = await Lecture.create({
+            chapterId: chapter.id,
+            title: lectureData.title,
+            description: lectureData.description,
+            type: 'video', // Required field
+            duration: (lectureData.estimatedDuration || 45) * 60, // Convert to seconds
+            order: lectureData.order,
+            content: '', // Will be generated in Phase 2
+          }, { transaction });
+
+          lectureRecords.push(lecture);
+        }
+
+        chapterRecords.push({
+          chapter,
+          lectures: lectureRecords,
+        });
+      }
+
+      await transaction.commit();
+
+      logger.info('COURSE_OUTLINE_SAVED', {
+        courseId: course.id,
+        userId,
+        title: course.title,
+        chapterCount: chapterRecords.length,
+        lectureCount: chapterRecords.reduce((acc, ch) => acc + ch.lectures.length, 0),
+      });
+
+      return {
+        course,
+        chapters: chapterRecords,
+        message: 'Course outline đã được lưu vào database',
+        status: 'outline_ready',
+      };
+    } catch (error) {
+      await transaction.rollback();
+      logger.error('COURSE_OUTLINE_SAVE_FAILED', {
+        outlineData,
+        userId,
+        error: error.message,
+        stack: error.stack,
+      });
+      throw {
+        status: 500,
+        message: 'Không thể lưu course outline',
+        code: 'COURSE_OUTLINE_SAVE_FAILED',
+      };
+    }
+  }
+
+  /**
+   * Generate and save course outline (gộp Step 1 + 2)
+   */
+  async generateAndSaveCourseOutline(courseConfig, userId) {
+    // Step 1: Generate outline
+    const generationResult = await this.generateCourseOutline(courseConfig, userId);
+    
+    // Step 2: Save to database
+    const saveResult = await this.saveCourseOutline({
+      outline: generationResult.outline,
+      config: courseConfig,
+    }, userId);
+    
+    return {
+      course: saveResult.course,
+      chapters: saveResult.chapters,
+      outline: generationResult.outline,
+      metadata: {
+        generatedAt: new Date(),
+        totalChapters: saveResult.chapters.length,
+        totalLectures: saveResult.chapters.reduce((acc, ch) => acc + ch.lectures.length, 0),
+      },
+    };
+  }
+
+  /**
+   * Generate slug from title
+   */
+  generateSlug(title) {
+    return title
+      .toLowerCase()
+      .replace(/[^a-z0-9\s-]/g, '')
+      .replace(/\s+/g, '-')
+      .substring(0, 50) + '-' + Date.now();
+  }
+
+  /**
    * Get content by ID and type
    */
   async getContentById(contentId, contentType) {

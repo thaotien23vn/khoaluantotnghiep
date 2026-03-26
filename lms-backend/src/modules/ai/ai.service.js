@@ -9,6 +9,7 @@ const aiPersonalization = require('../../services/aiPersonalization.service');
 const aiAnalytics = require('../../services/aiAnalytics.service');
 const aiContent = require('../../services/aiContent.service');
 const aiLearningPath = require('../../services/aiLearningPath.service');
+const { courseGenerationQueue } = require('../../services/courseGeneration.queue');
 
 const {
   Enrollment,
@@ -63,6 +64,9 @@ class AiService {
   generatePracticeExercises = (...args) => aiContent.generatePracticeExercises(...args);
   analyzeContentQuality = aiContent.analyzeContentQuality;
   getContentQualityReport = (...args) => aiContent.getContentQualityReport(...args);
+  generateCourseOutline = (...args) => aiContent.generateCourseOutline(...args);
+  saveCourseOutline = (...args) => aiContent.saveCourseOutline(...args);
+  generateAndSaveCourseOutline = (...args) => aiContent.generateAndSaveCourseOutline(...args);
 
   // Learning Path
   generateLearningPath = aiLearningPath.generateLearningPath;
@@ -796,6 +800,73 @@ class AiService {
     }
 
     return { health };
+  }
+
+  /**
+   * Trigger course content generation via queue (Phase 2)
+   */
+  async triggerCourseContentGeneration(reqUser, courseId, chapterIds, options = {}) {
+    const setting = await this.getAiSetting();
+    if (!setting?.enabled) {
+      throw { status: 503, message: 'AI đang tạm tắt' };
+    }
+
+    const policy = await this.getRolePolicy(reqUser.role);
+    if (!policy?.enabled) {
+      throw { status: 403, message: 'Role không được phép sử dụng AI' };
+    }
+
+    // Verify teacher owns the course
+    const course = await Course.findByPk(courseId);
+    if (!course) {
+      throw { status: 404, message: 'Không tìm thấy course' };
+    }
+
+    const allowed = await this.ensureTeacherOwnsCourseOrAdmin(reqUser, course);
+    if (!allowed) {
+      throw { status: 403, message: 'Bạn không có quyền tạo content cho course này' };
+    }
+
+    // Check if course is in outline_ready status
+    if (course.generationStatus !== 'outline_ready' && course.generationStatus !== 'failed') {
+      throw { 
+        status: 400, 
+        message: 'Course phải ở trạng thái outline_ready hoặc failed để generate content',
+        code: 'INVALID_COURSE_STATUS'
+      };
+    }
+
+    // Update course status
+    await course.update({ generationStatus: 'generating_content' });
+
+    // Add job to queue
+    const job = await courseGenerationQueue.add(
+      'generateCourseContent',
+      {
+        courseId,
+        chapterIds,
+        options,
+        userId: reqUser.id,
+      },
+      {
+        jobId: `course-${courseId}-${Date.now()}`,
+        priority: 1,
+      }
+    );
+
+    logger.info('COURSE_CONTENT_GENERATION_QUEUED', {
+      jobId: job.id,
+      courseId,
+      chapterIds,
+      userId: reqUser.id,
+    });
+
+    return {
+      jobId: job.id,
+      courseId,
+      status: 'queued',
+      message: 'Course content generation đã được đưa vào hàng đợi',
+    };
   }
 }
 
