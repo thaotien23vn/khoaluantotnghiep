@@ -531,6 +531,18 @@ const triggerAdminRecommendationsValidation = [
   handleValidationErrors,
 ];
 
+/**
+ * Publish Quiz Validation
+ */
+const publishQuizValidation = [
+  param('quizId')
+    .notEmpty()
+    .withMessage('quizId là bắt buộc')
+    .isInt({ min: 1 })
+    .withMessage('quizId phải là số nguyên dương'),
+  handleValidationErrors,
+];
+
 module.exports = {
   handleValidationErrors,
   createStudentConversationValidation,
@@ -555,6 +567,7 @@ module.exports = {
   analyzeTeacherContentQualityValidation,
   getTeacherCourseAnalyticsValidation,
   getTeacherQualityReportValidation,
+  publishQuizValidation,
   // Admin enhancements
   getAdminPlatformAnalyticsValidation,
   getAdminContentQualityReportValidation,

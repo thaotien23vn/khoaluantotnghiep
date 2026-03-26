@@ -58,6 +58,8 @@ class AiService {
   // Content
   generateLectureContent = aiContent.generateLectureContent;
   generateQuizQuestions = (...args) => aiContent.generateQuizQuestions(...args);
+  generateAndSaveQuiz = (...args) => aiContent.generateAndSaveQuiz(...args);
+  publishQuiz = (...args) => aiContent.publishQuiz(...args);
   generatePracticeExercises = (...args) => aiContent.generatePracticeExercises(...args);
   analyzeContentQuality = aiContent.analyzeContentQuality;
   getContentQualityReport = (...args) => aiContent.getContentQualityReport(...args);
@@ -525,6 +527,54 @@ class AiService {
     }
 
     return this.generateQuizQuestions(lectureId, options);
+  }
+
+  /**
+   * Generate and save quiz as draft
+   */
+  async generateAndSaveTeacherQuiz(reqUser, lectureId, quizData, options = {}) {
+    const setting = await this.getAiSetting();
+    if (!setting?.enabled) {
+      throw { status: 503, message: 'AI đang tạm tắt' };
+    }
+
+    const policy = await this.getRolePolicy(reqUser.role);
+    if (!policy?.enabled) {
+      throw { status: 403, message: 'Role không được phép sử dụng AI' };
+    }
+
+    const lecture = await Lecture.findByPk(lectureId, {
+      include: [{ model: Chapter, attributes: ['courseId'], required: true }],
+    });
+
+    if (!lecture) {
+      throw { status: 404, message: 'Không tìm thấy lecture' };
+    }
+
+    const course = await Course.findByPk(lecture.Chapter.courseId);
+    const allowed = await this.ensureTeacherOwnsCourseOrAdmin(reqUser, course);
+    if (!allowed) {
+      throw { status: 403, message: 'Bạn không có quyền tạo quiz cho lecture này' };
+    }
+
+    return this.generateAndSaveQuiz(lectureId, quizData, options, reqUser.id);
+  }
+
+  /**
+   * Publish a draft quiz
+   */
+  async publishTeacherQuiz(reqUser, quizId) {
+    const setting = await this.getAiSetting();
+    if (!setting?.enabled) {
+      throw { status: 503, message: 'AI đang tạm tắt' };
+    }
+
+    const policy = await this.getRolePolicy(reqUser.role);
+    if (!policy?.enabled) {
+      throw { status: 403, message: 'Role không được phép sử dụng AI' };
+    }
+
+    return this.publishQuiz(quizId, reqUser.id);
   }
 
   /**

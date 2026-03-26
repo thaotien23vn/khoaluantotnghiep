@@ -26,6 +26,7 @@ const {
   analyzeTeacherContentQualityValidation,
   getTeacherCourseAnalyticsValidation,
   getTeacherQualityReportValidation,
+  publishQuizValidation,
   // Admin enhancements
   getAdminPlatformAnalyticsValidation,
   getAdminContentQualityReportValidation,
@@ -207,6 +208,24 @@ router.post(
   authorizeRole('teacher', 'admin'),
   generateTeacherQuizValidation,
   aiController.generateTeacherQuizQuestions
+);
+
+// Generate and Save Quiz as Draft
+router.post(
+  '/teacher/ai/generate-and-save-quiz',
+  authMiddleware,
+  authorizeRole('teacher', 'admin'),
+  generateTeacherQuizValidation,
+  aiController.generateAndSaveTeacherQuiz
+);
+
+// Publish Draft Quiz
+router.post(
+  '/teacher/ai/quizzes/:quizId/publish',
+  authMiddleware,
+  authorizeRole('teacher', 'admin'),
+  publishQuizValidation,
+  aiController.publishTeacherQuiz
 );
 
 // Practice Exercises Generation

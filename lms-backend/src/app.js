@@ -103,11 +103,37 @@ if (process.env.NODE_ENV !== 'production') {
 }
 
 // Health check
-app.get("/api/health", (req, res) => {
-  res.json({
+app.get("/api/health", async (req, res) => {
+  const health = {
     status: "OK",
     message: "LMS Backend running",
-  });
+    timestamp: new Date().toISOString(),
+    services: {},
+  };
+
+  // Check Redis
+  try {
+    const { redisConnection } = require('./modules/notification/notification.queue');
+    if (redisConnection) {
+      await redisConnection.ping();
+      health.services.redis = { status: 'operational' };
+    } else {
+      health.services.redis = { status: 'disabled', message: 'Not configured' };
+    }
+  } catch (err) {
+    health.services.redis = { status: 'degraded', error: err.message };
+  }
+
+  // Check Database
+  try {
+    const db = require('./models');
+    await db.sequelize.authenticate();
+    health.services.database = { status: 'operational' };
+  } catch (err) {
+    health.services.database = { status: 'degraded', error: err.message };
+  }
+
+  res.json(health);
 });
 
 // Auth routes

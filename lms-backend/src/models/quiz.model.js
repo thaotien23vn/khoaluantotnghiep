@@ -55,6 +55,16 @@ module.exports = (sequelize) => {
       defaultValue: true,
       field: 'show_results',
     },
+    status: {
+      type: DataTypes.ENUM('draft', 'published'),
+      defaultValue: 'draft',
+      allowNull: false,
+    },
+    lectureId: {
+      type: DataTypes.INTEGER.UNSIGNED,
+      allowNull: true,
+      field: 'lecture_id',
+    },
   }, {
     tableName: 'quizzes',
     timestamps: true,
@@ -81,6 +91,11 @@ module.exports = (sequelize) => {
     Quiz.hasMany(models.Attempt, {
       foreignKey: 'quizId',
       as: 'attempts',
+    });
+
+    Quiz.belongsTo(models.Lecture, {
+      foreignKey: 'lectureId',
+      as: 'lecture',
     });
   };
 

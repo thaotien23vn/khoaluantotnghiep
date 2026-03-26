@@ -252,6 +252,28 @@ class AiController {
     }
   }
 
+  async generateAndSaveTeacherQuiz(req, res) {
+    try {
+      const lectureId = Number(req.body.lectureId);
+      const quizData = req.body.quizData || {};
+      const options = req.body.options || {};
+      const result = await aiService.generateAndSaveTeacherQuiz(req.user, lectureId, quizData, options);
+      res.status(201).json({ success: true, message: 'Quiz generated and saved as draft', data: result });
+    } catch (error) {
+      handleServiceError(error, res);
+    }
+  }
+
+  async publishTeacherQuiz(req, res) {
+    try {
+      const quizId = Number(req.params.quizId);
+      const result = await aiService.publishTeacherQuiz(req.user, quizId);
+      res.json({ success: true, message: 'Quiz published successfully', data: result });
+    } catch (error) {
+      handleServiceError(error, res);
+    }
+  }
+
   async generateTeacherPracticeExercises(req, res) {
     try {
       const lectureId = Number(req.body.lectureId);

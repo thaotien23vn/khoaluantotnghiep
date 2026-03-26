@@ -236,7 +236,7 @@ class QuizService {
     }
 
     const quizzes = await Quiz.findAll({
-      where: { courseId },
+      where: { courseId, status: 'published' },
       attributes: ['id', 'title', 'description', 'maxScore', 'timeLimit', 'passingScore', 'startTime', 'endTime', 'showResults'],
       include: [
         {
@@ -296,7 +296,7 @@ class QuizService {
     }
 
     const quizzes = await Quiz.findAll({
-      where: { courseId: courseIds },
+      where: { courseId: courseIds, status: 'published' },
       attributes: ['id', 'title', 'description', 'maxScore', 'timeLimit', 'passingScore', 'startTime', 'endTime', 'showResults'],
       include: [
         { model: Course, as: 'course', attributes: ['id', 'title', 'imageUrl'] },

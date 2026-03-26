@@ -201,22 +201,51 @@ Trả về danh sách các câu hỏi trong format JSON array.`;
       const aiResponse = await aiGateway.generateText({
         system: systemPrompt,
         prompt,
-        maxOutputTokens: 4096,
+        maxOutputTokens: 8192,  // Tăng để xử lý nhiều câu hỏi
       });
 
       let questions;
       try {
-        // Extract JSON from response
-        const jsonMatch = aiResponse.text.match(/\[[\s\S]*\]/);
-        if (jsonMatch) {
-          questions = JSON.parse(jsonMatch[0]);
-        } else {
-          questions = JSON.parse(aiResponse.text);
+        // Try multiple extraction methods
+        let jsonText = aiResponse.text;
+
+        // Method 1: Extract from markdown code block ```json ... ```
+        const codeBlockMatch = jsonText.match(/```(?:json)?\s*([\s\S]*?)\s*```/);
+        if (codeBlockMatch) {
+          jsonText = codeBlockMatch[1];
+        }
+
+        // Method 2: Extract array pattern [...] - non-greedy first, then greedy
+        const arrayMatch = jsonText.match(/\[[\s\S]*?\](?=\s*$|\s*\n)/) || jsonText.match(/\[[\s\S]*\]/);
+        if (arrayMatch) {
+          jsonText = arrayMatch[0];
+        }
+
+        // Method 3: Try to find JSON array between brackets
+        const startIdx = jsonText.indexOf('[');
+        let endIdx = jsonText.lastIndexOf(']');
+        
+        // If JSON seems truncated (no closing bracket), try to fix it
+        if (startIdx !== -1) {
+          if (endIdx === -1 || endIdx < startIdx) {
+            // JSON is truncated - try to find partial array and close it
+            jsonText = jsonText.substring(startIdx) + '\n}]';
+            logger.warn('JSON_TRUNCATED_ATTEMPTING_FIX', { lectureId });
+          } else {
+            jsonText = jsonText.substring(startIdx, endIdx + 1);
+          }
+        }
+
+        questions = JSON.parse(jsonText);
+
+        // Ensure it's an array
+        if (!Array.isArray(questions)) {
+          throw new Error('Parsed result is not an array');
         }
       } catch (parseError) {
         logger.error('QUIZ_QUESTIONS_PARSE_FAILED', {
           lectureId,
-          response: aiResponse.text,
+          response: aiResponse.text?.substring(0, 500),
           error: parseError.message,
         });
         throw {
@@ -250,6 +279,234 @@ Trả về danh sách các câu hỏi trong format JSON array.`;
         status: error.status || 500,
         message: error.message || 'Không thể tạo quiz questions',
         code: error.code || 'QUIZ_GENERATION_FAILED',
+      };
+    }
+  }
+
+  /**
+   * Generate quiz and auto-save as draft
+   */
+  async generateAndSaveQuiz(lectureId, quizData, options = {}, userId) {
+    try {
+      const {
+        title,
+        description,
+        timeLimit = 30,
+        passingScore = 60,
+        maxScore = 100,
+      } = quizData;
+
+      // Generate questions first
+      const generatedQuestions = await this.generateQuizQuestions(lectureId, options);
+
+      // Get lecture info for courseId
+      const lecture = await Lecture.findByPk(lectureId, {
+        include: [
+          {
+            model: Chapter,
+            attributes: ['courseId'],
+          },
+        ],
+      });
+
+      if (!lecture) {
+        throw {
+          status: 404,
+          message: 'Không tìm thấy lecture',
+          code: 'LECTURE_NOT_FOUND',
+        };
+      }
+
+      const courseId = lecture.Chapter.courseId;
+
+      // Create quiz as draft
+      const quiz = await Quiz.create({
+        title: title || `Quiz: ${lecture.title}`,
+        description: description || `Quiz được tạo tự động từ lecture "${lecture.title}"`,
+        courseId,
+        lectureId,
+        createdBy: userId,
+        timeLimit,
+        passingScore,
+        maxScore,
+        status: 'draft',
+        showResults: true,
+      });
+
+      // Create questions
+      const questionRecords = [];
+      for (const q of generatedQuestions.questions) {
+        const question = await Question.create({
+          quizId: quiz.id,
+          type: q.type,
+          content: q.question,
+          options: q.options || null,
+          correctAnswer: q.correctAnswer,
+          explanation: q.explanation || null,
+          points: 1,
+          order: q.order,
+        });
+        questionRecords.push(question);
+      }
+
+      // Analyze content quality
+      let qualityScore = null;
+      try {
+        qualityScore = await this.analyzeQuizQuality(quiz.id);
+      } catch (qualityError) {
+        logger.warn('ANALYZE_QUIZ_QUALITY_ERROR', {
+          quizId: quiz.id,
+          error: qualityError.message,
+        });
+        // Continue without quality score
+      }
+
+      logger.info('QUIZ_GENERATED_AND_SAVED', {
+        quizId: quiz.id,
+        lectureId,
+        courseId,
+        userId,
+        questionCount: questionRecords.length,
+        status: 'draft',
+      });
+
+      return {
+        quiz,
+        questions: questionRecords,
+        qualityScore,
+        metadata: {
+          generatedAt: new Date(),
+          questionCount: questionRecords.length,
+          status: 'draft',
+        },
+      };
+    } catch (error) {
+      logger.error('GENERATE_AND_SAVE_QUIZ_FAILED', {
+        lectureId,
+        quizData,
+        options,
+        userId,
+        error: error.message,
+        stack: error.stack,
+      });
+      throw {
+        status: error.status || 500,
+        message: error.message || 'Không thể tạo và lưu quiz',
+        code: error.code || 'GENERATE_AND_SAVE_QUIZ_FAILED',
+      };
+    }
+  }
+
+  /**
+   * Analyze quiz quality
+   */
+  async analyzeQuizQuality(quizId) {
+    try {
+      const quiz = await Quiz.findByPk(quizId, {
+        include: [Question],
+      });
+
+      if (!quiz || !quiz.questions || quiz.questions.length === 0) {
+        return null;
+      }
+
+      const questions = quiz.questions;
+      const questionTypes = questions.reduce((acc, q) => {
+        acc[q.type] = (acc[q.type] || 0) + 1;
+        return acc;
+      }, {});
+
+      const hasCorrectAnswers = questions.every(q => q.correctAnswer);
+      const hasExplanations = questions.filter(q => q.explanation).length;
+      const explanationRate = questions.length > 0 ? hasExplanations / questions.length : 0;
+
+      const qualityMetrics = {
+        questionCount: questions.length,
+        questionTypes,
+        hasCorrectAnswers,
+        explanationRate,
+        overallScore: 7.0, // Base score
+      };
+
+      // Calculate overall score based on criteria
+      if (hasCorrectAnswers) qualityMetrics.overallScore += 1.5;
+      if (explanationRate > 0.5) qualityMetrics.overallScore += 1;
+      if (Object.keys(questionTypes).length > 1) qualityMetrics.overallScore += 0.5;
+
+      return qualityMetrics;
+    } catch (error) {
+      logger.error('ANALYZE_QUIZ_QUALITY_FAILED', {
+        quizId,
+        error: error.message,
+      });
+      return null;
+    }
+  }
+
+  /**
+   * Publish a draft quiz
+   */
+  async publishQuiz(quizId, userId) {
+    try {
+      const quiz = await Quiz.findByPk(quizId);
+
+      if (!quiz) {
+        throw {
+          status: 404,
+          message: 'Không tìm thấy quiz',
+          code: 'QUIZ_NOT_FOUND',
+        };
+      }
+
+      if (quiz.createdBy !== userId) {
+        throw {
+          status: 403,
+          message: 'Bạn không có quyền publish quiz này',
+          code: 'UNAUTHORIZED',
+        };
+      }
+
+      if (quiz.status !== 'draft') {
+        throw {
+          status: 400,
+          message: 'Quiz đã được publish hoặc không ở trạng thái draft',
+          code: 'INVALID_STATUS',
+        };
+      }
+
+      // Check if quiz has questions
+      const questionCount = await Question.count({ where: { quizId } });
+      if (questionCount === 0) {
+        throw {
+          status: 400,
+          message: 'Quiz không có câu hỏi nào',
+          code: 'NO_QUESTIONS',
+        };
+      }
+
+      await quiz.update({ status: 'published' });
+
+      logger.info('QUIZ_PUBLISHED', {
+        quizId,
+        userId,
+        questionCount,
+      });
+
+      return {
+        quiz,
+        publishedAt: new Date(),
+        questionCount,
+      };
+    } catch (error) {
+      logger.error('PUBLISH_QUIZ_FAILED', {
+        quizId,
+        userId,
+        error: error.message,
+      });
+      throw {
+        status: error.status || 500,
+        message: error.message || 'Không thể publish quiz',
+        code: error.code || 'PUBLISH_QUIZ_FAILED',
       };
     }
   }
