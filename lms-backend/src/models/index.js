@@ -23,7 +23,8 @@ const sequelize = isTest
               ssl: {
                 require: true,
                 rejectUnauthorized: false
-              }
+              },
+              family: 4
             }
           })
         : new Sequelize(process.env.DB_NAME, process.env.DB_USER, process.env.DB_PASSWORD, {
@@ -35,7 +36,8 @@ const sequelize = isTest
               ssl: {
                 require: true,
                 rejectUnauthorized: false
-              }
+              },
+              family: 4
             },
             pool: {
               max: 5,
