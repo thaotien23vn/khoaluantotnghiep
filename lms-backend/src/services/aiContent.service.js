@@ -96,8 +96,16 @@ Format response theo markdown với clear headings.`;
 
       const content = aiResponse.text;
 
+      // Get the lecture ID from the context or generate one
+      const lecture = await Lecture.findOne({
+        where: { title, chapterId },
+        order: [['createdAt', 'DESC']],
+      });
+      
+      const lectureId = lecture ? lecture.id : null;
+
       // Analyze content quality
-      const qualityScore = await this.analyzeContentQuality(content, 'lecture');
+      const qualityScore = await this.analyzeContentQuality(lectureId, content, 'lecture');
 
       return {
         content,
