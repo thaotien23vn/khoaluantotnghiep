@@ -61,6 +61,7 @@ async function buildLectureSourceText(lectureId, options = {}) {
   if (course?.description) parts.push(`Course description: ${course.description}`);
   parts.push(`Chapter: ${lecture.Chapter.title || ''}`);
   parts.push(`Lecture: ${lecture.title || ''}`);
+  if (lecture.content) parts.push(`Content:\n${lecture.content}`);
   if (lecture.aiNotes) parts.push(`Lecture notes: ${lecture.aiNotes}`);
 
   return {
