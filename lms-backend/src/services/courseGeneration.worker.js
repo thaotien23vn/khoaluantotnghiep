@@ -250,7 +250,7 @@ if (!isTest) {
         });
 
         return {
-          success: allSuccessful,
+          success: currentBatchSuccessful,
           results,
           courseId,
         };
