@@ -46,12 +46,12 @@ function cosineSimilarity(a, b) {
 
 async function buildLectureSourceText(lectureId, options = {}) {
   const lecture = await Lecture.findByPk(lectureId, {
-    include: [{ model: Chapter, as: 'chapter', attributes: ['id', 'title', 'courseId'], required: true }],
+    include: [{ model: Chapter, attributes: ['id', 'title', 'courseId'], required: true }],
     transaction: options.transaction,
   });
   if (!lecture) return null;
 
-  const course = await Course.findByPk(lecture.chapter.courseId, {
+  const course = await Course.findByPk(lecture.Chapter.courseId, {
     attributes: ['id', 'title', 'description'],
     transaction: options.transaction,
   });
