@@ -38,6 +38,11 @@ module.exports = (sequelize) => {
         defaultValue: DataTypes.NOW,
         field: "answered_at",
       },
+      isSkipped: {
+        type: DataTypes.BOOLEAN,
+        defaultValue: false,
+        field: "is_skipped",
+      },
     },
     {
       tableName: "placement_responses",

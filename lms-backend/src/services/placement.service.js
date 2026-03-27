@@ -747,14 +747,22 @@ Yêu cầu:
     return normalizedUser === normalizedCorrect;
   }
 
-  getProgress(session) {
+  async getProgress(sessionId) {
+    const session = await PlacementSession.findByPk(sessionId);
+    if (!session) {
+      throw new Error('Session not found');
+    }
+    
     const totalQuestions = session.isQuickCheck ? QUICK_CHECK_QUESTIONS : MAX_QUESTIONS;
     return {
+      sessionId: session.id,
+      status: session.status,
       currentQuestion: session.questionCount,
       totalQuestions,
       currentLevel: session.currentCefrLevel,
       correctCount: session.correctCount,
       accuracy: session.questionCount > 0 ? (session.correctCount / session.questionCount) : 0,
+      startedAt: session.created_at,
     };
   }
 

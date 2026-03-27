@@ -178,6 +178,55 @@ class PlacementController {
   }
 
   /**
+   * Skip a question
+   */
+  async skipQuestion(req, res, next) {
+    try {
+      const { sessionId } = req.params;
+      const { questionId, timeSpentSeconds } = req.body;
+
+      const result = await placementService.submitAnswer(sessionId, {
+        questionId,
+        answer: null, // Skipped
+        isSkipped: true,
+        timeSpentSeconds: timeSpentSeconds || 0,
+      });
+
+      res.json({
+        success: true,
+        data: {
+          sessionId: result.sessionId,
+          question: result.question,
+          completed: result.completed,
+          progress: result.progress,
+          message: 'Đã bỏ qua câu hỏi',
+        },
+      });
+    } catch (err) {
+      logger.error('PLACEMENT_SKIP_ERROR', { error: err.message });
+      next(err);
+    }
+  }
+
+  /**
+   * Get test progress
+   */
+  async getProgress(req, res, next) {
+    try {
+      const { sessionId } = req.params;
+      const progress = await placementService.getProgress(sessionId);
+
+      res.json({
+        success: true,
+        data: progress,
+      });
+    } catch (err) {
+      logger.error('PLACEMENT_PROGRESS_ERROR', { error: err.message });
+      next(err);
+    }
+  }
+
+  /**
    * Check if user is eligible to retake placement test
    */
   async checkRetakeEligibility(req, res, next) {

@@ -87,6 +87,24 @@ router.post(
   placementController.submitAnswer
 );
 
+// Skip a question
+router.post(
+  '/student/placement/:sessionId/skip',
+  authMiddleware,
+  authorizeRole('student', 'admin'),
+  sessionIdValidation,
+  placementController.skipQuestion
+);
+
+// Get test progress
+router.get(
+  '/student/placement/:sessionId/progress',
+  authMiddleware,
+  authorizeRole('student', 'admin'),
+  sessionIdValidation,
+  placementController.getProgress
+);
+
 // Complete test manually
 router.post(
   '/student/placement/:sessionId/complete',
