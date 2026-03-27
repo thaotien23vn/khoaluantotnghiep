@@ -198,7 +198,7 @@ class AiService {
 
     await AiMessage.create({ conversationId: convId, sender: 'ai', content: aiRes.text, tokenUsage: null });
 
-    await this.logAiCall({
+    await aiAudit.logAiCall({
       userId,
       role,
       endpoint: 'student_ai_tutor',
