@@ -3,6 +3,9 @@ const authMiddleware = require('../middlewares/auth');
 const authorizeRole = require('../middlewares/authorize');
 const { body, param } = require('express-validator');
 const placementController = require('../modules/placement/placement.controller');
+const placementQuestionGenerator = require('../services/placementQuestionGenerator.service');
+const placementQuestionCron = require('../modules/placement/placementQuestion.cron');
+const logger = require('../utils/logger');
 
 const router = express.Router();
 
@@ -100,6 +103,44 @@ router.get(
   authorizeRole('student', 'admin'),
   sessionIdValidation,
   placementController.getResult
+);
+
+// Admin: Get question bank statistics
+router.get(
+  '/admin/placement/question-bank/stats',
+  authMiddleware,
+  authorizeRole('admin'),
+  async (req, res, next) => {
+    try {
+      const stats = await placementQuestionGenerator.getBankStatistics();
+      res.json({
+        success: true,
+        data: stats,
+      });
+    } catch (err) {
+      logger.error('PLACEMENT_STATS_ERROR', { error: err.message });
+      next(err);
+    }
+  }
+);
+
+// Admin: Trigger batch generation manually
+router.post(
+  '/admin/placement/question-bank/generate',
+  authMiddleware,
+  authorizeRole('admin'),
+  async (req, res, next) => {
+    try {
+      const results = await placementQuestionCron.runNow();
+      res.json({
+        success: true,
+        data: results,
+      });
+    } catch (err) {
+      logger.error('PLACEMENT_MANUAL_GENERATE_ERROR', { error: err.message });
+      next(err);
+    }
+  }
 );
 
 module.exports = router;

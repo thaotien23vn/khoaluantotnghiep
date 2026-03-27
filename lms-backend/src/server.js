@@ -7,6 +7,7 @@ const emailService = require('./services/email.service');
 const http = require('http');
 const { initSocket } = require('./socket');
 const notificationCron = require('./modules/notification/notification.cron');
+const placementQuestionCron = require('./modules/placement/placementQuestion.cron');
 require('./modules/notification/notification.worker');
 require('./services/courseGeneration.worker'); // Khởi động course generation worker
 
@@ -88,6 +89,9 @@ const validateEnv = () => {
       
       // Start notification scheduler cron jobs
       notificationCron.start();
+      
+      // Start placement question pre-generation cron
+      placementQuestionCron.start();
     });
   } catch (error) {
     console.error('✗ Lỗi khởi động server:', error.message);
