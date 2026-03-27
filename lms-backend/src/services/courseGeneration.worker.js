@@ -190,8 +190,8 @@ if (!isTest) {
                 });
               }
 
-              // Delay between lectures to avoid rate limiting
-              await new Promise((resolve) => setTimeout(resolve, 2000));
+              // Delay between lectures to avoid rate limiting (Gemini: ~2 req/min for free tier)
+              await new Promise((resolve) => setTimeout(resolve, 8000));
             }
 
             results.success.push(chapter.id);
@@ -207,7 +207,7 @@ if (!isTest) {
           }
 
           // Delay between chapters
-          await new Promise((resolve) => setTimeout(resolve, 3000));
+          await new Promise((resolve) => setTimeout(resolve, 5000));
         }
 
         // Update course status based on results
