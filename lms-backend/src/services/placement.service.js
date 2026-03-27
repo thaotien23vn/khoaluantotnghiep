@@ -1,5 +1,5 @@
 const db = require('../models');
-const aiGateway = require('../modules/ai/ai.gateway');
+const aiGateway = require('./aiGateway.service');
 const placementAiRecommendations = require('./placementAiRecommendations.service');
 const logger = require('../utils/logger');
 
