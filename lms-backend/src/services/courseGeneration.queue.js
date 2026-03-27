@@ -39,10 +39,10 @@ if (!isTest) {
     defaultJobOptions: {
       removeOnComplete: 50,
       removeOnFail: 25,
-      attempts: 3,
+      attempts: 1, // Không retry job level - để worker xử lý retry
       backoff: {
-        type: 'exponential',
-        delay: 10000, // 10s cho AI generation
+        type: 'fixed',
+        delay: 5000,
       },
     },
   });
