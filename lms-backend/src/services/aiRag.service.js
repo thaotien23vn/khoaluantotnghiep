@@ -59,14 +59,14 @@ async function buildLectureSourceText(lectureId, options = {}) {
   const parts = [];
   parts.push(`Course: ${course?.title || ''}`);
   if (course?.description) parts.push(`Course description: ${course.description}`);
-  parts.push(`Chapter: ${lecture.chapter.title || ''}`);
+  parts.push(`Chapter: ${lecture.Chapter.title || ''}`);
   parts.push(`Lecture: ${lecture.title || ''}`);
   if (lecture.aiNotes) parts.push(`Lecture notes: ${lecture.aiNotes}`);
 
   return {
-    courseId: Number(lecture.chapter.courseId),
+    courseId: Number(lecture.Chapter.courseId),
     lectureId: Number(lecture.id),
-    chapterId: Number(lecture.chapter.id),
+    chapterId: Number(lecture.Chapter.id),
     text: normalizeText(parts.join('\n')),
   };
 }

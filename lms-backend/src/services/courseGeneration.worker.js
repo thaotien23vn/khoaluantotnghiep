@@ -1,5 +1,6 @@
 const { Worker } = require('bullmq');
 const Redis = require('ioredis');
+const { Op } = require('sequelize');
 const aiContent = require('./aiContent.service');
 const aiRag = require('./aiRag.service');
 const db = require('../models');
@@ -216,7 +217,7 @@ if (!isTest) {
           where: { courseId },
           include: [{
             model: Lecture,
-            where: { content: { [db.Sequelize.Op.ne]: null } },
+            where: { content: { [Op.ne]: null } },
             required: true,
           }],
         });
