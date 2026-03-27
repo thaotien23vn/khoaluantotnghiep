@@ -109,18 +109,48 @@ if (!isTest) {
                   continue;
                 }
 
-                // Generate lecture content using AI
-                const contentResult = await aiContent.generateLectureContent(
-                  courseId,
-                  chapter.id,
-                  {
-                    title: lecture.title,
-                    outline: lecture.description || '',
-                    targetAudience: options.targetAudience || 'general',
-                    difficulty: options.difficulty || 'intermediate',
-                    estimatedDuration: lecture.estimatedDuration || 45,
+                // Generate lecture content using AI with retry for rate limiting
+                let contentResult;
+                let retries = 0;
+                const maxRetries = 3;
+                
+                while (retries < maxRetries) {
+                  try {
+                    contentResult = await aiContent.generateLectureContent(
+                      courseId,
+                      chapter.id,
+                      {
+                        title: lecture.title,
+                        outline: lecture.description || '',
+                        targetAudience: options.targetAudience || 'general',
+                        difficulty: options.difficulty || 'intermediate',
+                        estimatedDuration: lecture.estimatedDuration || 45,
+                      }
+                    );
+                    break; // Success, exit retry loop
+                  } catch (aiError) {
+                    // Check if it's a rate limit error (429)
+                    if (aiError.message?.includes('429') || aiError.statusCode === 429) {
+                      retries++;
+                      if (retries >= maxRetries) {
+                        throw aiError; // Max retries reached
+                      }
+                      
+                      // Exponential backoff: 60s, 120s, 240s
+                      const delayMs = 60000 * Math.pow(2, retries - 1);
+                      logger.warn('RATE_LIMIT_HIT_RETRYING', {
+                        lectureId: lecture.id,
+                        retry: retries,
+                        maxRetries,
+                        delaySeconds: delayMs / 1000,
+                      });
+                      
+                      await new Promise((resolve) => setTimeout(resolve, delayMs));
+                    } else {
+                      throw aiError; // Not a rate limit error
+                    }
                   }
-                );
+                }
 
                 // Update lecture with generated content
                 await lecture.update({
