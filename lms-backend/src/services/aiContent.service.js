@@ -1145,12 +1145,32 @@ Lưu ý:
 - Chapter cuối: Nâng cao và tổng kết
 - Tên lecture phải cụ thể và hấp dẫn`;
 
-      const aiResponse = await aiGateway.generateText({
-        system: systemPrompt,
-        prompt,
-        maxOutputTokens: 8192,
-        timeoutMs: 120000, // 120s cho outline lớn
-      });
+      let aiResponse;
+      let retries = 0;
+      const maxRetries = 3;
+      
+      while (retries < maxRetries) {
+        try {
+          aiResponse = await aiGateway.generateText({
+            system: systemPrompt,
+            prompt,
+            maxOutputTokens: 8192,
+            timeoutMs: 180000, // 180s cho outline phức tạp
+          });
+          break; // Success
+        } catch (aiError) {
+          if (aiError.message?.includes('429') || aiError.statusCode === 429) {
+            retries++;
+            if (retries >= maxRetries) throw aiError;
+            
+            const delayMs = 60000 * Math.pow(2, retries - 1); // 60s, 120s
+            logger.warn('OUTLINE_RATE_LIMIT_RETRY', { retry: retries, delaySeconds: delayMs / 1000 });
+            await new Promise((resolve) => setTimeout(resolve, delayMs));
+          } else {
+            throw aiError;
+          }
+        }
+      }
 
       let outline;
       try {
