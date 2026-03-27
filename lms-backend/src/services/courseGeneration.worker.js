@@ -211,25 +211,28 @@ if (!isTest) {
         }
 
         // Update course status based on results
-        // Check if ALL chapters in the course have content, not just the ones in this job
-        const totalChapters = await Chapter.count({ where: { courseId } });
-        const chaptersWithContent = await Chapter.count({
-          where: { courseId },
-          include: [{
-            model: Lecture,
-            where: { content: { [Op.ne]: null } },
-            required: true,
-          }],
+        // Check if ALL lectures of ALL chapters have content
+        const totalLectures = await Lecture.count({
+          where: { '$Chapter.courseId$': courseId },
+          include: [{ model: Chapter, attributes: [], required: true }],
         });
         
-        const allChaptersHaveContent = chaptersWithContent >= totalChapters;
+        const lecturesWithContent = await Lecture.count({
+          where: { 
+            content: { [Op.ne]: null },
+            '$Chapter.courseId$': courseId,
+          },
+          include: [{ model: Chapter, attributes: [], required: true }],
+        });
+        
+        const allContentGenerated = lecturesWithContent >= totalLectures && totalLectures > 0;
         const currentBatchSuccessful = results.failed.length === 0;
         
         let newStatus;
-        if (allChaptersHaveContent && currentBatchSuccessful) {
+        if (allContentGenerated && currentBatchSuccessful) {
           newStatus = 'completed';
         } else if (currentBatchSuccessful) {
-          newStatus = 'generating_content'; // Still have chapters to generate
+          newStatus = 'generating_content'; // Still have content to generate
         } else {
           newStatus = 'failed';
         }
