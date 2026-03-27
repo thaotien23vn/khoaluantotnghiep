@@ -766,13 +766,22 @@ Yêu cầu:
    * @returns {Object} eligibility info
    */
   async checkRetakeEligibility(userId) {
+    logger.info('RETAKE_ELIGIBILITY_START', { userId });
+    
     const lastCompletedSession = await PlacementSession.findOne({
       where: {
         userId,
         status: 'completed',
       },
       order: [['completedAt', 'DESC']],
+      // Add timeout to prevent hanging
+      benchmark: true,
+      logging: (sql, timing) => {
+        logger.info('RETAKE_ELIGIBILITY_QUERY', { timing, sql: sql.substring(0, 100) });
+      },
     });
+
+    logger.info('RETAKE_ELIGIBILITY_QUERY_DONE', { userId, hasSession: !!lastCompletedSession });
 
     if (!lastCompletedSession) {
       return {
@@ -794,6 +803,8 @@ Yêu cầu:
       ? null 
       : new Date(lastTestDate.getTime() + RETAKE_COOLDOWN_DAYS * 24 * 60 * 60 * 1000);
 
+    logger.info('RETAKE_ELIGIBILITY_RESULT', { userId, canRetake });
+    
     return {
       canRetake,
       message: canRetake 
@@ -802,11 +813,11 @@ Yêu cầu:
       lastTestDate,
       daysRemaining,
       nextRetakeDate,
-      lastResult: {
+      lastResult: lastCompletedSession ? {
         level: lastCompletedSession.finalCefrLevel,
         accuracy: lastCompletedSession.correctCount / lastCompletedSession.questionCount,
         isQuickCheck: lastCompletedSession.isQuickCheck,
-      },
+      } : null,
     };
   }
 
