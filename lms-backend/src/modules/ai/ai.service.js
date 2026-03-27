@@ -194,6 +194,7 @@ class AiService {
       system,
       prompt,
       maxOutputTokens: Number(policy.maxOutputTokens) || Number(process.env.AI_MAX_OUTPUT_TOKENS || 1024) || 1024,
+      timeoutMs: 60000,
     });
 
     await AiMessage.create({ conversationId: convId, sender: 'ai', content: aiRes.text, tokenUsage: null });
