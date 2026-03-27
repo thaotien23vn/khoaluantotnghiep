@@ -1,6 +1,6 @@
 const cron = require('node-cron');
 const placementQuestionGenerator = require('../../services/placementQuestionGenerator.service');
-const logger = require('../utils/logger');
+const logger = require('../../utils/logger');
 
 /**
  * Cron job to pre-generate placement test questions nightly
