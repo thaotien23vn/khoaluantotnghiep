@@ -21,12 +21,27 @@ const MAX_QUESTIONS = 20;     // Max questions per test
 const QUICK_CHECK_QUESTIONS = 7;  // Quick check has max 7 questions
 const MIN_QUESTIONS = 8;      // Min questions before early stop
 const CONFIDENCE_THRESHOLD = 0.85; // Stop when confident enough
+const RETAKE_COOLDOWN_DAYS = 30;   // Days before can retake
 
 class PlacementService {
   /**
    * Start a new placement test session
    */
-  async startSession({ userId, targetCourseId, selfAssessedLevel, isQuickCheck = false }) {
+  async startSession({ userId, targetCourseId, selfAssessedLevel, isQuickCheck = false, isRetake = false }) {
+    // Check retake eligibility if userId provided
+    if (userId && !isQuickCheck) {
+      const eligibility = await this.checkRetakeEligibility(userId);
+      if (!eligibility.canRetake && eligibility.lastTestDate) {
+        throw {
+          status: 403,
+          message: `Bạn cần chờ thêm ${eligibility.daysRemaining} ngày nữa để làm lại placement test.`,
+          code: 'RETAKE_NOT_ALLOWED',
+          daysRemaining: eligibility.daysRemaining,
+          nextRetakeDate: eligibility.nextRetakeDate,
+        };
+      }
+    }
+
     // Get target course info if provided
     let startingLevel = 'B1'; // Default
     
@@ -45,6 +60,25 @@ class PlacementService {
       startingLevel = selfAssessedLevel;
     }
 
+    // Get previous session info if retake
+    let previousSessionId = null;
+    let retakeCount = 0;
+    
+    if (isRetake && userId) {
+      const lastSession = await PlacementSession.findOne({
+        where: {
+          userId,
+          status: 'completed',
+        },
+        order: [['completedAt', 'DESC']],
+      });
+      
+      if (lastSession) {
+        previousSessionId = lastSession.id;
+        retakeCount = (lastSession.retakeCount || 0) + 1;
+      }
+    }
+
     const session = await PlacementSession.create({
       userId,
       targetCourseId,
@@ -52,6 +86,9 @@ class PlacementService {
       currentCefrLevel: startingLevel,
       status: 'in_progress',
       isQuickCheck: isQuickCheck || false,
+      isRetake: isRetake || false,
+      previousSessionId,
+      retakeCount,
     });
 
     logger.info('PLACEMENT_SESSION_STARTED', {
@@ -719,6 +756,125 @@ Yêu cầu:
       correctCount: session.correctCount,
       accuracy: session.questionCount > 0 ? (session.correctCount / session.questionCount) : 0,
     };
+  }
+
+  // ==================== RETAKE & HISTORY ====================
+
+  /**
+   * Check if user is eligible to retake placement test
+   * @param {number} userId 
+   * @returns {Object} eligibility info
+   */
+  async checkRetakeEligibility(userId) {
+    const lastCompletedSession = await PlacementSession.findOne({
+      where: {
+        userId,
+        status: 'completed',
+      },
+      order: [['completedAt', 'DESC']],
+    });
+
+    if (!lastCompletedSession) {
+      return {
+        canRetake: true,
+        message: 'Bạn chưa từng làm placement test.',
+        lastTestDate: null,
+        daysRemaining: 0,
+        nextRetakeDate: null,
+      };
+    }
+
+    const lastTestDate = new Date(lastCompletedSession.completedAt);
+    const now = new Date();
+    const daysSinceLastTest = Math.floor((now - lastTestDate) / (1000 * 60 * 60 * 24));
+    const daysRemaining = Math.max(0, RETAKE_COOLDOWN_DAYS - daysSinceLastTest);
+    const canRetake = daysRemaining === 0;
+
+    const nextRetakeDate = canRetake 
+      ? null 
+      : new Date(lastTestDate.getTime() + RETAKE_COOLDOWN_DAYS * 24 * 60 * 60 * 1000);
+
+    return {
+      canRetake,
+      message: canRetake 
+        ? 'Bạn có thể làm lại placement test.'
+        : `Bạn cần chờ thêm ${daysRemaining} ngày nữa để làm lại test.`,
+      lastTestDate,
+      daysRemaining,
+      nextRetakeDate,
+      lastResult: {
+        level: lastCompletedSession.finalCefrLevel,
+        accuracy: lastCompletedSession.correctCount / lastCompletedSession.questionCount,
+        isQuickCheck: lastCompletedSession.isQuickCheck,
+      },
+    };
+  }
+
+  /**
+   * Get user's placement test history
+   * @param {number} userId 
+   * @param {Object} options 
+   * @returns {Array} placement history
+   */
+  async getUserPlacementHistory(userId, options = {}) {
+    const { limit = 10, includeDetails = false } = options;
+
+    const sessions = await PlacementSession.findAll({
+      where: {
+        userId,
+        status: 'completed',
+      },
+      include: includeDetails ? [
+        {
+          model: PlacementResponse,
+          as: 'responses',
+          include: [{
+            model: PlacementQuestion,
+            as: 'question',
+            attributes: ['skillType', 'cefrLevel', 'questionText'],
+          }],
+        },
+      ] : [],
+      order: [['completedAt', 'DESC']],
+      limit,
+    });
+
+    return sessions.map(session => ({
+      id: session.id,
+      finalLevel: session.finalCefrLevel,
+      confidence: session.confidenceScore,
+      accuracy: session.questionCount > 0 
+        ? (session.correctCount / session.questionCount) 
+        : 0,
+      questionCount: session.questionCount,
+      isQuickCheck: session.isQuickCheck,
+      isRetake: session.isRetake,
+      retakeCount: session.retakeCount,
+      completedAt: session.completedAt,
+      createdAt: session.createdAt,
+      responses: includeDetails ? session.responses?.map(r => ({
+        skillType: r.question?.skillType,
+        cefrLevel: r.question?.cefrLevel,
+        isCorrect: r.isCorrect,
+        timeSpent: r.timeSpentSeconds,
+      })) : undefined,
+    }));
+  }
+
+  /**
+   * Get retake count for user
+   * @param {number} userId 
+   * @returns {number} retake count
+   */
+  async getRetakeCount(userId) {
+    const count = await PlacementSession.count({
+      where: {
+        userId,
+        status: 'completed',
+        isRetake: true,
+      },
+    });
+    return count;
   }
 }
 

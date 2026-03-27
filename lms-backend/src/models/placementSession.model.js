@@ -81,6 +81,24 @@ module.exports = (sequelize) => {
         defaultValue: DataTypes.NOW,
         field: "last_activity_at",
       },
+      isRetake: {
+        type: DataTypes.BOOLEAN,
+        defaultValue: false,
+        field: "is_retake",
+        comment: "Whether this is a retake session",
+      },
+      previousSessionId: {
+        type: DataTypes.INTEGER.UNSIGNED,
+        allowNull: true,
+        field: "previous_session_id",
+        comment: "Link to previous session if retake",
+      },
+      retakeCount: {
+        type: DataTypes.INTEGER,
+        defaultValue: 0,
+        field: "retake_count",
+        comment: "Number of times user has retaken",
+      },
     },
     {
       tableName: "placement_sessions",

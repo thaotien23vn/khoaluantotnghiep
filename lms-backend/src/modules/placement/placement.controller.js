@@ -176,6 +176,50 @@ class PlacementController {
       next(err);
     }
   }
+
+  /**
+   * Check if user is eligible to retake placement test
+   */
+  async checkRetakeEligibility(req, res, next) {
+    try {
+      const userId = req.user?.id;
+      const eligibility = await placementService.checkRetakeEligibility(userId);
+      
+      res.json({
+        success: true,
+        data: eligibility,
+      });
+    } catch (err) {
+      logger.error('PLACEMENT_RETAKE_CHECK_ERROR', { error: err.message });
+      next(err);
+    }
+  }
+
+  /**
+   * Get user's placement test history
+   */
+  async getUserPlacementHistory(req, res, next) {
+    try {
+      const userId = req.user?.id;
+      const { limit = 10, includeDetails = false } = req.query;
+      
+      const history = await placementService.getUserPlacementHistory(userId, {
+        limit: parseInt(limit),
+        includeDetails: includeDetails === 'true',
+      });
+      
+      res.json({
+        success: true,
+        data: {
+          history,
+          count: history.length,
+        },
+      });
+    } catch (err) {
+      logger.error('PLACEMENT_HISTORY_ERROR', { error: err.message });
+      next(err);
+    }
+  }
 }
 
 module.exports = new PlacementController();

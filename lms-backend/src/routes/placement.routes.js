@@ -203,12 +203,4 @@ router.get(
   placementAnalyticsController.getTrends
 );
 
-// Student: Get own placement history
-router.get(
-  '/student/placement/history',
-  authMiddleware,
-  authorizeRole('student', 'admin'),
-  placementAnalyticsController.getUserHistory
-);
-
 module.exports = router;
