@@ -149,11 +149,12 @@ class PlacementController {
       const { targetCourseId } = req.body;
       const userId = req.user?.id || null;
 
-      // Create a temporary quick check session
+      // Create a quick check session with 7 questions max
       const session = await placementService.startSession({
         userId,
         targetCourseId,
         selfAssessedLevel: 'unknown',
+        isQuickCheck: true,
       });
 
       // Get first question immediately
@@ -164,8 +165,10 @@ class PlacementController {
         data: {
           sessionId: session.id,
           isQuickCheck: true,
+          totalQuestions: 7,
+          currentQuestion: 1,
           question: question.completed ? null : question,
-          message: 'Quick check: 2-3 câu để ước tính trình độ',
+          message: 'Quick check: 7 câu để ước tính trình độ',
         },
       });
     } catch (err) {

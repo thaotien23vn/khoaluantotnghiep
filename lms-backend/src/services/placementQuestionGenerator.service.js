@@ -11,8 +11,8 @@ const SKILL_TYPES = ['grammar', 'vocabulary', 'reading'];
 // Target: 100 questions per level-skill combination
 const TARGET_QUESTIONS_PER_COMBO = 100;
 const MIN_QUESTIONS_THRESHOLD = 50; // Generate if below this
-const BATCH_SIZE = 5; // Generate 5 at a time per batch to avoid rate limits
-const DELAY_BETWEEN_BATCHES_MS = 8000; // 8s delay between batches
+const BATCH_SIZE = 3; // Generate 3 at a time to be safer with rate limits
+const DELAY_BETWEEN_BATCHES_MS = 10000; // 10s delay between batches
 
 class PlacementQuestionGenerator {
   /**

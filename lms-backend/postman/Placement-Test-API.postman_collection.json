@@ -1,0 +1,350 @@
+{
+  "info": {
+    "name": "Placement Test API",
+    "description": "API collection for adaptive placement test with analytics",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "item": [
+    {
+      "name": "1. Start Test",
+      "item": [
+        {
+          "name": "Start Placement Test (with target course)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{accessToken}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"targetCourseId\": 1,\n  \"selfAssessedLevel\": \"B1\"\n}"
+            },
+            "url": "{{baseUrl}}/api/student/placement/start"
+          }
+        },
+        {
+          "name": "Start Test (unknown level)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{accessToken}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"selfAssessedLevel\": \"unknown\"\n}"
+            },
+            "url": "{{baseUrl}}/api/student/placement/start"
+          }
+        }
+      ]
+    },
+    {
+      "name": "2. Quick Check (7 questions)",
+      "item": [
+        {
+          "name": "Quick Check Start",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{accessToken}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"targetCourseId\": 1\n}"
+            },
+            "url": "{{baseUrl}}/api/student/placement/quick-check"
+          }
+        },
+        {
+          "name": "Get Quick Check Question (2-7)",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{accessToken}}"
+              }
+            ],
+            "url": "{{baseUrl}}/api/student/placement/{{sessionId}}/question"
+          }
+        },
+        {
+          "name": "Submit Quick Check Answer",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{accessToken}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"questionId\": {{questionId}},\n  \"answer\": \"B\",\n  \"timeSpentSeconds\": 15\n}"
+            },
+            "url": "{{baseUrl}}/api/student/placement/{{sessionId}}/answer"
+          }
+        },
+        {
+          "name": "Complete Quick Check",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{accessToken}}"
+              }
+            ],
+            "url": "{{baseUrl}}/api/student/placement/{{sessionId}}/complete"
+          }
+        }
+      ]
+    },
+    {
+      "name": "3. Full Test (8-20 questions)",
+      "item": [
+        {
+          "name": "Get Next Question",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{accessToken}}"
+              }
+            ],
+            "url": "{{baseUrl}}/api/student/placement/{{sessionId}}/question"
+          }
+        },
+        {
+          "name": "Submit Answer",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{accessToken}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"questionId\": {{questionId}},\n  \"answer\": \"B\",\n  \"timeSpentSeconds\": 20\n}"
+            },
+            "url": "{{baseUrl}}/api/student/placement/{{sessionId}}/answer"
+          }
+        },
+        {
+          "name": "Complete Test Early",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{accessToken}}"
+              }
+            ],
+            "url": "{{baseUrl}}/api/student/placement/{{sessionId}}/complete"
+          }
+        },
+        {
+          "name": "Get Test Result",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{accessToken}}"
+              }
+            ],
+            "url": "{{baseUrl}}/api/student/placement/{{sessionId}}/result"
+          }
+        }
+      ]
+    },
+    {
+      "name": "4. User History",
+      "item": [
+        {
+          "name": "Get My Placement History",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{accessToken}}"
+              }
+            ],
+            "url": "{{baseUrl}}/api/student/placement/history"
+          }
+        }
+      ]
+    },
+    {
+      "name": "5. Admin Analytics",
+      "item": [
+        {
+          "name": "Dashboard Report",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{adminToken}}"
+              }
+            ],
+            "url": "{{baseUrl}}/api/admin/placement/analytics/dashboard?startDate=2024-01-01&endDate=2024-12-31"
+          }
+        },
+        {
+          "name": "Overall Stats",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{adminToken}}"
+              }
+            ],
+            "url": "{{baseUrl}}/api/admin/placement/analytics/stats"
+          }
+        },
+        {
+          "name": "Level Distribution",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{adminToken}}"
+              }
+            ],
+            "url": "{{baseUrl}}/api/admin/placement/analytics/levels"
+          }
+        },
+        {
+          "name": "Skill Performance",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{adminToken}}"
+              }
+            ],
+            "url": "{{baseUrl}}/api/admin/placement/analytics/skill-performance"
+          }
+        },
+        {
+          "name": "Difficult Questions",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{adminToken}}"
+              }
+            ],
+            "url": "{{baseUrl}}/api/admin/placement/analytics/difficult-questions?limit=10"
+          }
+        },
+        {
+          "name": "Question Bank Stats",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{adminToken}}"
+              }
+            ],
+            "url": "{{baseUrl}}/api/admin/placement/analytics/question-bank"
+          }
+        },
+        {
+          "name": "Completion Trends",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{adminToken}}"
+              }
+            ],
+            "url": "{{baseUrl}}/api/admin/placement/analytics/trends?days=30"
+          }
+        }
+      ]
+    },
+    {
+      "name": "6. Admin Management",
+      "item": [
+        {
+          "name": "Question Bank Stats",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{adminToken}}"
+              }
+            ],
+            "url": "{{baseUrl}}/api/admin/placement/question-bank/stats"
+          }
+        },
+        {
+          "name": "Generate Questions Manually",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{adminToken}}"
+              }
+            ],
+            "url": "{{baseUrl}}/api/admin/placement/question-bank/generate"
+          }
+        }
+      ]
+    }
+  ],
+  "variable": [
+    {
+      "key": "baseUrl",
+      "value": "http://localhost:5000",
+      "type": "string"
+    },
+    {
+      "key": "accessToken",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "adminToken",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "sessionId",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "questionId",
+      "value": "",
+      "type": "string"
+    }
+  ]
+}

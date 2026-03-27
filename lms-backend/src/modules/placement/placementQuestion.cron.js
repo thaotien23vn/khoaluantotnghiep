@@ -9,13 +9,25 @@ const logger = require('../../utils/logger');
 class PlacementQuestionCron {
   constructor() {
     this.task = null;
+    this.warmupTask = null;
   }
 
   /**
-   * Start the cron job
+   * Start the cron jobs
    */
   start() {
-    // Run at 2:00 AM daily
+    // Warm-up job at 1:55 AM to keep Render server awake
+    this.warmupTask = cron.schedule('55 1 * * *', async () => {
+      logger.info('PLACEMENT_CRON_WARMUP', { 
+        time: new Date().toISOString(),
+        message: 'Warming up server for 2AM generation job'
+      });
+    }, {
+      scheduled: true,
+      timezone: 'Asia/Ho_Chi_Minh',
+    });
+
+    // Main job at 2:00 AM daily
     this.task = cron.schedule('0 2 * * *', async () => {
       logger.info('PLACEMENT_CRON_START', { 
         time: new Date().toISOString(),
@@ -35,23 +47,27 @@ class PlacementQuestionCron {
       }
     }, {
       scheduled: true,
-      timezone: 'Asia/Ho_Chi_Minh', // Vietnam timezone
+      timezone: 'Asia/Ho_Chi_Minh',
     });
 
     logger.info('PLACEMENT_CRON_SCHEDULED', { 
-      schedule: '0 2 * * *',
+      warmupSchedule: '55 1 * * *',
+      mainSchedule: '0 2 * * *',
       timezone: 'Asia/Ho_Chi_Minh'
     });
   }
 
   /**
-   * Stop the cron job
+   * Stop the cron jobs
    */
   stop() {
+    if (this.warmupTask) {
+      this.warmupTask.stop();
+    }
     if (this.task) {
       this.task.stop();
-      logger.info('PLACEMENT_CRON_STOPPED');
     }
+    logger.info('PLACEMENT_CRON_STOPPED');
   }
 
   /**

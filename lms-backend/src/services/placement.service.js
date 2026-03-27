@@ -1,13 +1,14 @@
 const db = require('../models');
+const aiGateway = require('../modules/ai/ai.gateway');
+const placementAiRecommendations = require('./placementAiRecommendations.service');
 const logger = require('../utils/logger');
-const aiGateway = require('./aiGateway.service');
 
 const {
   PlacementSession,
   PlacementQuestion,
   PlacementResponse,
-  PlacementQuestionBank,
   Course,
+  PlacementQuestionBank,
 } = db.models;
 
 // CEFR levels in order
@@ -17,6 +18,7 @@ const CEFR_LEVELS = ['A1', 'A2', 'B1', 'B2', 'C1', 'C2'];
 const LEVEL_UP_STREAK = 2;    // 2 correct -> level up
 const LEVEL_DOWN_STREAK = 3;  // 3 wrong -> level down
 const MAX_QUESTIONS = 20;     // Max questions per test
+const QUICK_CHECK_QUESTIONS = 7;  // Quick check has max 7 questions
 const MIN_QUESTIONS = 8;      // Min questions before early stop
 const CONFIDENCE_THRESHOLD = 0.85; // Stop when confident enough
 
@@ -24,7 +26,7 @@ class PlacementService {
   /**
    * Start a new placement test session
    */
-  async startSession({ userId, targetCourseId, selfAssessedLevel }) {
+  async startSession({ userId, targetCourseId, selfAssessedLevel, isQuickCheck = false }) {
     // Get target course info if provided
     let startingLevel = 'B1'; // Default
     
@@ -49,6 +51,7 @@ class PlacementService {
       selfAssessedLevel: selfAssessedLevel || 'unknown',
       currentCefrLevel: startingLevel,
       status: 'in_progress',
+      isQuickCheck: isQuickCheck || false,
     });
 
     logger.info('PLACEMENT_SESSION_STARTED', {
@@ -234,8 +237,16 @@ class PlacementService {
       completedAt: new Date(),
     });
 
-    // Generate recommendations
+    // Generate AI-powered recommendations
+    const aiRecommendations = await placementAiRecommendations.generatePlacementRecommendations(
+      session,
+      skillBreakdown,
+      finalLevel
+    );
+
+    // Combine both rule-based and AI recommendations
     const recommendations = await this.generateRecommendations(session, finalLevel);
+    recommendations.aiInsights = aiRecommendations;
 
     logger.info('PLACEMENT_SESSION_COMPLETED', {
       sessionId,
@@ -286,6 +297,7 @@ class PlacementService {
       accuracy: session.questionCount > 0 ? (session.correctCount / session.questionCount) : 0,
       skillBreakdown,
       recommendations: await this.generateRecommendations(session, session.finalCefrLevel),
+      aiRecommendations: result.aiInsights,
       completedAt: session.completedAt,
     };
   }
@@ -322,7 +334,13 @@ class PlacementService {
   }
 
   shouldStopTest(session) {
-    // Stop conditions:
+    // Quick check: always stop at exactly QUICK_CHECK_QUESTIONS (7)
+    if (session.isQuickCheck) {
+      if (session.questionCount >= QUICK_CHECK_QUESTIONS) return true;
+      return false; // Never early stop quick check
+    }
+
+    // Stop conditions for full test:
     // 1. Max questions reached
     if (session.questionCount >= MAX_QUESTIONS) return true;
     
@@ -693,9 +711,10 @@ Yêu cầu:
   }
 
   getProgress(session) {
+    const totalQuestions = session.isQuickCheck ? QUICK_CHECK_QUESTIONS : MAX_QUESTIONS;
     return {
       currentQuestion: session.questionCount,
-      totalQuestions: MAX_QUESTIONS,
+      totalQuestions,
       currentLevel: session.currentCefrLevel,
       correctCount: session.correctCount,
       accuracy: session.questionCount > 0 ? (session.correctCount / session.questionCount) : 0,
