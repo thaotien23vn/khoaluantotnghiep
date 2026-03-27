@@ -1,5 +1,5 @@
 const cron = require('node-cron');
-const placementQuestionGenerator = require('../services/placementQuestionGenerator.service');
+const placementQuestionGenerator = require('../../services/placementQuestionGenerator.service');
 const logger = require('../utils/logger');
 
 /**
