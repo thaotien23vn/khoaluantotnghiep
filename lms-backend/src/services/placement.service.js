@@ -773,7 +773,7 @@ Yêu cầu:
       where: {
         userId,
       },
-      order: [['createdAt', 'DESC']],
+      order: [['created_at', 'DESC']],
     });
 
     logger.info('RETAKE_ELIGIBILITY_QUERY_DONE', { userId, hasSession: !!lastSession, status: lastSession?.status });
