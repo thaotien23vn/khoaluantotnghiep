@@ -105,6 +105,22 @@ router.get(
   placementController.getResult
 );
 
+// Check retake eligibility
+router.get(
+  '/student/placement/retake-eligibility',
+  authMiddleware,
+  authorizeRole('student', 'admin'),
+  placementController.checkRetakeEligibility
+);
+
+// Get placement history
+router.get(
+  '/student/placement/history',
+  authMiddleware,
+  authorizeRole('student', 'admin'),
+  placementController.getUserPlacementHistory
+);
+
 // Admin: Get question bank statistics
 router.get(
   '/admin/placement/question-bank/stats',
