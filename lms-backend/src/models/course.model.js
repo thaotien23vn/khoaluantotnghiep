@@ -24,9 +24,9 @@ module.exports = (sequelize) => {
       allowNull: true,
     },
     level: {
-      type: DataTypes.STRING,
+      type: DataTypes.ENUM('beginner', 'elementary', 'intermediate', 'upper-intermediate', 'advanced', 'proficiency', 'all-levels'),
       allowNull: true,
-      defaultValue: 'Mọi cấp độ',
+      defaultValue: 'all-levels',
     },
     category: {
       type: DataTypes.STRING,
