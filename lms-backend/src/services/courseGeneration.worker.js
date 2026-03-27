@@ -79,6 +79,35 @@ if (!isTest) {
             // Generate content for each lecture
             for (const lecture of lectures) {
               try {
+                // Skip if lecture already has content and skipExistingContent is true
+                if (options.skipExistingContent && lecture.content) {
+                  logger.info('LECTURE_CONTENT_SKIPPED', {
+                    lectureId: lecture.id,
+                    chapterId: chapter.id,
+                    reason: 'Content already exists',
+                  });
+                  
+                  // Still try to RAG ingest in case it failed before
+                  try {
+                    await aiRag.ingestLecture(lecture.id, {
+                      title: lecture.title,
+                      chapterId: chapter.id,
+                      courseId,
+                    });
+                    logger.info('LECTURE_INGESTED_TO_RAG', {
+                      lectureId: lecture.id,
+                      chapterId: chapter.id,
+                      courseId,
+                    });
+                  } catch (ragError) {
+                    logger.warn('RAG_INGEST_FAILED', {
+                      lectureId: lecture.id,
+                      error: ragError.message,
+                    });
+                  }
+                  continue;
+                }
+
                 // Generate lecture content using AI
                 const contentResult = await aiContent.generateLectureContent(
                   courseId,
