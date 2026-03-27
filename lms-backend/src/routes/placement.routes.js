@@ -3,7 +3,7 @@ const authMiddleware = require('../middlewares/auth');
 const authorizeRole = require('../middlewares/authorize');
 const { body, param } = require('express-validator');
 const placementController = require('../modules/placement/placement.controller');
-const placementQuestionGenerator = require('../services/placementQuestionGenerator.service');
+const placementAnalyticsController = require('../modules/placement/placementAnalytics.controller');
 const placementQuestionCron = require('../modules/placement/placementQuestion.cron');
 const logger = require('../utils/logger');
 
@@ -141,6 +141,74 @@ router.post(
       next(err);
     }
   }
+);
+
+// ====================
+// ANALYTICS ROUTES
+// ====================
+
+// Admin: Get comprehensive dashboard report
+router.get(
+  '/admin/placement/analytics/dashboard',
+  authMiddleware,
+  authorizeRole('admin'),
+  placementAnalyticsController.getDashboard
+);
+
+// Admin: Get overall statistics
+router.get(
+  '/admin/placement/analytics/stats',
+  authMiddleware,
+  authorizeRole('admin'),
+  placementAnalyticsController.getOverallStats
+);
+
+// Admin: Get level distribution
+router.get(
+  '/admin/placement/analytics/levels',
+  authMiddleware,
+  authorizeRole('admin'),
+  placementAnalyticsController.getLevelDistribution
+);
+
+// Admin: Get skill performance
+router.get(
+  '/admin/placement/analytics/skill-performance',
+  authMiddleware,
+  authorizeRole('admin'),
+  placementAnalyticsController.getSkillPerformance
+);
+
+// Admin: Get most difficult questions
+router.get(
+  '/admin/placement/analytics/difficult-questions',
+  authMiddleware,
+  authorizeRole('admin'),
+  placementAnalyticsController.getDifficultQuestions
+);
+
+// Admin: Get question bank usage stats
+router.get(
+  '/admin/placement/analytics/question-bank',
+  authMiddleware,
+  authorizeRole('admin'),
+  placementAnalyticsController.getQuestionBankStats
+);
+
+// Admin: Get completion trends
+router.get(
+  '/admin/placement/analytics/trends',
+  authMiddleware,
+  authorizeRole('admin'),
+  placementAnalyticsController.getTrends
+);
+
+// Student: Get own placement history
+router.get(
+  '/student/placement/history',
+  authMiddleware,
+  authorizeRole('student', 'admin'),
+  placementAnalyticsController.getUserHistory
 );
 
 module.exports = router;
