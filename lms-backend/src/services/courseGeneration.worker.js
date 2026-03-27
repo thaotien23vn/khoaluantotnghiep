@@ -210,10 +210,32 @@ if (!isTest) {
         }
 
         // Update course status based on results
-        const allSuccessful = results.failed.length === 0;
+        // Check if ALL chapters in the course have content, not just the ones in this job
+        const totalChapters = await Chapter.count({ where: { courseId } });
+        const chaptersWithContent = await Chapter.count({
+          where: { courseId },
+          include: [{
+            model: Lecture,
+            where: { content: { [db.Sequelize.Op.ne]: null } },
+            required: true,
+          }],
+        });
+        
+        const allChaptersHaveContent = chaptersWithContent >= totalChapters;
+        const currentBatchSuccessful = results.failed.length === 0;
+        
+        let newStatus;
+        if (allChaptersHaveContent && currentBatchSuccessful) {
+          newStatus = 'completed';
+        } else if (currentBatchSuccessful) {
+          newStatus = 'generating_content'; // Still have chapters to generate
+        } else {
+          newStatus = 'failed';
+        }
+        
         await Course.update(
           {
-            generationStatus: allSuccessful ? 'completed' : 'failed',
+            generationStatus: newStatus,
             aiGenerated: true,
           },
           { where: { id: courseId } }
