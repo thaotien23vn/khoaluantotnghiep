@@ -92,6 +92,7 @@ Format response theo markdown với clear headings.`;
         system: systemPrompt,
         prompt,
         maxOutputTokens: 4096,
+        timeout: 120000, // 120s timeout cho lecture dài
       });
 
       const content = aiResponse.text;
