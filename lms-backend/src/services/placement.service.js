@@ -768,22 +768,18 @@ Yêu cầu:
   async checkRetakeEligibility(userId) {
     logger.info('RETAKE_ELIGIBILITY_START', { userId });
     
-    const lastCompletedSession = await PlacementSession.findOne({
+    // Find any session (in_progress or completed)
+    const lastSession = await PlacementSession.findOne({
       where: {
         userId,
-        status: 'completed',
       },
-      order: [['completedAt', 'DESC']],
-      // Add timeout to prevent hanging
-      benchmark: true,
-      logging: (sql, timing) => {
-        logger.info('RETAKE_ELIGIBILITY_QUERY', { timing, sql: sql.substring(0, 100) });
-      },
+      order: [['createdAt', 'DESC']],
     });
 
-    logger.info('RETAKE_ELIGIBILITY_QUERY_DONE', { userId, hasSession: !!lastCompletedSession });
+    logger.info('RETAKE_ELIGIBILITY_QUERY_DONE', { userId, hasSession: !!lastSession, status: lastSession?.status });
 
-    if (!lastCompletedSession) {
+    // No session at all
+    if (!lastSession) {
       return {
         canRetake: true,
         message: 'Bạn chưa từng làm placement test.',
@@ -793,7 +789,21 @@ Yêu cầu:
       };
     }
 
-    const lastTestDate = new Date(lastCompletedSession.completedAt);
+    // Has in-progress session - should continue, not retake
+    if (lastSession.status === 'in_progress') {
+      return {
+        canRetake: false,
+        message: 'Bạn đang có một bài test chưa hoàn thành. Hãy tiếp tục làm bài đó.',
+        lastTestDate: lastSession.createdAt,
+        daysRemaining: 0,
+        nextRetakeDate: null,
+        hasInProgressSession: true,
+        inProgressSessionId: lastSession.id,
+      };
+    }
+
+    // Calculate cooldown for completed session
+    const lastTestDate = new Date(lastSession.completedAt);
     const now = new Date();
     const daysSinceLastTest = Math.floor((now - lastTestDate) / (1000 * 60 * 60 * 24));
     const daysRemaining = Math.max(0, RETAKE_COOLDOWN_DAYS - daysSinceLastTest);
@@ -803,7 +813,7 @@ Yêu cầu:
       ? null 
       : new Date(lastTestDate.getTime() + RETAKE_COOLDOWN_DAYS * 24 * 60 * 60 * 1000);
 
-    logger.info('RETAKE_ELIGIBILITY_RESULT', { userId, canRetake });
+    logger.info('RETAKE_ELIGIBILITY_RESULT', { userId, canRetake, daysRemaining });
     
     return {
       canRetake,
@@ -813,11 +823,14 @@ Yêu cầu:
       lastTestDate,
       daysRemaining,
       nextRetakeDate,
-      lastResult: lastCompletedSession ? {
-        level: lastCompletedSession.finalCefrLevel,
-        accuracy: lastCompletedSession.correctCount / lastCompletedSession.questionCount,
-        isQuickCheck: lastCompletedSession.isQuickCheck,
-      } : null,
+      hasInProgressSession: false,
+      lastResult: {
+        level: lastSession.finalCefrLevel,
+        accuracy: lastSession.questionCount > 0 
+          ? (lastSession.correctCount / lastSession.questionCount) 
+          : 0,
+        isQuickCheck: lastSession.isQuickCheck,
+      },
     };
   }
 
