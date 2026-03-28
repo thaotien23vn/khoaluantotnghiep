@@ -63,7 +63,7 @@ class LessonChatService {
         {
           model: User,
           as: 'sender',
-          attributes: ['id', 'first_name', 'last_name', 'avatar'],
+          attributes: ['id', 'name', 'avatar'],
         },
         ...(includeReplies ? [{
           model: LessonMessage,
@@ -74,7 +74,7 @@ class LessonChatService {
             {
               model: User,
               as: 'sender',
-              attributes: ['id', 'first_name', 'last_name', 'avatar'],
+              attributes: ['id', 'name', 'avatar'],
             },
           ],
         }] : []),
