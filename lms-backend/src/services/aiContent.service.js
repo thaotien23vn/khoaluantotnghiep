@@ -261,7 +261,8 @@ Trả về danh sách các câu hỏi trong format JSON array.`;
       const aiResponse = await aiGateway.generateText({
         system: systemPrompt,
         prompt,
-        maxOutputTokens: 8192,  // Tăng để xử lý nhiều câu hỏi
+        maxOutputTokens: 8192,
+        timeoutMs: 60000,  // Tăng timeout cho quiz generation
       });
 
       let questions;
