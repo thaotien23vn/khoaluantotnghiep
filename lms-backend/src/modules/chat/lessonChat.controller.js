@@ -1,5 +1,5 @@
-const lessonChatService = require('../services/lessonChat.service');
-const logger = require('../utils/logger');
+const lessonChatService = require('./lessonChat.service');
+const logger = require('../../utils/logger');
 
 /**
  * Lesson Chat Controller
