@@ -416,7 +416,7 @@ Trả lời dựa trên nội dung bài học trên. Nếu không có thông tin
           model: LessonMessage,
           as: 'message',
           include: [
-            { model: User, as: 'sender', attributes: ['id', 'firstName', 'lastName'] },
+            { model: User, as: 'sender', attributes: ['id', 'name', 'avatar'] },
           ],
         },
         {
