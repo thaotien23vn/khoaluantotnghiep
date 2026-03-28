@@ -262,7 +262,7 @@ Trả về danh sách các câu hỏi trong format JSON array.`;
         system: systemPrompt,
         prompt,
         maxOutputTokens: 8192,
-        timeoutMs: 60000,  // Tăng timeout cho quiz generation
+        timeoutMs: 120000,  // 120s - Gemini đang chậm
       });
 
       let questions;
