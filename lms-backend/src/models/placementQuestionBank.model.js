@@ -20,7 +20,7 @@ module.exports = (sequelize) => {
         field: "skill_type",
       },
       questionType: {
-        type: DataTypes.ENUM("multiple_choice", "fill_blank", "matching"),
+        type: DataTypes.ENUM("multiple_choice", "fill_blank", "matching", "listening", "sentence_ordering"),
         defaultValue: "multiple_choice",
         field: "question_type",
       },

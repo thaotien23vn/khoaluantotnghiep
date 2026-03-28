@@ -23,6 +23,8 @@ const MIN_QUESTIONS = 8;      // Min questions before early stop
 const CONFIDENCE_THRESHOLD = 0.85; // Stop when confident enough
 const RETAKE_COOLDOWN_DAYS = 30;   // Days before can retake
 
+const MIN_TIME_PER_QUESTION = 5; // Minimum 5 seconds per question
+
 class PlacementService {
   /**
    * Start a new placement test session
@@ -125,17 +127,24 @@ class PlacementService {
     const currentLevel = session.currentCefrLevel;
     const skillType = this.selectSkillType(session.questionCount);
     
+    // Randomly select question type for variety
+    const questionTypes = ['multiple_choice', 'fill_blank', 'listening', 'sentence_ordering'];
+    const selectedType = questionTypes[Math.floor(Math.random() * questionTypes.length)];
+    
     // Try to get from question bank first (hybrid approach)
-    let question = await this.getFromQuestionBank(currentLevel, skillType);
+    let question = await this.getFromQuestionBank(currentLevel, skillType, selectedType);
     
     // If not in bank or we want fresh AI questions, generate with AI
     if (!question) {
-      question = await this.generateAiQuestion(session, currentLevel, skillType);
+      question = await this.generateAiQuestion(session, currentLevel, skillType, selectedType);
       
       // Save to question bank for future reuse
       await this.saveToQuestionBank(question, currentLevel, skillType);
     }
 
+    // Anti-gaming: Shuffle options so correct answer position varies
+    const shuffledOptions = this.shuffleArray(question.options || []);
+    
     // Create placement question for this session
     const placementQuestion = await PlacementQuestion.create({
       sessionId: session.id,
@@ -144,7 +153,7 @@ class PlacementService {
       skillType,
       questionType: question.type,
       content: question.content,
-      options: question.options,
+      options: shuffledOptions,
       correctAnswer: question.correctAnswer,
       explanation: question.explanation,
       aiGenerated: question.aiGenerated || true,
@@ -163,8 +172,12 @@ class PlacementService {
       questionIndex: placementQuestion.questionIndex,
       cefrLevel: currentLevel,
       skillType,
+      questionType: question.type,
       content: question.content,
       options: question.options,
+      segments: question.segments,
+      audioText: question.audioText,
+      hint: question.hint,
       timeLimitSeconds: 60,
       totalQuestions: MAX_QUESTIONS,
       currentQuestion: session.questionCount + 1,
@@ -193,6 +206,21 @@ class PlacementService {
 
     if (existingResponse) {
       throw { status: 400, message: 'Question already answered' };
+    }
+
+    // Anti-gaming: Check minimum time per question
+    if (timeSpentSeconds < MIN_TIME_PER_QUESTION) {
+      logger.warn('PLACEMENT_TOO_FAST', {
+        sessionId,
+        questionId,
+        timeSpentSeconds,
+        minRequired: MIN_TIME_PER_QUESTION,
+      });
+      throw {
+        status: 400,
+        message: `Vui lòng dành ít nhất ${MIN_TIME_PER_QUESTION} giây để đọc và trả lời câu hỏi.`,
+        code: 'TOO_FAST',
+      };
     }
 
     // Evaluate answer
@@ -537,12 +565,13 @@ class PlacementService {
   // HYBRID APPROACH: DB CACHE
   // ====================
 
-  async getFromQuestionBank(cefrLevel, skillType) {
-    // Get random question from bank
+  async getFromQuestionBank(cefrLevel, skillType, questionType = 'multiple_choice') {
+    // Get random question from bank matching criteria
     const question = await PlacementQuestionBank.findOne({
       where: {
         cefrLevel,
         skillType,
+        questionType,
         isActive: true,
       },
       order: db.sequelize.random(),
@@ -590,8 +619,8 @@ class PlacementService {
   // AI GENERATION
   // ====================
 
-  async generateAiQuestion(session, cefrLevel, skillType) {
-    const prompt = this.buildPrompt(cefrLevel, skillType);
+  async generateAiQuestion(session, cefrLevel, skillType, questionType = 'multiple_choice') {
+    const prompt = this.buildPrompt(cefrLevel, skillType, questionType);
     
     try {
       const aiResponse = await aiGateway.generateText({
@@ -601,12 +630,13 @@ class PlacementService {
         timeoutMs: 15000,
       });
 
-      const question = this.parseAiResponse(aiResponse.text);
+      const question = this.parseAiResponse(aiResponse.text, questionType);
       
       logger.info('PLACEMENT_AI_QUESTION_GENERATED', {
         sessionId: session.id,
         cefrLevel,
         skillType,
+        questionType,
       });
 
       return {
@@ -620,6 +650,7 @@ class PlacementService {
         sessionId: session.id,
         cefrLevel,
         skillType,
+        questionType,
         error: err.message,
       });
       
@@ -628,7 +659,7 @@ class PlacementService {
     }
   }
 
-  buildPrompt(cefrLevel, skillType) {
+  buildPrompt(cefrLevel, skillType, questionType = 'multiple_choice') {
     const levelDescriptions = {
       'A1': 'người mới bắt đầu, từ vựng cơ bản, câu đơn giản',
       'A2': 'sơ cấp, giao tiếp hàng ngày đơn giản',
@@ -642,41 +673,107 @@ class PlacementService {
       'grammar': 'ngữ pháp (thì, cấu trúc câu, giới từ)',
       'vocabulary': 'từ vựng (nghĩa từ, collocation, phrasal verb)',
       'reading': 'đọc hiểu (đoạn văn ngắn + câu hỏi)',
+      'listening': 'nghe hiểu',
     };
 
-    return `Tạo 1 câu hỏi placement test ${skillPrompts[skillType]} cho trình độ ${cefrLevel} (${levelDescriptions[cefrLevel]}).
-
-Format JSON:
-{
+    // Different formats based on question type
+    const typeFormats = {
+      'multiple_choice': {
+        format: `{
   "type": "multiple_choice",
   "content": "Câu hỏi...",
   "options": ["A. ...", "B. ...", "C. ...", "D. ..."],
   "correctAnswer": "A",
-  "explanation": "Giải thích ngắn gọn..."
-}
+  "explanation": "Giải thích..."
+}`,
+        requirements: '- 4 options cho multiple choice\n- correctAnswer là A, B, C, hoặc D',
+      },
+      'fill_blank': {
+        format: `{
+  "type": "fill_blank",
+  "content": "Câu có chỗ trống ____ để điền từ.",
+  "correctAnswer": "từ điền vào",
+  "explanation": "Giải thích...",
+  "hint": "gợi ý (nếu cần)"
+}`,
+        requirements: '- Câu có dấu ____ hoặc ______\n- correctAnswer là từ điền vào chỗ trống',
+      },
+      'listening': {
+        format: `{
+  "type": "listening",
+  "content": "Transcript hoặc mô tả audio...",
+  "audioText": "Nội dung audio script",
+  "options": ["A. ...", "B. ...", "C. ...", "D. ..."],
+  "correctAnswer": "A",
+  "explanation": "Giải thích..."
+}`,
+        requirements: '- Tạo transcript ngắn (2-3 câu đối thoại hoặc 1 đoạn ngắn)\n- 4 options trả lời\n- correctAnswer là A, B, C, hoặc D',
+      },
+      'sentence_ordering': {
+        format: `{
+  "type": "sentence_ordering",
+  "content": "Sắp xếp các phần thành câu hoàn chỉnh",
+  "segments": ["phần 1", "phần 2", "phần 3", "phần 4"],
+  "correctAnswer": "A-B-C-D",
+  "explanation": "Giải thích thứ tự đúng..."
+}`,
+        requirements: '- 4 segments để học sinh sắp xếp\n- correctAnswer là thứ tự đúng ví dụ: "B-A-C-D"',
+      },
+    };
+
+    const typeFormat = typeFormats[questionType] || typeFormats['multiple_choice'];
+
+    return `Tạo 1 câu hỏi placement test ${skillPrompts[skillType]} cho trình độ ${cefrLevel} (${levelDescriptions[cefrLevel]}).
+
+LOẠI CÂU HỎI: ${questionType}
+
+Format JSON:
+${typeFormat.format}
 
 Yêu cầu:
 - Độ khó phù hợp ${cefrLevel}
-- 4 options cho multiple choice
+${typeFormat.requirements}
 - Chỉ trả về JSON, không thêm text khác`;
   }
 
-  parseAiResponse(text) {
+  parseAiResponse(text, questionType = 'multiple_choice') {
     try {
       // Extract JSON from response
       const jsonMatch = text.match(/\{[\s\S]*\}/);
       if (jsonMatch) {
         const parsed = JSON.parse(jsonMatch[0]);
-        return {
-          type: parsed.type || 'multiple_choice',
+        
+        // Base question structure
+        const question = {
+          type: parsed.type || questionType,
           content: parsed.content,
-          options: parsed.options || [],
           correctAnswer: parsed.correctAnswer,
           explanation: parsed.explanation || '',
         };
+
+        // Add type-specific fields
+        switch (questionType) {
+          case 'multiple_choice':
+          case 'listening':
+            question.options = parsed.options || [];
+            if (questionType === 'listening') {
+              question.audioText = parsed.audioText || '';
+            }
+            break;
+          case 'fill_blank':
+            question.hint = parsed.hint || '';
+            break;
+          case 'sentence_ordering':
+            question.segments = parsed.segments || [];
+            break;
+          default:
+            question.options = parsed.options || [];
+        }
+
+        return question;
       }
     } catch (err) {
-      logger.warn('PLACEMENT_AI_PARSE_FAILED', { text: text?.substring(0, 100) });
+      logger.warn('PLACEMENT_AI_PARSE_FAILED', { text: text?.substring(0, 100), questionType });
     }
     
     return this.getFallbackQuestion('B1', 'grammar');
@@ -737,14 +834,26 @@ Yêu cầu:
     const normalizedUser = userAnswer.toString().trim().toUpperCase();
     const normalizedCorrect = correctAnswer.toString().trim().toUpperCase();
     
-    // For multiple choice, just check letter (A, B, C, D) or full option
-    if (questionType === 'multiple_choice') {
-      if (normalizedUser.length === 1) {
-        return normalizedUser === normalizedCorrect.charAt(0);
-      }
+    switch (questionType) {
+      case 'multiple_choice':
+      case 'listening':
+        // For multiple choice, check letter (A, B, C, D) or full option
+        if (normalizedUser.length === 1) {
+          return normalizedUser === normalizedCorrect.charAt(0);
+        }
+        return normalizedUser === normalizedCorrect;
+        
+      case 'fill_blank':
+        // For fill blank, exact match or accept variations
+        return normalizedUser === normalizedCorrect;
+        
+      case 'sentence_ordering':
+        // For sentence ordering, check if order matches (e.g., "A-B-C-D")
+        return normalizedUser.replace(/\s/g, '') === normalizedCorrect.replace(/\s/g, '');
+        
+      default:
+        return normalizedUser === normalizedCorrect;
     }
-    
-    return normalizedUser === normalizedCorrect;
   }
 
   async getProgress(sessionId) {
@@ -907,6 +1016,132 @@ Yêu cầu:
       },
     });
     return count;
+  }
+
+  /**
+   * Admin: Get detailed user placement history
+   * @param {number} userId 
+   * @param {boolean} includeDetails 
+   */
+  async getUserHistoryForAdmin(userId, includeDetails = false) {
+    const sessions = await PlacementSession.findAll({
+      where: { userId },
+      include: includeDetails ? [
+        {
+          model: PlacementResponse,
+          as: 'responses',
+          include: [{ model: PlacementQuestion, as: 'question' }],
+        },
+      ] : [],
+      order: [['created_at', 'DESC']],
+    });
+
+    return sessions.map(session => ({
+      id: session.id,
+      status: session.status,
+      finalCefrLevel: session.finalCefrLevel,
+      questionCount: session.questionCount,
+      correctCount: session.correctCount,
+      accuracy: session.questionCount > 0 ? (session.correctCount / session.questionCount) : 0,
+      confidence: session.confidence,
+      isQuickCheck: session.isQuickCheck,
+      isRetake: session.isRetake,
+      retakeCount: session.retakeCount,
+      completedAt: session.completedAt,
+      createdAt: session.createdAt,
+      responses: includeDetails ? session.responses?.map(r => ({
+        id: r.id,
+        questionId: r.questionId,
+        cefrLevel: r.question?.cefrLevel,
+        skillType: r.question?.skillType,
+        questionType: r.question?.questionType,
+        isCorrect: r.isCorrect,
+        isSkipped: r.isSkipped,
+        timeSpentSeconds: r.timeSpentSeconds,
+      })) : undefined,
+    }));
+  }
+
+  /**
+   * Admin: Reset cooldown for user (allow immediate retake)
+   * @param {number} userId 
+   */
+  async resetCooldown(userId) {
+    // Find the most recent completed session
+    const lastSession = await PlacementSession.findOne({
+      where: {
+        userId,
+        status: 'completed',
+      },
+      order: [['completedAt', 'DESC']],
+    });
+
+    if (!lastSession) {
+      throw { status: 404, message: 'Không tìm thấy bài test đã hoàn thành cho user này' };
+    }
+
+    // Mark as not requiring cooldown (set completedAt to very old date)
+    await lastSession.update({
+      completedAt: new Date('2000-01-01'), // Reset to very old date
+      isRetake: false,
+    });
+
+    logger.info('PLACEMENT_COOLDOWN_RESET', {
+      userId,
+      sessionId: lastSession.id,
+      adminAction: true,
+    });
+
+    return {
+      success: true,
+      message: 'Đã reset cooldown cho user. User có thể làm lại placement test ngay lập tức.',
+      previousSessionId: lastSession.id,
+      previousLevel: lastSession.finalCefrLevel,
+    };
+  }
+
+  /**
+   * Admin: Delete a placement session
+   * @param {number} sessionId 
+   */
+  async deleteSession(sessionId) {
+    const session = await PlacementSession.findByPk(sessionId, {
+      include: [{ model: PlacementResponse, as: 'responses' }],
+    });
+
+    if (!session) {
+      throw { status: 404, message: 'Session không tồn tại' };
+    }
+
+    const userId = session.userId;
+
+    // Delete related responses first
+    if (session.responses?.length > 0) {
+      await PlacementResponse.destroy({
+        where: { sessionId },
+      });
+    }
+
+    // Delete related questions
+    await PlacementQuestion.destroy({
+      where: { sessionId },
+    });
+
+    // Delete the session
+    await session.destroy();
+
+    logger.info('PLACEMENT_SESSION_DELETED', {
+      sessionId,
+      userId,
+      adminAction: true,
+    });
+
+    return {
+      success: true,
+      message: 'Đã xóa session và tất cả dữ liệu liên quan',
+      deletedSessionId: sessionId,
+      userId,
+    };
   }
 }
 

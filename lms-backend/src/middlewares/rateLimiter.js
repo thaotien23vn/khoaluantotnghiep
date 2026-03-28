@@ -4,6 +4,7 @@
  */
 
 const rateLimit = require('express-rate-limit');
+const logger = require('../utils/logger');
 
 const isProd = String(process.env.NODE_ENV || '').toLowerCase() === 'production';
 
@@ -61,4 +62,24 @@ module.exports = {
   authLimiter,
   emailVerificationLimiter,
   passwordResetLimiter,
+  placementRateLimiter: rateLimit({
+    windowMs: 10000, // 10 seconds
+    max: 5, // 5 requests per 10 seconds
+    message: {
+      success: false,
+      message: 'Quá nhiều yêu cầu placement test, vui lòng thử lại sau',
+    },
+    handler: (req, res) => {
+      logger.warn('RATE_LIMIT_PLACEMENT', {
+        ip: req.ip,
+        userId: req.user?.id,
+        method: req.method,
+        path: req.path,
+      });
+      res.status(429).json({
+        success: false,
+        message: 'Quá nhiều yêu cầu placement test, vui lòng thử lại sau',
+      });
+    },
+  }),
 };

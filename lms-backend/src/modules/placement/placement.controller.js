@@ -269,6 +269,73 @@ class PlacementController {
       next(err);
     }
   }
+
+  // ================= ADMIN APIs =================
+
+  /**
+   * Admin: Get user placement history
+   */
+  async adminGetUserHistory(req, res, next) {
+    try {
+      const { userId } = req.params;
+      const { includeDetails = false } = req.query;
+      
+      const history = await placementService.getUserHistoryForAdmin(
+        parseInt(userId),
+        includeDetails === 'true'
+      );
+      
+      res.json({
+        success: true,
+        data: {
+          userId: parseInt(userId),
+          history,
+          count: history.length,
+        },
+      });
+    } catch (err) {
+      logger.error('ADMIN_PLACEMENT_HISTORY_ERROR', { error: err.message, userId: req.params.userId });
+      next(err);
+    }
+  }
+
+  /**
+   * Admin: Reset cooldown for user
+   */
+  async adminResetCooldown(req, res, next) {
+    try {
+      const { userId } = req.params;
+      
+      const result = await placementService.resetCooldown(parseInt(userId));
+      
+      res.json({
+        success: true,
+        data: result,
+      });
+    } catch (err) {
+      logger.error('ADMIN_RESET_COOLDOWN_ERROR', { error: err.message, userId: req.params.userId });
+      next(err);
+    }
+  }
+
+  /**
+   * Admin: Delete a placement session
+   */
+  async adminDeleteSession(req, res, next) {
+    try {
+      const { sessionId } = req.params;
+      
+      const result = await placementService.deleteSession(parseInt(sessionId));
+      
+      res.json({
+        success: true,
+        data: result,
+      });
+    } catch (err) {
+      logger.error('ADMIN_DELETE_SESSION_ERROR', { error: err.message, sessionId: req.params.sessionId });
+      next(err);
+    }
+  }
 }
 
 module.exports = new PlacementController();

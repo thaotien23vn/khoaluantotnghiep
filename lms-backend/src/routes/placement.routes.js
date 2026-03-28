@@ -1,6 +1,7 @@
 const express = require('express');
 const authMiddleware = require('../middlewares/auth');
 const authorizeRole = require('../middlewares/authorize');
+const { placementRateLimiter } = require('../middlewares/rateLimiter');
 const { body, param } = require('express-validator');
 const placementController = require('../modules/placement/placement.controller');
 const placementAnalyticsController = require('../modules/placement/placementAnalytics.controller');
@@ -83,6 +84,7 @@ router.post(
   '/student/placement/:sessionId/answer',
   authMiddleware,
   authorizeRole('student', 'admin'),
+  placementRateLimiter,
   submitAnswerValidation,
   placementController.submitAnswer
 );
@@ -92,6 +94,7 @@ router.post(
   '/student/placement/:sessionId/skip',
   authMiddleware,
   authorizeRole('student', 'admin'),
+  placementRateLimiter,
   sessionIdValidation,
   placementController.skipQuestion
 );
@@ -175,6 +178,34 @@ router.post(
       next(err);
     }
   }
+);
+
+// ====================
+// ADMIN MANAGEMENT ROUTES
+// ====================
+
+// Admin: Get user placement history
+router.get(
+  '/admin/placement/user/:userId/history',
+  authMiddleware,
+  authorizeRole('admin'),
+  placementController.adminGetUserHistory
+);
+
+// Admin: Reset cooldown for user
+router.post(
+  '/admin/placement/user/:userId/reset-cooldown',
+  authMiddleware,
+  authorizeRole('admin'),
+  placementController.adminResetCooldown
+);
+
+// Admin: Delete a placement session
+router.delete(
+  '/admin/placement/session/:sessionId',
+  authMiddleware,
+  authorizeRole('admin'),
+  placementController.adminDeleteSession
 );
 
 // ====================
