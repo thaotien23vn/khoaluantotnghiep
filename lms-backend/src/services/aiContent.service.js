@@ -755,6 +755,7 @@ Hãy đánh giá và cho điểm theo các tiêu chí đã nêu.`;
         system: systemPrompt,
         prompt,
         maxOutputTokens: 2048,
+        timeoutMs: 60000, // 60s cho quality analysis
       });
 
       let analysis;
