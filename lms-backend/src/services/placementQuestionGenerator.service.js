@@ -14,7 +14,7 @@ const MIN_QUESTIONS_THRESHOLD = 50; // Generate if below this
 const BATCH_SIZE = 3; // Generate 3 at a time to be safer with rate limits
 const DELAY_BETWEEN_BATCHES_MS = 15000; // 15s delay between batches
 
-const MAX_CONSECUTIVE_FAILURES = 15;
+const MAX_CONSECUTIVE_FAILURES = 2; // Stop after 2 consecutive failures
 
 class PlacementQuestionGenerator {
   /**

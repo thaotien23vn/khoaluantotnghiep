@@ -56,6 +56,26 @@ class CircuitBreaker {
 
 const circuitBreaker = new CircuitBreaker(5, 60000); // 5 failures -> open for 60s
 
+// Global rate limit cooldown - when ALL keys are rate limited
+let globalRateLimitCooldown = 0;
+const MAX_CONSECUTIVE_FAILURES = 5; // Reduced from 15 to stop sooner when all keys fail
+const GLOBAL_COOLDOWN_MS = 60000; // 60 seconds
+
+function isGlobalRateLimited() {
+  if (Date.now() < globalRateLimitCooldown) {
+    return true;
+  }
+  return false;
+}
+
+function setGlobalRateLimit() {
+  globalRateLimitCooldown = Date.now() + GLOBAL_COOLDOWN_MS;
+  logger.error('GLOBAL_RATE_LIMIT_COOLDOWN_SET', { 
+    cooldownSeconds: GLOBAL_COOLDOWN_MS / 1000,
+    nextAttempt: new Date(globalRateLimitCooldown).toISOString()
+  });
+}
+
 function getNextApiKey() {
   if (apiKeys.length === 0) return null;
   const index = currentKeyIndex % apiKeys.length;
@@ -101,7 +121,15 @@ function buildGeminiUrl(model, action) {
 }
 
 async function geminiGenerate({ system, prompt, maxOutputTokens, timeoutMs = 30000 }) {
-  // Check circuit breaker first
+  // Check global rate limit cooldown first
+  if (isGlobalRateLimited()) {
+    const err = new Error(`All API keys rate limited. Global cooldown active until ${new Date(globalRateLimitCooldown).toISOString()}`);
+    err.statusCode = 429;
+    err.code = 'GLOBAL_RATE_LIMITED';
+    throw err;
+  }
+
+  // Check circuit breaker
   if (!circuitBreaker.canExecute()) {
     const state = circuitBreaker.getState();
     const err = new Error(`Circuit breaker is OPEN. AI service temporarily unavailable. Next attempt: ${state.nextAttempt}`);
@@ -170,11 +198,13 @@ async function geminiGenerate({ system, prompt, maxOutputTokens, timeoutMs = 300
           errorMessage: errorMessage?.substring(0, 100)
         });
         
-        // If last key, give up
+        // If last key, set global cooldown and give up
         if (attempt === maxAttempts - 1) {
           logger.error('ALL_GEMINI_KEYS_EXHAUSTED', { maxAttempts });
-          const err = new Error(`All Gemini API keys exhausted. Status=${status}`);
+          setGlobalRateLimit(); // Set 60s cooldown for all requests
+          const err = new Error(`All Gemini API keys exhausted. Global cooldown 60s. Status=${status}`);
           err.statusCode = status || 429;
+          err.code = 'ALL_KEYS_RATE_LIMITED';
           throw err;
         }
         
@@ -300,4 +330,6 @@ module.exports = {
   embedText,
   getApiKeyCount: () => apiKeys.length,
   getCircuitBreakerState: () => circuitBreaker.getState(),
+  isGlobalRateLimited,
+  getGlobalCooldownTime: () => globalRateLimitCooldown,
 };
