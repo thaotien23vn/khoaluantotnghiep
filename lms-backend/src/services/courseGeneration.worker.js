@@ -307,6 +307,9 @@ if (!isTest) {
     {
       connection: redisConnection,
       concurrency: 1, // Process one at a time to avoid AI overload
+      lockDuration: 300000, // 5 minutes - AI calls can take up to 180s
+      stalledInterval: 60000, // Check stalled jobs every minute
+      maxStalledCount: 3, // Allow 3 stall events before failing
       limiter: {
         max: 1,
         duration: 5000, // 5 seconds between jobs
