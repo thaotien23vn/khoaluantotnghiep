@@ -425,7 +425,7 @@ Trả lời dựa trên nội dung bài học trên. Nếu không có thông tin
           include: [{ model: Course, as: 'course', attributes: ['id', 'title'] }],
         },
       ],
-      order: [['createdAt', 'ASC']],
+      order: [['created_at', 'ASC']],
     });
   }
 
