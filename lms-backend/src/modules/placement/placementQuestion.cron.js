@@ -73,7 +73,7 @@ class PlacementQuestionCron {
   /**
    * Run immediately (for manual trigger)
    */
-  async runNow() {
+  async runNow(signal) {
     logger.info('PLACEMENT_CRON_MANUAL_START');
     
     try {
@@ -81,8 +81,13 @@ class PlacementQuestionCron {
       const stats = await placementQuestionGenerator.getBankStatistics();
       logger.info('PLACEMENT_CRON_STATS', { stats });
 
-      // Then generate
-      const results = await placementQuestionGenerator.generateAllMissingQuestions();
+      // Then generate with abort support
+      const results = await placementQuestionGenerator.generateAllMissingQuestions(signal);
+      
+      if (signal?.aborted) {
+        logger.info('PLACEMENT_CRON_MANUAL_CANCELLED');
+        return { ...results, cancelled: true };
+      }
       
       logger.info('PLACEMENT_CRON_MANUAL_COMPLETE', {
         generated: results.generated,
@@ -91,6 +96,10 @@ class PlacementQuestionCron {
 
       return results;
     } catch (err) {
+      if (err.name === 'AbortError') {
+        logger.info('PLACEMENT_CRON_MANUAL_ABORTED');
+        return { generated: 0, failed: 0, cancelled: true };
+      }
       logger.error('PLACEMENT_CRON_MANUAL_ERROR', { error: err.message });
       throw err;
     }

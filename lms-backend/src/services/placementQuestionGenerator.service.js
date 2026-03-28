@@ -12,7 +12,7 @@ const SKILL_TYPES = ['grammar', 'vocabulary', 'reading'];
 const TARGET_QUESTIONS_PER_COMBO = 100;
 const MIN_QUESTIONS_THRESHOLD = 50; // Generate if below this
 const BATCH_SIZE = 3; // Generate 3 at a time to be safer with rate limits
-const DELAY_BETWEEN_BATCHES_MS = 10000; // 10s delay between batches
+const DELAY_BETWEEN_BATCHES_MS = 15000; // 15s delay between batches
 
 const MAX_CONSECUTIVE_FAILURES = 15;
 
@@ -20,7 +20,7 @@ class PlacementQuestionGenerator {
   /**
    * Main entry point - run nightly to pre-generate questions
    */
-  async generateAllMissingQuestions() {
+  async generateAllMissingQuestions(signal) {
     logger.info('PLACEMENT_BATCH_GENERATION_START');
     const results = {
       generated: 0,
@@ -33,6 +33,14 @@ class PlacementQuestionGenerator {
 
     for (const cefrLevel of CEFR_LEVELS) {
       for (const skillType of SKILL_TYPES) {
+        // Check for abort signal
+        if (signal?.aborted) {
+          logger.info('PLACEMENT_GENERATION_ABORTED_BY_USER');
+          results.stoppedEarly = true;
+          results.reason = 'Cancelled by user';
+          return results;
+        }
+
         // Check if too many consecutive failures
         if (consecutiveFailures >= MAX_CONSECUTIVE_FAILURES) {
           logger.error('PLACEMENT_GENERATION_STOPPED_TOO_MANY_FAILURES', {
@@ -57,7 +65,7 @@ class PlacementQuestionGenerator {
               needed,
             });
 
-            const batchResult = await this.generateBatch(cefrLevel, skillType, Math.min(needed, 20));
+            const batchResult = await this.generateBatch(cefrLevel, skillType, Math.min(needed, 20), signal);
             results.generated += batchResult.generated;
             consecutiveFailures = batchResult.hadSuccess ? 0 : consecutiveFailures + batchResult.failedInBatch;
 
@@ -75,7 +83,7 @@ class PlacementQuestionGenerator {
             }
 
             // Delay between combinations
-            await this.sleep(DELAY_BETWEEN_BATCHES_MS);
+            await this.sleepWithAbortCheck(DELAY_BETWEEN_BATCHES_MS, signal);
           }
         } catch (err) {
           logger.error('PLACEMENT_BATCH_GENERATE_ERROR', {
@@ -110,16 +118,26 @@ class PlacementQuestionGenerator {
   /**
    * Generate a batch of questions
    */
-  async generateBatch(cefrLevel, skillType, count) {
+  async generateBatch(cefrLevel, skillType, count, signal) {
     let generated = 0;
     let failedInBatch = 0;
     let hadSuccess = false;
     const batches = Math.ceil(count / BATCH_SIZE);
 
     for (let i = 0; i < batches; i++) {
+      // Check for abort signal
+      if (signal?.aborted) {
+        return { generated, failedInBatch, hadSuccess };
+      }
+
       const batchSize = Math.min(BATCH_SIZE, count - generated);
       
       for (let j = 0; j < batchSize; j++) {
+        // Check for abort signal
+        if (signal?.aborted) {
+          return { generated, failedInBatch, hadSuccess };
+        }
+
         try {
           const question = await this.generateSingleQuestion(cefrLevel, skillType);
           if (question) {
@@ -138,15 +156,15 @@ class PlacementQuestionGenerator {
           failedInBatch++;
         }
         
-        // Small delay between individual questions
+        // Small delay between individual questions (5s to respect 15 RPM per key)
         if (j < batchSize - 1) {
-          await this.sleep(2000);
+          await this.sleepWithAbortCheck(5000, signal);
         }
       }
 
       // Delay between batches
       if (i < batches - 1) {
-        await this.sleep(DELAY_BETWEEN_BATCHES_MS);
+        await this.sleepWithAbortCheck(DELAY_BETWEEN_BATCHES_MS, signal);
       }
     }
 
@@ -250,6 +268,21 @@ Yêu cầu:
       explanation: question.explanation,
       aiGenerated: true,
       isActive: true,
+    });
+  }
+
+  /**
+   * Utility: sleep with abort signal check
+   */
+  sleepWithAbortCheck(ms, signal) {
+    return new Promise((resolve, reject) => {
+      const timer = setTimeout(resolve, ms);
+      if (signal) {
+        signal.addEventListener('abort', () => {
+          clearTimeout(timer);
+          reject(new Error('AbortError'));
+        }, { once: true });
+      }
     });
   }
 

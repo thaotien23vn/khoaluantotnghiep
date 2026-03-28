@@ -167,8 +167,29 @@ router.post(
   authMiddleware,
   authorizeRole('admin'),
   async (req, res, next) => {
+    // Create AbortController for cancellation support
+    const controller = new AbortController();
+    const { signal } = controller;
+    
+    // Listen for client disconnect
+    req.on('close', () => {
+      if (!res.headersSent) {
+        logger.info('PLACEMENT_GENERATE_CLIENT_DISCONNECTED');
+        controller.abort();
+      }
+    });
+    
     try {
-      const results = await placementQuestionCron.runNow();
+      const results = await placementQuestionCron.runNow(signal);
+      
+      if (signal.aborted) {
+        return res.status(499).json({
+          success: false,
+          message: 'Generation cancelled by client disconnect',
+          data: results,
+        });
+      }
+      
       res.json({
         success: true,
         data: results,
