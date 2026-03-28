@@ -2,6 +2,7 @@ const db = require('../models');
 const { Op } = require('sequelize');
 const aiGateway = require('./aiGateway.service');
 const logger = require('../utils/logger');
+const { safeAiCall } = require('../utils/aiSafeCaller');
 
 // Content cleaning utility
 function cleanContent(content) {
@@ -193,7 +194,7 @@ Format: Markdown với headings rõ ràng.`;
   async generateQuizQuestions(lectureId, options = {}) {
     try {
       const {
-        questionCount = 10,
+        questionCount = 5,  // Giảm từ 10 xuống 5 để tránh timeout
         questionTypes = ['multiple_choice', 'true_false', 'short_answer'],
         difficulty = 'mixed',
       } = options;
@@ -258,12 +259,36 @@ Format mỗi câu hỏi như sau:
 
 Trả về danh sách các câu hỏi trong format JSON array.`;
 
-      const aiResponse = await aiGateway.generateText({
-        system: systemPrompt,
-        prompt,
-        maxOutputTokens: 8192,
-        timeoutMs: 120000,  // 120s - Gemini đang chậm
-      });
+      let aiResponse;
+      let retries = 0;
+      const maxRetries = 3;
+      
+      while (retries < maxRetries) {
+        try {
+          aiResponse = await aiGateway.generateText({
+            system: systemPrompt,
+            prompt,
+            maxOutputTokens: 8192,
+            timeoutMs: 180000,  // 180s cho quiz nặng
+          });
+          break; // Success
+        } catch (aiError) {
+          const isRetryable = aiError.message?.includes('429') || 
+                             aiError.message?.includes('503') ||
+                             aiError.message?.includes('timeout') ||
+                             aiError.statusCode === 429 || 
+                             aiError.statusCode === 503;
+                             
+          if (isRetryable && retries < maxRetries - 1) {
+            retries++;
+            const delayMs = 30000 * Math.pow(2, retries - 1); // 30s, 60s
+            logger.warn('QUIZ_GENERATE_RETRY', { retry: retries, delaySeconds: delayMs / 1000, error: aiError.message });
+            await new Promise((resolve) => setTimeout(resolve, delayMs));
+          } else {
+            throw aiError;
+          }
+        }
+      }
 
       let questions;
       try {

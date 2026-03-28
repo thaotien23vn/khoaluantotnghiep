@@ -5,6 +5,57 @@ const logger = require('../utils/logger');
 const apiKeys = (process.env.GEMINI_API_KEYS || process.env.GEMINI_API_KEY || '').split(',').filter(Boolean);
 let currentKeyIndex = 0;
 
+// Simple Circuit Breaker to avoid hammering API when failing
+class CircuitBreaker {
+  constructor(threshold = 5, timeoutMs = 60000) {
+    this.failureCount = 0;
+    this.threshold = threshold;
+    this.timeoutMs = timeoutMs;
+    this.state = 'CLOSED'; // CLOSED, OPEN, HALF_OPEN
+    this.nextAttempt = 0;
+  }
+
+  canExecute() {
+    if (this.state === 'CLOSED') return true;
+    if (this.state === 'OPEN') {
+      if (Date.now() > this.nextAttempt) {
+        this.state = 'HALF_OPEN';
+        logger.info('CIRCUIT_BREAKER_HALF_OPEN');
+        return true;
+      }
+      return false;
+    }
+    return true; // HALF_OPEN
+  }
+
+  recordSuccess() {
+    this.failureCount = 0;
+    this.state = 'CLOSED';
+  }
+
+  recordFailure() {
+    this.failureCount++;
+    if (this.failureCount >= this.threshold) {
+      this.state = 'OPEN';
+      this.nextAttempt = Date.now() + this.timeoutMs;
+      logger.error('CIRCUIT_BREAKER_OPEN', { 
+        failureCount: this.failureCount, 
+        cooldownSeconds: this.timeoutMs / 1000 
+      });
+    }
+  }
+
+  getState() {
+    return {
+      state: this.state,
+      failureCount: this.failureCount,
+      nextAttempt: this.state === 'OPEN' ? new Date(this.nextAttempt).toISOString() : null
+    };
+  }
+}
+
+const circuitBreaker = new CircuitBreaker(5, 60000); // 5 failures -> open for 60s
+
 function getNextApiKey(attempt = 0) {
   if (apiKeys.length === 0) return null;
   const index = (currentKeyIndex + attempt) % apiKeys.length;
@@ -51,6 +102,15 @@ function buildGeminiUrl(model, action) {
 }
 
 async function geminiGenerate({ system, prompt, maxOutputTokens, timeoutMs = 30000 }) {
+  // Check circuit breaker first
+  if (!circuitBreaker.canExecute()) {
+    const state = circuitBreaker.getState();
+    const err = new Error(`Circuit breaker is OPEN. AI service temporarily unavailable. Next attempt: ${state.nextAttempt}`);
+    err.statusCode = 503;
+    err.code = 'CIRCUIT_BREAKER_OPEN';
+    throw err;
+  }
+
   if (!hasApiKeys()) {
     const err = new Error('GEMINI_API_KEYS is not configured');
     err.statusCode = 503;
@@ -89,6 +149,7 @@ async function geminiGenerate({ system, prompt, maxOutputTokens, timeoutMs = 300
 
       // Success - remember this key for next time
       currentKeyIndex = keyIndex;
+      circuitBreaker.recordSuccess(); // Reset failure count
       
       const text = res?.data?.candidates?.[0]?.content?.parts?.map((p) => p?.text).filter(Boolean).join('') || '';
       return { text, raw: res.data };
@@ -134,6 +195,8 @@ async function geminiGenerate({ system, prompt, maxOutputTokens, timeoutMs = 300
         model: getModel(),
         keyIndex,
       });
+      
+      circuitBreaker.recordFailure(); // Count failure
       
       const err = new Error(`Gemini generateContent failed status=${status || 'unknown'} code=${errorCode || 'none'} message=${errorMessage} detail=${detail ? JSON.stringify(detail) : ''}`);
       err.statusCode = Number.isInteger(status) ? status : 502;
@@ -236,4 +299,5 @@ module.exports = {
   generateText,
   embedText,
   getApiKeyCount: () => apiKeys.length,
+  getCircuitBreakerState: () => circuitBreaker.getState(),
 };
