@@ -84,7 +84,7 @@ function getGeminiApiKey() {
 }
 
 function getModel() {
-  return process.env.AI_MODEL || 'gemini-1.5-flash';
+  return process.env.AI_MODEL || 'gemini-1.5-pro';
 }
 
 function getEmbeddingModel() {

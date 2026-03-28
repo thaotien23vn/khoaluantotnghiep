@@ -195,6 +195,7 @@ class LessonChatService {
         prompt,
         maxOutputTokens: 800,
         temperature: 0.3,
+        timeoutMs: 120000,
       });
 
       // Parse confidence from response or estimate
