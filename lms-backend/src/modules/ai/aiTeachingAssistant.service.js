@@ -9,6 +9,12 @@ function cleanContent(content) {
   if (!content || typeof content !== 'string') return content;
   
   return content
+    // Convert escaped characters to actual characters (fix AI response with \\n instead of real newlines)
+    .replace(/\\n/g, '\n')
+    .replace(/\\t/g, '\t')
+    .replace(/\\r/g, '\r')
+    .replace(/\\"/g, '"')
+    .replace(/\\\\/g, '\\')
     // Remove common AI response prefixes
     .replace(/^(Chào bạn,?\s*)?(với tư cách là|tôi là|tôi rất hào hứng|tôi sẽ giúp|dưới đây là|đây là)[^\n]*\n*/gi, '')
     // Remove markdown code block markers if content is wrapped in them

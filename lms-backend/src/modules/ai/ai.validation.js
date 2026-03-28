@@ -367,8 +367,8 @@ const generateTeacherQuizValidation = [
     .withMessage('count phải từ 1-50'),
   body('options.difficulty')
     .optional()
-    .isIn(['easy', 'medium', 'hard'])
-    .withMessage('difficulty phải là easy, medium, hoặc hard'),
+    .isIn(['easy', 'medium', 'hard', 'mixed'])
+    .withMessage('difficulty phải là easy, medium, hard, hoặc mixed'),
   body('options.questionTypes')
     .optional()
     .isArray()
@@ -395,8 +395,8 @@ const generateTeacherExercisesValidation = [
     .withMessage('count phải từ 1-20'),
   body('options.difficulty')
     .optional()
-    .isIn(['easy', 'medium', 'hard'])
-    .withMessage('difficulty phải là easy, medium, hoặc hard'),
+    .isIn(['easy', 'medium', 'hard', 'mixed'])
+    .withMessage('difficulty phải là easy, medium, hard, hoặc mixed'),
   handleValidationErrors,
 ];
 

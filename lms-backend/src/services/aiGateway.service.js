@@ -84,7 +84,7 @@ function getGeminiApiKey() {
 }
 
 function getModel() {
-  return process.env.AI_MODEL || 'gemini-flash-latest';
+  return process.env.AI_MODEL || 'gemini-1.5-flash';
 }
 
 function getEmbeddingModel() {
@@ -95,8 +95,6 @@ function buildGeminiUrl(model, action) {
   // action: generateContent | embedContent
   let normalized = String(model || '');
   if (normalized.startsWith('models/')) normalized = normalized.slice('models/'.length);
-  if (normalized === 'gemini-1.5-flash') normalized = 'gemini-flash-latest';
-  if (normalized === 'gemini-1.5-flash-latest') normalized = 'gemini-flash-latest';
   if (normalized === 'text-embedding-004') normalized = 'gemini-embedding-001';
   return `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(normalized)}:${action}`;
 }
