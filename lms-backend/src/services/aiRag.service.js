@@ -130,6 +130,11 @@ async function ingestLecture(lectureId, options = {}) {
       },
       { transaction: options.transaction }
     );
+    
+    // Delay nhỏ giữa các calls để tránh rate limit
+    if (i < chunks.length - 1) {
+      await new Promise(resolve => setTimeout(resolve, 500));
+    }
   }
 
   await doc.update({ status: 'ready' }, { transaction: options.transaction });
