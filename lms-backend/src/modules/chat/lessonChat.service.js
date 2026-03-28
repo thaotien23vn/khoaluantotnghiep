@@ -1,6 +1,6 @@
-const db = require('../models');
-const aiGateway = require('./aiGateway.service');
-const logger = require('../utils/logger');
+const db = require('../../models/index');
+const aiGateway = require('../../services/aiGateway.service');
+const logger = require('../../utils/logger');
 const { Op } = require('sequelize');
 
 const {
