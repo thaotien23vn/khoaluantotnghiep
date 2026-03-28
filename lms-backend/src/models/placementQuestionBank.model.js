@@ -20,7 +20,7 @@ module.exports = (sequelize) => {
         field: "skill_type",
       },
       questionType: {
-        type: DataTypes.ENUM("multiple_choice", "fill_blank", "matching", "listening", "sentence_ordering"),
+        type: DataTypes.ENUM("multiple_choice", "fill_blank", "matching", "listening", "sentence_ordering", "true_false"),
         defaultValue: "multiple_choice",
         field: "question_type",
       },
@@ -55,6 +55,22 @@ module.exports = (sequelize) => {
         type: DataTypes.BOOLEAN,
         defaultValue: true,
         field: "is_active",
+      },
+      // Các trường mới cho quiz thường
+      sourceType: {
+        type: DataTypes.ENUM("placement", "quiz"),
+        defaultValue: "placement",
+        field: "source_type",
+      },
+      courseId: {
+        type: DataTypes.INTEGER.UNSIGNED,
+        allowNull: true,
+        field: "course_id",
+      },
+      lectureId: {
+        type: DataTypes.INTEGER.UNSIGNED,
+        allowNull: true,
+        field: "lecture_id",
       },
     },
     {

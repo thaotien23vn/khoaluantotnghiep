@@ -3,6 +3,7 @@ const { Op } = require('sequelize');
 const aiGateway = require('./aiGateway.service');
 const logger = require('../utils/logger');
 const { safeAiCall } = require('../utils/aiSafeCaller');
+const { mapQuizDifficultyToCefr } = require('../utils/difficultyMapper');
 
 // Content cleaning utility
 function cleanContent(content) {
@@ -33,6 +34,7 @@ const {
   Question,
   UserLearningProfile,
   LearningAnalytics,
+  PlacementQuestionBank,
 } = db.models;
 
 class AiContentService {
@@ -419,9 +421,13 @@ Trả về danh sách các câu hỏi trong format JSON array.`;
         showResults: true,
       });
 
-      // Create questions
+      // Create questions in Question table (for quiz functionality)
       const questionRecords = [];
+      // Also save to PlacementQuestionBank with CEFR mapping
+      const bankQuestions = [];
+      
       for (const q of generatedQuestions.questions) {
+        // Save to Question table
         const question = await Question.create({
           quizId: quiz.id,
           type: q.type,
@@ -433,6 +439,33 @@ Trả về danh sách các câu hỏi trong format JSON array.`;
           order: q.order,
         });
         questionRecords.push(question);
+        
+        // Map difficulty to CEFR level and save to bank
+        const cefrLevel = mapQuizDifficultyToCefr(q.difficulty || options.difficulty || 'medium');
+        try {
+          const bankQuestion = await PlacementQuestionBank.create({
+            cefrLevel,
+            skillType: this.inferSkillType(q.type),
+            questionType: this.mapQuestionType(q.type),
+            content: q.question,
+            options: q.options || null,
+            correctAnswer: q.correctAnswer,
+            explanation: q.explanation || null,
+            sourceType: 'quiz',
+            courseId,
+            lectureId,
+            aiGenerated: true,
+            isActive: true,
+          });
+          bankQuestions.push(bankQuestion);
+        } catch (bankError) {
+          logger.warn('QUESTION_BANK_SAVE_FAILED', {
+            lectureId,
+            question: q.question?.substring(0, 50),
+            error: bankError.message,
+          });
+          // Continue - quiz still works even if bank save fails
+        }
       }
 
       // Analyze content quality
@@ -453,16 +486,19 @@ Trả về danh sách các câu hỏi trong format JSON array.`;
         courseId,
         userId,
         questionCount: questionRecords.length,
+        bankQuestionCount: bankQuestions.length,
         status: 'draft',
       });
 
       return {
         quiz,
         questions: questionRecords,
+        bankQuestions,
         qualityScore,
         metadata: {
           generatedAt: new Date(),
           questionCount: questionRecords.length,
+          bankQuestionCount: bankQuestions.length,
           status: 'draft',
         },
       };
@@ -481,6 +517,34 @@ Trả về danh sách các câu hỏi trong format JSON array.`;
         code: error.code || 'GENERATE_AND_SAVE_QUIZ_FAILED',
       };
     }
+  }
+
+  /**
+   * Infer skill type from question type
+   */
+  inferSkillType(questionType) {
+    const typeMap = {
+      multiple_choice: 'grammar',
+      true_false: 'grammar',
+      short_answer: 'vocabulary',
+      fill_blank: 'vocabulary',
+      matching: 'vocabulary',
+    };
+    return typeMap[questionType] || 'grammar';
+  }
+
+  /**
+   * Map question type to bank format
+   */
+  mapQuestionType(type) {
+    const typeMap = {
+      multiple_choice: 'multiple_choice',
+      true_false: 'multiple_choice', // Bank doesn't have true_false, map to multiple_choice
+      short_answer: 'fill_blank',
+      fill_blank: 'fill_blank',
+      matching: 'matching',
+    };
+    return typeMap[type] || 'multiple_choice';
   }
 
   /**
