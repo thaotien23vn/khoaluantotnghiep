@@ -3,6 +3,7 @@ const authMiddleware = require('../middlewares/auth');
 const authorizeRole = require('../middlewares/authorize');
 const { body } = require('express-validator');
 const aiController = require('../modules/ai/ai.controller');
+const aiTeachingAssistantController = require('../modules/ai/aiTeachingAssistant.controller');
 const {
   createStudentConversationValidation,
   sendStudentMessageValidation,
@@ -34,6 +35,11 @@ const {
   getAdminPlatformAnalyticsValidation,
   getAdminContentQualityReportValidation,
   triggerAdminRecommendationsValidation,
+  // AI Teaching Assistant
+  generateTeachingGuideValidation,
+  generateStudentFeedbackValidation,
+  generateTeacherExamValidation,
+  generateTeachingMaterialsValidation,
 } = require('../modules/ai/ai.validation');
 
 const router = express.Router();
@@ -265,6 +271,54 @@ router.get(
   authorizeRole('teacher', 'admin'),
   getTeacherQualityReportValidation,
   aiController.getTeacherContentQualityReport
+);
+
+// ==========================================
+// AI TEACHING ASSISTANT ROUTES
+// ==========================================
+
+// Generate Teaching Guide (Lesson Plan)
+router.post(
+  '/teacher/ai/teaching-guide',
+  authMiddleware,
+  authorizeRole('teacher', 'admin'),
+  generateTeachingGuideValidation,
+  aiTeachingAssistantController.generateTeachingGuide
+);
+
+// Generate Student Feedback Suggestions
+router.post(
+  '/teacher/ai/student-feedback',
+  authMiddleware,
+  authorizeRole('teacher', 'admin'),
+  generateStudentFeedbackValidation,
+  aiTeachingAssistantController.generateStudentFeedback
+);
+
+// Generate Exam/Quiz with Answer Key
+router.post(
+  '/teacher/ai/generate-exam',
+  authMiddleware,
+  authorizeRole('teacher', 'admin'),
+  generateTeacherExamValidation,
+  aiTeachingAssistantController.generateTeacherQuiz
+);
+
+// Generate Teaching Materials (slides, handouts, worksheets)
+router.post(
+  '/teacher/ai/teaching-materials',
+  authMiddleware,
+  authorizeRole('teacher', 'admin'),
+  generateTeachingMaterialsValidation,
+  aiTeachingAssistantController.generateTeachingMaterials
+);
+
+// Analyze Course Difficulty
+router.get(
+  '/teacher/ai/course-difficulty/:courseId',
+  authMiddleware,
+  authorizeRole('teacher', 'admin'),
+  aiTeachingAssistantController.analyzeCourseDifficulty
 );
 
 // ==========================================

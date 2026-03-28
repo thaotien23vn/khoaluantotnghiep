@@ -3,6 +3,26 @@ const { Op } = require('sequelize');
 const aiGateway = require('./aiGateway.service');
 const logger = require('../utils/logger');
 
+// Content cleaning utility
+function cleanContent(content) {
+  if (!content || typeof content !== 'string') return content;
+  
+  return content
+    // Remove common AI response prefixes
+    .replace(/^(Chào bạn,?\s*)?(với tư cách là|tôi là|tôi rất hào hứng|tôi sẽ giúp|dưới đây là|đây là)[^\n]*\n*/gi, '')
+    // Remove markdown code block markers if content is wrapped in them
+    .replace(/^```(?:markdown|text)?\s*/i, '')
+    .replace(/\s*```\s*$/i, '')
+    // Clean up multiple consecutive newlines
+    .replace(/\n{4,}/g, '\n\n\n')
+    // Remove trailing spaces
+    .replace(/[ \t]+$/gm, '')
+    // Remove zero-width characters
+    .replace(/[\u200B-\u200D\uFEFF]/g, '')
+    // Trim
+    .trim();
+}
+
 const {
   ContentQualityScore,
   Course,
@@ -54,39 +74,70 @@ class AiContentService {
         };
       }
 
-      const systemPrompt = `Bạn là một chuyên gia giáo dục có kinh nghiệm trong việc tạo nội dung học tập chất lượng cao. Hãy tạo nội dung lecture chi tiết dựa trên outline được cung cấp.
+      const systemPrompt = `Bạn là một chuyên gia tạo nội dung học tập trực tuyến (e-learning) cho học viên TỰ HỌC. 
+Nội dung phải được viết TRỰC TIẾP cho học viên, không phải giáo viên.
 
-Yêu cầu:
-- Nội dung phải rõ ràng, có cấu trúc logic
-- Phù hợp với cấp độ: ${difficulty}
-- Thời lượng ước tính: ${estimatedDuration} phút
-- Đối tượng mục tiêu: ${targetAudience || 'Học viên chung'}
-- Bao gồm examples và case studies khi appropriate
+QUAN TRỌNG:
+- Viết ở ngôi thứ 2 ("bạn" - học viên)
+- KHÔNG có: "Ghi chú cho giảng viên", "Người dẫn (GV)", "Pair work", "Hoạt động lớp"
+- Học viên tự đọc và tự làm bài tập cá nhân
+- Có interactive elements: quick quiz, flashcards
+- Thêm video scripts nếu cần
+
+Yêu cầu chất lượng:
+- Nội dung rõ ràng, có cấu trúc logic
+- Phù hợp cấp độ: ${difficulty}
+- Thời lượng: ${estimatedDuration} phút
+- Đối tượng: ${targetAudience || 'Học viên tự học online'}
 - Có tính tương tác và engagement`;
 
-      const prompt = `Tạo nội dung lecture với thông tin sau:
+      const prompt = `Tạo nội dung TỰ HỌC cho lecture với thông tin sau:
 
 COURSE: ${course.title}
-${course.description ? `COURSE DESCRIPTION: ${course.description}` : ''}
+${course.description ? `MÔ TẢ KHÓA HỌC: ${course.description}` : ''}
 
 CHAPTER: ${chapter.title}
-${chapter.description ? `CHAPTER DESCRIPTION: ${chapter.description}` : ''}
+${chapter.description ? `MÔ TẢ CHƯƠNG: ${chapter.description}` : ''}
 
 LECTURE TITLE: ${title}
 OUTLINE:
 ${outline}
 
-LEARNING OBJECTIVES:
+MỤC TIÊU HỌC TẬP:
 ${learningObjectives.length > 0 ? learningObjectives.join('\n') : 'Chưa xác định'}
 
-Hãy tạo nội dung chi tiết bao gồm:
-1. Introduction (5-10 phút)
-2. Main content (40-50 phút) - chia thành các sections theo outline
-3. Examples và demonstrations
-4. Summary và key takeaways (5-10 phút)
-5. Practice exercises hoặc discussion questions
+YÊU CẦU NỘI DUNG (VIẾT TRỰC TIẾP CHO HỌC VIÊN):
 
-Format response theo markdown với clear headings.`;
+1. 🎯 MỞ ĐẦU (5-7 phút)
+   - Giải thích tại sao học viên cần học chủ đề này
+   - Lợi ích thực tế trong công việc/cuộc sống
+   - Không có lời chào/thân mật không cần thiết
+
+2. 📚 NỘI DUNG CHÍNH (30-40 phút) - Chia thành sections nhỏ
+   Mỗi section có:
+   - Explanation trực tiếp (ngôi thứ 2)
+   - Real-world examples cụ thể
+   - 💡 Pro tips: "Mẹo thực hành"
+   - ⚠️ Common mistakes: "Lỗi thường gặp và cách tránh"
+
+3. 🎮 INTERACTIVE ELEMENTS
+   - 🎯 Quick Check: 2-3 câu hỏi ngắn có đáp án giải thích
+   - 📝 Key Takeaways: 3-5 điểm chính cần nhớ
+   - ✏️ Practice Exercise: Bài tập cá nhân (không cần partner)
+
+4. 🔚 TÓM TẮT (3-5 phút)
+   - Những điểm quan trọng nhất để áp dụng ngay
+
+5. 🚀 NEXT STEPS
+   - Gợi ý bài học tiếp theo hoặc resources bổ sung
+
+QUY TẮC:
+- KHÔNG bắt đầu bằng "Chào bạn", "Dưới đây là", "Tôi sẽ"
+- KHÔNG có "Giáo viên cần...", "GV nên..."
+- Viết ngắn gọn, súc tích, dễ đọc
+- Dùng emojis để tăng visual appeal
+
+Format: Markdown với headings rõ ràng.`;
 
       const aiResponse = await aiGateway.generateText({
         system: systemPrompt,
@@ -95,7 +146,7 @@ Format response theo markdown với clear headings.`;
         timeoutMs: 120000, // 120s timeout cho lecture dài
       });
 
-      const content = aiResponse.text;
+      const content = cleanContent(aiResponse.text);
 
       // Get the lecture ID from the context or generate one
       const lecture = await Lecture.findOne({

@@ -118,8 +118,9 @@ async function geminiGenerate({ system, prompt, maxOutputTokens, timeoutMs = 300
           throw err;
         }
         
-        // Small delay before next key
-        await new Promise(resolve => setTimeout(resolve, 500));
+        // Exponential backoff before next key
+        const delayMs = Math.min(1000 * Math.pow(2, attempt), 10000);
+        await new Promise(resolve => setTimeout(resolve, delayMs));
         continue;
       }
       

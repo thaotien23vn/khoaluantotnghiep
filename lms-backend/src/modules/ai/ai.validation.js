@@ -620,6 +620,118 @@ const triggerCourseContentGenerationValidation = [
   handleValidationErrors,
 ];
 
+/**
+ * AI Teaching Assistant - Generate Teaching Guide Validation
+ */
+const generateTeachingGuideValidation = [
+  body('lectureId')
+    .notEmpty()
+    .withMessage('lectureId là bắt buộc')
+    .isInt({ min: 1 })
+    .withMessage('lectureId phải là số nguyên dương'),
+  body('classDuration')
+    .optional()
+    .isInt({ min: 15, max: 180 })
+    .withMessage('classDuration phải từ 15-180 phút'),
+  body('classSize')
+    .optional()
+    .isInt({ min: 1, max: 200 })
+    .withMessage('classSize phải từ 1-200 học sinh'),
+  body('teachingMode')
+    .optional()
+    .isIn(['offline', 'online', 'hybrid'])
+    .withMessage('teachingMode phải là offline, online, hoặc hybrid'),
+  body('studentLevel')
+    .optional()
+    .isIn(['beginner', 'intermediate', 'advanced'])
+    .withMessage('studentLevel phải là beginner, intermediate, hoặc advanced'),
+  handleValidationErrors,
+];
+
+/**
+ * AI Teaching Assistant - Generate Student Feedback Validation
+ */
+const generateStudentFeedbackValidation = [
+  body('courseId')
+    .notEmpty()
+    .withMessage('courseId là bắt buộc')
+    .isInt({ min: 1 })
+    .withMessage('courseId phải là số nguyên dương'),
+  body('studentId')
+    .optional()
+    .isInt({ min: 1 })
+    .withMessage('studentId phải là số nguyên dương'),
+  body('feedbackType')
+    .optional()
+    .isIn(['general', 'positive', 'improvement', 'specific_assignment'])
+    .withMessage('feedbackType không hợp lệ'),
+  body('assignmentId')
+    .optional()
+    .isInt({ min: 1 })
+    .withMessage('assignmentId phải là số nguyên dương'),
+  handleValidationErrors,
+];
+
+/**
+ * AI Teaching Assistant - Generate Exam/Quiz Validation
+ */
+const generateTeacherExamValidation = [
+  body('courseId')
+    .notEmpty()
+    .withMessage('courseId là bắt buộc')
+    .isInt({ min: 1 })
+    .withMessage('courseId phải là số nguyên dương'),
+  body('quizType')
+    .optional()
+    .isIn(['chapter_test', 'midterm', 'final', 'practice'])
+    .withMessage('quizType không hợp lệ'),
+  body('difficulty')
+    .optional()
+    .isIn(['easy', 'medium', 'hard', 'mixed'])
+    .withMessage('difficulty phải là easy, medium, hard, hoặc mixed'),
+  body('questionCount')
+    .optional()
+    .isInt({ min: 5, max: 100 })
+    .withMessage('questionCount phải từ 5-100'),
+  body('timeLimit')
+    .optional()
+    .isInt({ min: 5, max: 180 })
+    .withMessage('timeLimit phải từ 5-180 phút'),
+  body('chapterIds')
+    .optional()
+    .isArray()
+    .withMessage('chapterIds phải là array'),
+  body('includeAnswerKey')
+    .optional()
+    .isBoolean()
+    .withMessage('includeAnswerKey phải là boolean'),
+  handleValidationErrors,
+];
+
+/**
+ * AI Teaching Assistant - Generate Teaching Materials Validation
+ */
+const generateTeachingMaterialsValidation = [
+  body('lectureId')
+    .notEmpty()
+    .withMessage('lectureId là bắt buộc')
+    .isInt({ min: 1 })
+    .withMessage('lectureId phải là số nguyên dương'),
+  body('materialType')
+    .optional()
+    .isIn(['slides', 'handout', 'worksheet', 'cheat_sheet'])
+    .withMessage('materialType phải là slides, handout, worksheet, hoặc cheat_sheet'),
+  body('slideCount')
+    .optional()
+    .isInt({ min: 5, max: 50 })
+    .withMessage('slideCount phải từ 5-50'),
+  body('includeActivities')
+    .optional()
+    .isBoolean()
+    .withMessage('includeActivities phải là boolean'),
+  handleValidationErrors,
+];
+
 module.exports = {
   handleValidationErrors,
   createStudentConversationValidation,
@@ -648,6 +760,11 @@ module.exports = {
   generateCourseOutlineValidation,
   triggerCourseContentGenerationValidation,
   saveCourseOutlineValidation,
+  // AI Teaching Assistant
+  generateTeachingGuideValidation,
+  generateStudentFeedbackValidation,
+  generateTeacherExamValidation,
+  generateTeachingMaterialsValidation,
   // Admin enhancements
   getAdminPlatformAnalyticsValidation,
   getAdminContentQualityReportValidation,
