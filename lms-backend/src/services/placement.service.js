@@ -18,7 +18,7 @@ const CEFR_LEVELS = ['A1', 'A2', 'B1', 'B2', 'C1', 'C2'];
 const LEVEL_UP_STREAK = 2;    // 2 correct -> level up
 const LEVEL_DOWN_STREAK = 3;  // 3 wrong -> level down
 const MAX_QUESTIONS = 20;     // Max questions per test
-const QUICK_CHECK_QUESTIONS = 7;  // Quick check has max 7 questions
+const QUICK_CHECK_QUESTIONS = 10;  // Quick check has max 10 questions
 const MIN_QUESTIONS = 8;      // Min questions before early stop
 const CONFIDENCE_THRESHOLD = 0.85; // Stop when confident enough
 const RETAKE_COOLDOWN_DAYS = 30;   // Days before can retake
@@ -265,7 +265,28 @@ class PlacementService {
       streakWrong: newStreakWrong,
     });
 
-    // Return immediate feedback
+    // Check if test should auto-complete after this answer
+    const shouldComplete = this.shouldStopTest(session);
+    if (shouldComplete) {
+      logger.info('PLACEMENT_AUTO_COMPLETING', {
+        sessionId,
+        questionCount: session.questionCount,
+        isQuickCheck: session.isQuickCheck,
+      });
+      const result = await this.completeSession(sessionId);
+      return {
+        isCorrect,
+        correctAnswer: question.correctAnswer,
+        explanation: question.explanation,
+        currentLevel: newLevel,
+        streakCorrect: newStreakCorrect,
+        streakWrong: newStreakWrong,
+        completed: true,
+        result,
+      };
+    }
+
+    // Return immediate feedback for ongoing test
     return {
       isCorrect,
       correctAnswer: question.correctAnswer,
@@ -303,6 +324,7 @@ class PlacementService {
     });
 
     // Generate AI-powered recommendations
+    const skillBreakdown = this.calculateSkillBreakdown(session);
     const aiRecommendations = await placementAiRecommendations.generatePlacementRecommendations(
       session,
       skillBreakdown,
@@ -310,7 +332,7 @@ class PlacementService {
     );
 
     // Combine both rule-based and AI recommendations
-    const recommendations = await this.generateRecommendations(session, finalLevel);
+    const recommendations = await this.generateRecommendations(session, finalLevel, skillBreakdown);
     recommendations.aiInsights = aiRecommendations;
 
     logger.info('PLACEMENT_SESSION_COMPLETED', {
@@ -483,35 +505,66 @@ class PlacementService {
     }));
   }
 
-  async generateRecommendations(session, finalLevel) {
-    // If target course specified, check compatibility
+  async generateRecommendations(session, finalLevel, skillBreakdown = null) {
+    // If target course specified, check compatibility with detailed info
     if (session.targetCourseId) {
       const course = await Course.findByPk(session.targetCourseId, {
-        attributes: ['id', 'title', 'level'],
+        attributes: ['id', 'title', 'level', 'willLearn', 'requirements', 'tags'],
       });
       
       if (course) {
         const courseLevel = this.mapCourseLevelToCefr(course.level);
         const comparison = this.compareLevels(finalLevel, courseLevel);
         
+        // Check if course covers weak areas
+        let coversWeakAreas = false;
+        let weakAreasCovered = [];
+        if (skillBreakdown) {
+          const weakSkills = skillBreakdown
+            .filter(s => s.accuracy < 0.6)
+            .map(s => s.skill);
+          
+          const courseContent = [
+            ...(course.willLearn || []),
+            ...(course.tags || [])
+          ].join(' ').toLowerCase();
+          
+          weakAreasCovered = weakSkills.filter(skill => 
+            courseContent.includes(skill.toLowerCase())
+          );
+          coversWeakAreas = weakAreasCovered.length > 0;
+        }
+        
         return {
           targetCourse: {
             id: course.id,
             title: course.title,
             requiredLevel: courseLevel,
+            willLearn: course.willLearn || [],
+            requirements: course.requirements || [],
+            tags: course.tags || [],
           },
           yourLevel: finalLevel,
           match: comparison,
-          message: this.getRecommendationMessage(comparison, finalLevel, courseLevel),
+          coversWeakAreas,
+          weakAreasCovered,
+          message: this.getRecommendationMessage(comparison, finalLevel, courseLevel, coversWeakAreas),
         };
       }
     }
 
-    // General recommendation
+    // General recommendation with skill-based course matching
+    const weakAreas = skillBreakdown 
+      ? skillBreakdown.filter(s => s.accuracy < 0.6).map(s => s.skill)
+      : [];
+    
     return {
       yourLevel: finalLevel,
-      suggestedCourses: await this.getSuggestedCourses(finalLevel),
-      message: `Bạn đang ở trình độ ${finalLevel}. Đây là các khóa học phù hợp:`,
+      weakAreas,
+      suggestedCourses: await this.getSuggestedCourses(finalLevel, weakAreas, skillBreakdown),
+      message: weakAreas.length > 0 
+        ? `Bạn đang ở trình độ ${finalLevel}. Dựa trên kết quả test, bạn cần cải thiện: ${weakAreas.join(', ')}. Đây là các khóa học phù hợp:`
+        : `Bạn đang ở trình độ ${finalLevel}. Đây là các khóa học phù hợp:`,
     };
   }
 
@@ -524,10 +577,12 @@ class PlacementService {
     return 'not_ready'; // Too advanced
   }
 
-  getRecommendationMessage(match, userLevel, courseLevel) {
+  getRecommendationMessage(match, userLevel, courseLevel, coversWeakAreas = false) {
     switch (match) {
       case 'ready':
-        return `Bạn đã sẵn sàng cho khóa học này! Trình độ ${userLevel} phù hợp yêu cầu ${courseLevel}.`;
+        return coversWeakAreas 
+          ? `Bạn đã sẵn sàng cho khóa học này! Khóa học còn giúp cải thiện điểm yếu của bạn.`
+          : `Bạn đã sẵn sàng cho khóa học này! Trình độ ${userLevel} phù hợp yêu cầu ${courseLevel}.`;
       case 'challenging':
         return `Khóa học có thể hơi thử thách. Bạn nên ôn tập thêm trước khi bắt đầu.`;
       case 'not_ready':
@@ -535,18 +590,70 @@ class PlacementService {
     }
   }
 
-  async getSuggestedCourses(level) {
-    // Find courses matching the level
+  async getSuggestedCourses(level, weakAreas = [], skillBreakdown = null) {
+    const { Op } = require('sequelize');
+    const courseLevel = this.cefrToCourseLevel(level);
+    
+    // Base query: same level, published
+    const baseWhere = {
+      level: courseLevel,
+      published: true,
+    };
+    
+    // If we have weak areas, try to find courses that cover them
+    if (weakAreas.length > 0) {
+      const searchTerms = weakAreas.map(area => area.toLowerCase());
+      
+      // Find courses that mention weak areas in willLearn or tags
+      const coursesWithWeakAreas = await Course.findAll({
+        where: {
+          ...baseWhere,
+          [Op.or]: [
+            // Check willLearn array contains weak area keywords
+            { willLearn: { [Op.or]: searchTerms.map(term => ({ [Op.like]: `%${term}%` })) } },
+            // Check tags array contains weak area keywords  
+            { tags: { [Op.or]: searchTerms.map(term => ({ [Op.like]: `%${term}%` })) } },
+          ],
+        },
+        attributes: ['id', 'title', 'description', 'imageUrl', 'level', 'willLearn', 'requirements', 'tags'],
+        limit: 5,
+      });
+      
+      // If found courses covering weak areas, return them with match score
+      if (coursesWithWeakAreas.length > 0) {
+        return coursesWithWeakAreas.map(course => {
+          const courseContent = [
+            ...(course.willLearn || []),
+            ...(course.tags || [])
+          ].join(' ').toLowerCase();
+          
+          const matchedWeakAreas = weakAreas.filter(area => 
+            courseContent.includes(area.toLowerCase())
+          );
+          
+          return {
+            ...course.toJSON(),
+            matchScore: matchedWeakAreas.length,
+            matchedWeakAreas,
+            matchReason: `Khóa học giúp cải thiện: ${matchedWeakAreas.join(', ')}`,
+          };
+        }).sort((a, b) => b.matchScore - a.matchScore);
+      }
+    }
+    
+    // Fallback: return all courses at this level
     const courses = await Course.findAll({
-      where: { 
-        level: this.cefrToCourseLevel(level),
-        published: true,
-      },
-      attributes: ['id', 'title', 'description', 'imageUrl', 'level'],
+      where: baseWhere,
+      attributes: ['id', 'title', 'description', 'imageUrl', 'level', 'willLearn', 'requirements', 'tags'],
       limit: 5,
     });
     
-    return courses;
+    return courses.map(course => ({
+      ...course.toJSON(),
+      matchScore: 0,
+      matchedWeakAreas: [],
+      matchReason: 'Khóa học phù hợp trình độ của bạn',
+    }));
   }
 
   cefrToCourseLevel(cefr) {
