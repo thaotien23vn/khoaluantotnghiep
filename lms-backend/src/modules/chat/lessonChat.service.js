@@ -29,7 +29,7 @@ class LessonChatService {
     let chat = await LessonChat.findOne({
       where: { lessonId },
       include: [
-        { model: LessonMessage, as: 'messages', limit: 50, order: [['createdAt', 'DESC']] },
+        { model: LessonMessage, as: 'messages', limit: 50, order: [['created_at', 'DESC']] },
       ],
     });
 
@@ -79,7 +79,7 @@ class LessonChatService {
           ],
         }] : []),
       ],
-      order: [['createdAt', 'DESC']],
+      order: [['created_at', 'DESC']],
       limit,
       offset,
     });
