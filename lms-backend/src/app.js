@@ -12,6 +12,7 @@ const forumRoutes = require("./routes/forum.routes");
 const aiRoutes = require("./routes/ai.routes");
 const teacherStatisticsRoutes = require("./routes/teacher_statistics.routes");
 const placementRoutes = require("./routes/placement.routes");
+const chatRoutes = require("./routes/chat.routes");
 const protectedRoutes = require("./routes/protected.routes");
 const validateInput = require("./middlewares/validateInput");
 const { apiLimiter } = require("./middlewares/rateLimiter");
@@ -161,6 +162,9 @@ app.use("/api", aiRoutes);
 
 // Placement test routes
 app.use("/api", placementRoutes);
+
+// Chat routes
+app.use("/api", chatRoutes);
 
 // Payment routes
 app.use("/api/student/payments", paymentRoutes);

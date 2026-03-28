@@ -101,6 +101,10 @@ const models = {};
   'placementQuestion',
   'placementResponse',
   'placementQuestionBank',
+  'lessonChat',
+  'lessonMessage',
+  'chatParticipant',
+  'chatEscalation',
 ].forEach((name) => {
   models[name.charAt(0).toUpperCase() + name.slice(1)] = require(`./${name}.model`)(sequelize);
 });
@@ -140,6 +144,10 @@ const {
   PlacementQuestion,
   PlacementResponse,
   PlacementQuestionBank,
+  LessonChat,
+  LessonMessage,
+  ChatParticipant,
+  ChatEscalation,
 } = models;
 
 User.hasMany(Course, { foreignKey: 'createdBy', as: 'createdCourses' });
@@ -274,6 +282,13 @@ PlacementResponse.belongsTo(PlacementSession, { foreignKey: 'sessionId', as: 'se
 
 PlacementQuestion.hasMany(PlacementResponse, { foreignKey: 'questionId', as: 'responses' });
 PlacementResponse.belongsTo(PlacementQuestion, { foreignKey: 'questionId', as: 'question' });
+
+// Lesson Chat Associations
+for (const model of [LessonChat, LessonMessage, ChatParticipant, ChatEscalation]) {
+  if (model && typeof model.associate === 'function') {
+    model.associate(models);
+  }
+}
 
 const connectDB = async () => {
   await sequelize.authenticate();
