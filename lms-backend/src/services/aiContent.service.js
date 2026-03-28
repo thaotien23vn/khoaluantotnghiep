@@ -1305,7 +1305,7 @@ Lưu ý:
         title: outline.title,
         description: outline.description,
         slug: this.generateSlug(outline.title),
-        level: config.difficulty === 'beginner' ? 'Cơ bản' : config.difficulty === 'intermediate' ? 'Trung cấp' : 'Nâng cao',
+        level: config.difficulty === 'beginner' ? 'beginner' : config.difficulty === 'intermediate' ? 'intermediate' : 'advanced',
         category: config.topic,
         duration: outline.estimatedTotalDuration || `${config.estimatedWeeks} tuần`,
         totalLessons: outline.chapters?.reduce((acc, ch) => acc + (ch.lectures?.length || 0), 0) || 0,
