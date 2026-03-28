@@ -14,6 +14,8 @@ const MIN_QUESTIONS_THRESHOLD = 50; // Generate if below this
 const BATCH_SIZE = 3; // Generate 3 at a time to be safer with rate limits
 const DELAY_BETWEEN_BATCHES_MS = 10000; // 10s delay between batches
 
+const MAX_CONSECUTIVE_FAILURES = 15;
+
 class PlacementQuestionGenerator {
   /**
    * Main entry point - run nightly to pre-generate questions
@@ -24,10 +26,25 @@ class PlacementQuestionGenerator {
       generated: 0,
       failed: 0,
       errors: [],
+      stoppedEarly: false,
+      reason: null,
     };
+    let consecutiveFailures = 0;
 
     for (const cefrLevel of CEFR_LEVELS) {
       for (const skillType of SKILL_TYPES) {
+        // Check if too many consecutive failures
+        if (consecutiveFailures >= MAX_CONSECUTIVE_FAILURES) {
+          logger.error('PLACEMENT_GENERATION_STOPPED_TOO_MANY_FAILURES', {
+            consecutiveFailures,
+            maxAllowed: MAX_CONSECUTIVE_FAILURES,
+            generatedSoFar: results.generated,
+          });
+          results.stoppedEarly = true;
+          results.reason = `Stopped after ${consecutiveFailures} consecutive failures`;
+          return results;
+        }
+
         try {
           const count = await this.getQuestionCount(cefrLevel, skillType);
           const needed = TARGET_QUESTIONS_PER_COMBO - count;
@@ -40,8 +57,22 @@ class PlacementQuestionGenerator {
               needed,
             });
 
-            const generated = await this.generateBatch(cefrLevel, skillType, Math.min(needed, 20));
-            results.generated += generated;
+            const batchResult = await this.generateBatch(cefrLevel, skillType, Math.min(needed, 20));
+            results.generated += batchResult.generated;
+            consecutiveFailures = batchResult.hadSuccess ? 0 : consecutiveFailures + batchResult.failedInBatch;
+
+            if (consecutiveFailures >= MAX_CONSECUTIVE_FAILURES) {
+              logger.error('PLACEMENT_GENERATION_STOPPED_TOO_MANY_FAILURES', {
+                consecutiveFailures,
+                maxAllowed: MAX_CONSECUTIVE_FAILURES,
+                generatedSoFar: results.generated,
+                lastCefrLevel: cefrLevel,
+                lastSkillType: skillType,
+              });
+              results.stoppedEarly = true;
+              results.reason = `Stopped after ${consecutiveFailures} consecutive failures at ${cefrLevel}-${skillType}`;
+              return results;
+            }
 
             // Delay between combinations
             await this.sleep(DELAY_BETWEEN_BATCHES_MS);
@@ -53,6 +84,7 @@ class PlacementQuestionGenerator {
             error: err.message,
           });
           results.failed++;
+          consecutiveFailures++;
           results.errors.push({ cefrLevel, skillType, error: err.message });
         }
       }
@@ -80,6 +112,8 @@ class PlacementQuestionGenerator {
    */
   async generateBatch(cefrLevel, skillType, count) {
     let generated = 0;
+    let failedInBatch = 0;
+    let hadSuccess = false;
     const batches = Math.ceil(count / BATCH_SIZE);
 
     for (let i = 0; i < batches; i++) {
@@ -91,6 +125,9 @@ class PlacementQuestionGenerator {
           if (question) {
             await this.saveQuestion(question, cefrLevel, skillType);
             generated++;
+            hadSuccess = true;
+          } else {
+            failedInBatch++;
           }
         } catch (err) {
           logger.warn('PLACEMENT_SINGLE_GENERATE_FAILED', {
@@ -98,6 +135,7 @@ class PlacementQuestionGenerator {
             skillType,
             error: err.message,
           });
+          failedInBatch++;
         }
         
         // Small delay between individual questions
@@ -112,7 +150,7 @@ class PlacementQuestionGenerator {
       }
     }
 
-    return generated;
+    return { generated, failedInBatch, hadSuccess };
   }
 
   /**

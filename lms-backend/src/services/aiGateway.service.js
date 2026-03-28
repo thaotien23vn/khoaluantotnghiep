@@ -56,9 +56,10 @@ class CircuitBreaker {
 
 const circuitBreaker = new CircuitBreaker(5, 60000); // 5 failures -> open for 60s
 
-function getNextApiKey(attempt = 0) {
+function getNextApiKey() {
   if (apiKeys.length === 0) return null;
-  const index = (currentKeyIndex + attempt) % apiKeys.length;
+  const index = currentKeyIndex % apiKeys.length;
+  currentKeyIndex = (currentKeyIndex + 1) % apiKeys.length;
   return { key: apiKeys[index].trim(), index };
 }
 
@@ -84,7 +85,7 @@ function getGeminiApiKey() {
 }
 
 function getModel() {
-  return process.env.AI_MODEL || 'gemini-1.5-pro';
+  return process.env.AI_MODEL || 'gemini-2.5-flash-latest';
 }
 
 function getEmbeddingModel() {
@@ -121,7 +122,7 @@ async function geminiGenerate({ system, prompt, maxOutputTokens, timeoutMs = 300
   const maxAttempts = apiKeys.length;
   
   for (let attempt = 0; attempt < maxAttempts; attempt++) {
-    const { key: apiKey, index: keyIndex } = getNextApiKey(attempt);
+    const { key: apiKey, index: keyIndex } = getNextApiKey();
     
     try {
       logger.info('GEMINI_GENERATE_ATTEMPT', { attempt: attempt + 1, keyIndex, maxKeys: apiKeys.length });
@@ -216,7 +217,7 @@ async function geminiEmbed({ text }) {
   const maxAttempts = apiKeys.length;
   
   for (let attempt = 0; attempt < maxAttempts; attempt++) {
-    const { key: apiKey, index: keyIndex } = getNextApiKey(attempt);
+    const { key: apiKey, index: keyIndex } = getNextApiKey();
     
     try {
       logger.info('GEMINI_EMBED_ATTEMPT', { attempt: attempt + 1, keyIndex, maxKeys: apiKeys.length });
