@@ -489,7 +489,7 @@ Trả về danh sách các câu hỏi trong format JSON array.`;
   async analyzeQuizQuality(quizId) {
     try {
       const quiz = await Quiz.findByPk(quizId, {
-        include: [Question],
+        include: [{ model: Question, as: 'questions' }],
       });
 
       if (!quiz || !quiz.questions || quiz.questions.length === 0) {
@@ -1455,7 +1455,7 @@ Lưu ý:
         return lecture?.content || lecture?.aiNotes || '';
       case 'quiz':
         const quiz = await Quiz.findByPk(contentId, {
-          include: [Question],
+          include: [{ model: Question, as: 'questions' }],
         });
         return JSON.stringify(quiz, null, 2);
       default:
