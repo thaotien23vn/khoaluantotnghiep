@@ -61,7 +61,7 @@ const requestQueue = [];
 const MAX_RPM_PER_KEY = 15; // Gemini free tier: 15 requests/min/key
 const MIN_DELAY_MS = Math.ceil(60000 / MAX_RPM_PER_KEY); // 4000ms between requests per key
 const MAX_QUEUE_SIZE = 100;
-const MAX_RETRY_ATTEMPTS = 3;
+const MAX_RETRY_ATTEMPTS = 1; // Reduced to fail faster when all keys exhausted
 
 let lastRequestTime = 0;
 let isProcessingQueue = false;
@@ -75,7 +75,7 @@ let queueStats = {
 // Global rate limit cooldown - when ALL keys are rate limited
 let globalRateLimitCooldown = 0;
 const GLOBAL_COOLDOWN_MS = 60000; // 60 seconds
-const QUEUE_RETRY_DELAY_MS = 5000; // 5s delay before retrying queued request
+const QUEUE_RETRY_DELAY_MS = 1000; // 1s delay before retrying - fail fast when exhausted
 
 function isGlobalRateLimited() {
   if (Date.now() < globalRateLimitCooldown) {
@@ -161,7 +161,14 @@ async function processQueue() {
       queueStats.totalFailed++;
       
       // Retry logic for rate limited requests
-      if ((err.statusCode === 429 || err.code === 'ALL_KEYS_RATE_LIMITED' || err.code === 'GLOBAL_RATE_LIMITED') && request.retries < MAX_RETRY_ATTEMPTS) {
+      // Don't retry if all keys exhausted - fail immediately to avoid long waits
+      if (err.code === 'ALL_KEYS_RATE_LIMITED') {
+        request.reject(err);
+        logger.error('AI_QUEUE_ALL_KEYS_EXHAUSTED_FAIL_FAST', { 
+          type: request.type,
+          error: err.message
+        });
+      } else if ((err.statusCode === 429 || err.code === 'GLOBAL_RATE_LIMITED') && request.retries < MAX_RETRY_ATTEMPTS) {
         request.retries++;
         
         // If global cooldown active, wait longer
