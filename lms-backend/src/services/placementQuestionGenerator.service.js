@@ -14,7 +14,7 @@ const MAX_QUESTIONS_PER_LEVEL = 20; // Cap per CEFR level
 
 class PlacementQuestionGenerator {
   /**
-   * Main entry point - generate 20 questions in a single AI call
+   * Main entry point - generate 20 questions in batches of 10 to avoid rate limits
    * Distributed based on current database counts
    */
   async generateAllMissingQuestions(signal) {
@@ -54,26 +54,57 @@ class PlacementQuestionGenerator {
         return results;
       }
 
-      // Step 3: Generate all questions in a single AI call
-      const questions = await this.generateQuestionsBatch(distribution, signal);
-      
+      // Step 3: Split into batches of max 10 questions to avoid rate limits
+      const batches = this.splitDistributionIntoBatches(distribution, 10);
+      logger.info('PLACEMENT_BATCH_SPLIT', { batchCount: batches.length, batches });
+
+      // Step 4: Process each batch with delay between them
+      const allQuestions = [];
+      for (let i = 0; i < batches.length; i++) {
+        if (signal?.aborted) {
+          results.stoppedEarly = true;
+          results.reason = 'Cancelled by user';
+          break;
+        }
+
+        const batch = batches[i];
+        logger.info('PLACEMENT_PROCESSING_BATCH', { batchIndex: i + 1, totalBatches: batches.length, batch });
+
+        const questions = await this.generateQuestionsBatch(batch, signal);
+        
+        if (questions && questions.length > 0) {
+          allQuestions.push(...questions);
+          logger.info('PLACEMENT_BATCH_SUCCESS', { batchIndex: i + 1, count: questions.length });
+        } else {
+          logger.warn('PLACEMENT_BATCH_FAILED', { batchIndex: i + 1 });
+          results.failed++;
+        }
+
+        // Delay between batches (except after last one)
+        if (i < batches.length - 1 && !signal?.aborted) {
+          const delayMs = 8000; // 8s delay between batches
+          logger.info('PLACEMENT_BATCH_DELAY', { delayMs, nextBatch: i + 2 });
+          await this.sleepWithAbortCheck(delayMs, signal);
+        }
+      }
+
       if (signal?.aborted) {
         results.stoppedEarly = true;
         results.reason = 'Cancelled by user';
         return results;
       }
 
-      if (!questions || questions.length === 0) {
-        results.failed = 1;
+      if (allQuestions.length === 0) {
+        results.failed = batches.length;
         results.errors.push({ error: 'No questions generated from AI' });
         results.stoppedEarly = true;
         results.reason = 'AI returned no questions';
         return results;
       }
 
-      // Step 4: Save all questions to database
+      // Step 5: Save all questions to database
       let savedCount = 0;
-      for (const question of questions) {
+      for (const question of allQuestions) {
         if (signal?.aborted) {
           results.stoppedEarly = true;
           results.reason = 'Cancelled during saving';
@@ -118,6 +149,54 @@ class PlacementQuestionGenerator {
     });
     
     return results;
+  }
+
+  /**
+   * Split distribution into batches of max batchSize questions
+   */
+  splitDistributionIntoBatches(distribution, batchSize) {
+    const batches = [];
+    const entries = Object.entries(distribution);
+    
+    // Sort by count descending to prioritize levels needing more questions
+    entries.sort((a, b) => b[1] - a[1]);
+    
+    let currentBatch = {};
+    let currentBatchTotal = 0;
+    
+    for (const [level, count] of entries) {
+      let remaining = count;
+      
+      while (remaining > 0) {
+        const availableSpace = batchSize - currentBatchTotal;
+        
+        if (availableSpace <= 0) {
+          // Current batch is full, start new batch
+          batches.push(currentBatch);
+          currentBatch = {};
+          currentBatchTotal = 0;
+          continue;
+        }
+        
+        const toAdd = Math.min(remaining, availableSpace);
+        currentBatch[level] = (currentBatch[level] || 0) + toAdd;
+        currentBatchTotal += toAdd;
+        remaining -= toAdd;
+        
+        if (currentBatchTotal >= batchSize) {
+          batches.push(currentBatch);
+          currentBatch = {};
+          currentBatchTotal = 0;
+        }
+      }
+    }
+    
+    // Don't forget the last batch if it has content
+    if (currentBatchTotal > 0) {
+      batches.push(currentBatch);
+    }
+    
+    return batches;
   }
 
   /**
@@ -201,14 +280,15 @@ class PlacementQuestionGenerator {
    */
   async generateQuestionsBatch(distribution, signal) {
     const prompt = this.buildBatchPrompt(distribution);
+    const totalQuestions = Object.values(distribution).reduce((sum, c) => sum + c, 0);
     
     try {
-      logger.info('PLACEMENT_AI_BATCH_GENERATE_START', { distribution });
+      logger.info('PLACEMENT_AI_BATCH_GENERATE_START', { distribution, totalQuestions });
       
       const aiResponse = await aiGateway.generateText({
         system: 'Bạn là chuyên gia đánh giá trình độ tiếng Anh. Tạo câu hỏi placement test chất lượng cao.',
         prompt,
-        maxOutputTokens: 5000,
+        maxOutputTokens: totalQuestions <= 10 ? 3000 : 5000,
         timeoutMs: 60000,
       });
 
@@ -220,12 +300,12 @@ class PlacementQuestionGenerator {
       
       logger.info('PLACEMENT_AI_BATCH_GENERATE_COMPLETE', { 
         count: questions.length,
-        expected: TOTAL_QUESTIONS_PER_RUN 
+        expected: totalQuestions 
       });
       
       return questions;
     } catch (err) {
-      logger.error('PLACEMENT_AI_BATCH_GENERATE_FAILED', { error: err.message });
+      logger.error('PLACEMENT_AI_BATCH_GENERATE_FAILED', { error: err.message, distribution });
       return [];
     }
   }

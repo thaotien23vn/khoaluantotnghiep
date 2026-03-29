@@ -74,7 +74,7 @@ let queueStats = {
 
 // Global rate limit cooldown - when ALL keys are rate limited
 let globalRateLimitCooldown = 0;
-const GLOBAL_COOLDOWN_MS = 60000; // 60 seconds
+const GLOBAL_COOLDOWN_MS = 120000; // 120 seconds - increased to handle Gemini rate limits
 const QUEUE_RETRY_DELAY_MS = 1000; // 1s delay before retrying - fail fast when exhausted
 
 function isGlobalRateLimited() {
