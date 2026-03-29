@@ -119,6 +119,20 @@ class PlacementQuestionGenerator {
             skillType,
             consecutiveFailures,
           });
+          
+          // Check stop condition immediately after failure
+          if (consecutiveFailures >= MAX_CONSECUTIVE_FAILURES) {
+            logger.error('PLACEMENT_GENERATION_STOPPED_TOO_MANY_FAILURES', {
+              consecutiveFailures,
+              maxAllowed: MAX_CONSECUTIVE_FAILURES,
+              generatedSoFar: results.generated,
+              lastCefrLevel: cefrLevel,
+              lastSkillType: skillType,
+            });
+            results.stoppedEarly = true;
+            results.reason = `Stopped after ${consecutiveFailures} consecutive failures at ${cefrLevel}-${skillType}`;
+            return results;
+          }
         }
 
         // Small delay between individual questions (4s to avoid rate limits)
