@@ -246,7 +246,7 @@ Yêu cầu:
 
       const prompt = `Tạo ${questionCount} câu hỏi quiz từ nội dung lecture sau:
 
-COURSE: ${lecture.chapter?.Course?.title}
+COURSE: ${lecture.chapter?.course?.title}
 CHAPTER: ${lecture.chapter?.title}
 LECTURE: ${lecture.title}
 
@@ -730,7 +730,7 @@ Yêu cầu:
 
       const prompt = `Tạo ${exerciseCount} bài tập thực hành từ nội dung lecture sau:
 
-COURSE: ${lecture.chapter?.Course?.title}
+COURSE: ${lecture.chapter?.course?.title}
 CHAPTER: ${lecture.chapter?.title}
 LECTURE: ${lecture.title}
 
