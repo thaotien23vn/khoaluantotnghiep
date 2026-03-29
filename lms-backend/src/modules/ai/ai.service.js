@@ -114,9 +114,9 @@ class AiService {
 
     if (lectureId != null && Number.isFinite(lectureId)) {
       const lecture = await Lecture.findByPk(lectureId, {
-        include: [{ model: Chapter, attributes: ['courseId'], required: true }],
+        include: [{ model: Chapter, as: 'chapter', attributes: ['courseId'], required: true }],
       });
-      if (!lecture || Number(lecture.Chapter.courseId) !== courseId) {
+      if (!lecture || Number(lecture.chapter.courseId) !== courseId) {
         throw { status: 400, message: 'lectureId không thuộc courseId' };
       }
     }
