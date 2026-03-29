@@ -234,7 +234,7 @@ class AiPersonalizationService {
         reason: 'Tiếp theo trong lộ trình học tập',
         metadata: {
           chapter: nextLecture.chapter?.title,
-          order: nextLecture.order,
+          order: nextLecture.chapter?.order,
         },
         expiresAt: new Date(Date.now() + 14 * 24 * 60 * 60 * 1000), // 14 days
       });
@@ -316,6 +316,7 @@ class AiPersonalizationService {
           include: [
             {
               model: Chapter,
+          as: 'chapter',
               as: 'chapter',
               where: { courseId },
             },

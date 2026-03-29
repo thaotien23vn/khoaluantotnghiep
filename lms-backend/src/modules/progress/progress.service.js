@@ -18,14 +18,14 @@ class ProgressService {
    */
   async updateLectureProgress(userId, lectureId, watchedPercent) {
     const lecture = await Lecture.findByPk(lectureId, {
-      include: [{ model: Chapter, attributes: ['courseId'] }],
+      include: [{ model: Chapter, as: 'chapter', attributes: ['courseId'] }],
     });
 
     if (!lecture) {
       throw { status: 404, message: 'Không tìm thấy bài giảng' };
     }
 
-    const courseId = lecture.Chapter.courseId;
+    const courseId = lecture.chapter.courseId;
 
     // Check if enrolled
     const enrollment = await Enrollment.findOne({

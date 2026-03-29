@@ -47,6 +47,7 @@ class AiTeachingAssistantService {
         include: [
           {
             model: Chapter,
+            as: 'chapter',
             include: [
               {
                 model: Course,
@@ -71,7 +72,7 @@ Nội dung phải THỰC TẾ, ÁP DỤNG ĐƯỢC NGAY trong lớp học.`;
       const prompt = `Tạo GIÁO ÁN CHI TIẾT cho giáo viên:
 
 THÔNG TIN LỚP HỌC:
-- Môn: ${lecture.Chapter.Course.title}
+- Môn: ${lecture.chapter.Course.title}
 - Bài: ${lecture.title}
 - Thời lượng: ${classDuration} phút
 - Sĩ số: ${classSize} học sinh
@@ -148,7 +149,7 @@ Format: Markdown rõ ràng, có thể copy-paste vào giáo án.`;
       logger.info('TEACHING_GUIDE_GENERATED', {
         lectureId,
         teacherId,
-        courseId: lecture.Chapter.Course.id,
+        courseId: lecture.chapter.Course.id,
       });
 
       return {
@@ -156,7 +157,7 @@ Format: Markdown rõ ràng, có thể copy-paste vào giáo án.`;
         metadata: {
           lectureId,
           lectureTitle: lecture.title,
-          courseTitle: lecture.Chapter.Course.title,
+          courseTitle: lecture.chapter.Course.title,
           classDuration,
           classSize,
           teachingMode,
@@ -430,6 +431,7 @@ Format: Đầy đủ, sẵn sàng in ấn.`;
         include: [
           {
             model: Chapter,
+            as: 'chapter',
             include: [
               {
                 model: Course,
@@ -457,7 +459,7 @@ Format: Đầy đủ, sẵn sàng in ấn.`;
 
 ### Slide 1: Title
 - Tiêu đề: ${lecture.title}
-- Phụ đề: ${lecture.Chapter.Course.title}
+- Phụ đề: ${lecture.chapter.Course.title}
 
 ### Slide 2-3: Opening/Hook
 - Câu hỏi gợi mở
@@ -505,7 +507,7 @@ Họ và tên: _________________
       const fullPrompt = `Tạo TÀI LIỆU GIẢNG DẠY cho giáo viên:
 
 BÀI HỌC: ${lecture.title}
-KHÓA HỌC: ${lecture.Chapter.Course.title}
+KHÓA HỌC: ${lecture.chapter.Course.title}
 
 ${materialPrompt}
 
@@ -526,7 +528,7 @@ QUY TẮC:
         metadata: {
           lectureId,
           lectureTitle: lecture.title,
-          courseTitle: lecture.Chapter.Course.title,
+          courseTitle: lecture.chapter.Course.title,
           materialType,
           generatedAt: new Date(),
         },
@@ -555,6 +557,7 @@ QUY TẮC:
         include: [
           {
             model: Chapter,
+            as: 'chapter',
             include: [
               {
                 model: Lecture,

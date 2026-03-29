@@ -262,11 +262,12 @@ class AiService {
     }
 
     const lecture = await Lecture.findByPk(lid, {
-      include: [{ model: Chapter, attributes: ['courseId'], required: true }],
+      include: [{ model: Chapter,
+            as: 'chapter', attributes: ['courseId'], required: true }],
     });
     if (!lecture) throw { status: 404, message: 'Không tìm thấy lecture' };
 
-    const course = await Course.findByPk(lecture.Chapter.courseId);
+    const course = await Course.findByPk(lecture.chapter.courseId);
     const allowed = await this.ensureTeacherOwnsCourseOrAdmin(reqUser, course);
     if (!allowed) {
       throw { status: 403, message: 'Bạn không có quyền cập nhật lecture này' };
@@ -295,11 +296,12 @@ class AiService {
     }
 
     const lecture = await Lecture.findByPk(lid, {
-      include: [{ model: Chapter, attributes: ['courseId'], required: true }],
+      include: [{ model: Chapter,
+            as: 'chapter', attributes: ['courseId'], required: true }],
     });
     if (!lecture) throw { status: 404, message: 'Không tìm thấy lecture' };
 
-    const course = await Course.findByPk(lecture.Chapter.courseId);
+    const course = await Course.findByPk(lecture.chapter.courseId);
     const allowed = await this.ensureTeacherOwnsCourseOrAdmin(reqUser, course);
     if (!allowed) {
       throw { status: 403, message: 'Bạn không có quyền ingest lecture này' };
@@ -549,14 +551,15 @@ class AiService {
 
     // Verify teacher owns the lecture's course
     const lecture = await Lecture.findByPk(lectureId, {
-      include: [{ model: Chapter, attributes: ['courseId'], required: true }],
+      include: [{ model: Chapter,
+            as: 'chapter', attributes: ['courseId'], required: true }],
     });
     
     if (!lecture) {
       throw { status: 404, message: 'Không tìm thấy lecture' };
     }
 
-    const course = await Course.findByPk(lecture.Chapter.courseId);
+    const course = await Course.findByPk(lecture.chapter.courseId);
     const allowed = await this.ensureTeacherOwnsCourseOrAdmin(reqUser, course);
     if (!allowed) {
       throw { status: 403, message: 'Bạn không có quyền tạo quiz cho lecture này' };
@@ -580,14 +583,15 @@ class AiService {
     }
 
     const lecture = await Lecture.findByPk(lectureId, {
-      include: [{ model: Chapter, attributes: ['courseId'], required: true }],
+      include: [{ model: Chapter,
+            as: 'chapter', attributes: ['courseId'], required: true }],
     });
 
     if (!lecture) {
       throw { status: 404, message: 'Không tìm thấy lecture' };
     }
 
-    const course = await Course.findByPk(lecture.Chapter.courseId);
+    const course = await Course.findByPk(lecture.chapter.courseId);
     const allowed = await this.ensureTeacherOwnsCourseOrAdmin(reqUser, course);
     if (!allowed) {
       throw { status: 403, message: 'Bạn không có quyền tạo quiz cho lecture này' };
@@ -628,14 +632,15 @@ class AiService {
     }
 
     const lecture = await Lecture.findByPk(lectureId, {
-      include: [{ model: Chapter, attributes: ['courseId'], required: true }],
+      include: [{ model: Chapter,
+            as: 'chapter', attributes: ['courseId'], required: true }],
     });
     
     if (!lecture) {
       throw { status: 404, message: 'Không tìm thấy lecture' };
     }
 
-    const course = await Course.findByPk(lecture.Chapter.courseId);
+    const course = await Course.findByPk(lecture.chapter.courseId);
     const allowed = await this.ensureTeacherOwnsCourseOrAdmin(reqUser, course);
     if (!allowed) {
       throw { status: 403, message: 'Bạn không có quyền tạo exercises cho lecture này' };

@@ -215,6 +215,7 @@ Format: Markdown với headings rõ ràng.`;
         include: [
           {
             model: Chapter,
+            as: 'chapter',
             include: [
               {
                 model: Course,
@@ -233,7 +234,7 @@ Format: Markdown với headings rõ ràng.`;
         };
       }
 
-      const chapter = lecture.Chapter;
+      const chapter = lecture.chapter;
 
       const systemPrompt = `Bạn là một chuyên gia giáo dục trong việc tạo câu hỏi kiểm tra chất lượng cao. Tạo câu hỏi dựa trên nội dung lecture được cung cấp.
 
@@ -245,8 +246,8 @@ Yêu cầu:
 
       const prompt = `Tạo ${questionCount} câu hỏi quiz từ nội dung lecture sau:
 
-COURSE: ${lecture.Chapter?.Course?.title}
-CHAPTER: ${lecture.Chapter?.title}
+COURSE: ${lecture.chapter?.Course?.title}
+CHAPTER: ${lecture.chapter?.title}
 LECTURE: ${lecture.title}
 
 LECTURE CONTENT:
@@ -412,6 +413,7 @@ Trả về danh sách các câu hỏi trong format JSON array.`;
         include: [
           {
             model: Chapter,
+            as: 'chapter',
             attributes: ['courseId'],
           },
         ],
@@ -425,7 +427,7 @@ Trả về danh sách các câu hỏi trong format JSON array.`;
         };
       }
 
-      const courseId = lecture.Chapter.courseId;
+      const courseId = lecture.chapter.courseId;
 
       // Create quiz as draft
       const quiz = await Quiz.create({
@@ -699,6 +701,7 @@ Trả về danh sách các câu hỏi trong format JSON array.`;
         include: [
           {
             model: Chapter,
+            as: 'chapter',
             include: [
               {
                 model: Course,
@@ -727,8 +730,8 @@ Yêu cầu:
 
       const prompt = `Tạo ${exerciseCount} bài tập thực hành từ nội dung lecture sau:
 
-COURSE: ${lecture.Chapter?.Course?.title}
-CHAPTER: ${lecture.Chapter?.title}
+COURSE: ${lecture.chapter?.Course?.title}
+CHAPTER: ${lecture.chapter?.title}
 LECTURE: ${lecture.title}
 
 LECTURE CONTENT:
@@ -1091,6 +1094,7 @@ Hãy đánh giá và cho điểm theo các tiêu chí đã nêu.`;
         include: [
           {
             model: Chapter,
+            as: 'chapter',
             where: { courseId },
           },
         ],
