@@ -453,6 +453,24 @@ class AiController {
     }
   }
 
+  async saveTeacherCourseOutline(req, res) {
+    try {
+      const { outline, config } = req.body;
+      const userId = Number(req.user.id);
+
+      const outlineData = { outline, config };
+      const result = await aiService.saveCourseOutline(outlineData, userId);
+      
+      res.status(201).json({
+        success: true,
+        message: 'Course outline đã được lưu vào database',
+        data: result,
+      });
+    } catch (error) {
+      handleServiceError(error, res);
+    }
+  }
+
   // ===================== Admin Chat Permission Operations =====================
 
   async getAdminChatPermissions(req, res) {
