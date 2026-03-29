@@ -161,16 +161,25 @@ async function processQueue() {
       queueStats.totalFailed++;
       
       // Retry logic for rate limited requests
-      if ((err.statusCode === 429 || err.code === 'ALL_KEYS_RATE_LIMITED') && request.retries < MAX_RETRY_ATTEMPTS) {
+      if ((err.statusCode === 429 || err.code === 'ALL_KEYS_RATE_LIMITED' || err.code === 'GLOBAL_RATE_LIMITED') && request.retries < MAX_RETRY_ATTEMPTS) {
         request.retries++;
+        
+        // If global cooldown active, wait longer
+        let waitMs = QUEUE_RETRY_DELAY_MS;
+        if (isGlobalRateLimited()) {
+          waitMs = Math.max(QUEUE_RETRY_DELAY_MS, globalRateLimitCooldown - Date.now() + 1000);
+          logger.warn('AI_QUEUE_WAITING_GLOBAL_COOLDOWN', { waitMs });
+        }
+        
         logger.warn('AI_QUEUE_RETRY', { 
           type: request.type, 
           retry: request.retries,
-          maxRetries: MAX_RETRY_ATTEMPTS 
+          maxRetries: MAX_RETRY_ATTEMPTS,
+          waitMs
         });
         // Put back at front of queue with delay
         requestQueue.unshift(request);
-        await new Promise(resolve => setTimeout(resolve, QUEUE_RETRY_DELAY_MS));
+        await new Promise(resolve => setTimeout(resolve, waitMs));
       } else {
         request.reject(err);
         logger.error('AI_QUEUE_REQUEST_FAILED', { 
