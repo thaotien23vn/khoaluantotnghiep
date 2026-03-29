@@ -14,8 +14,8 @@ const MAX_QUESTIONS_PER_LEVEL = 20; // Cap per CEFR level
 
 class PlacementQuestionGenerator {
   /**
-   * Main entry point - generate 20 questions in batches of 10 to avoid rate limits
-   * Distributed based on current database counts
+   * Main entry point - generate exactly 20 questions in a single AI call
+   * Distributed based on current database counts to save RPM quota
    */
   async generateAllMissingQuestions(signal) {
     logger.info('PLACEMENT_BATCH_GENERATION_START', { targetTotal: TOTAL_QUESTIONS_PER_RUN });
@@ -54,57 +54,27 @@ class PlacementQuestionGenerator {
         return results;
       }
 
-      // Step 3: Split into batches of max 10 questions to avoid rate limits
-      const batches = this.splitDistributionIntoBatches(distribution, 10);
-      logger.info('PLACEMENT_BATCH_SPLIT', { batchCount: batches.length, batches });
-
-      // Step 4: Process each batch with delay between them
-      const allQuestions = [];
-      for (let i = 0; i < batches.length; i++) {
-        if (signal?.aborted) {
-          results.stoppedEarly = true;
-          results.reason = 'Cancelled by user';
-          break;
-        }
-
-        const batch = batches[i];
-        logger.info('PLACEMENT_PROCESSING_BATCH', { batchIndex: i + 1, totalBatches: batches.length, batch });
-
-        const questions = await this.generateQuestionsBatch(batch, signal);
-        
-        if (questions && questions.length > 0) {
-          allQuestions.push(...questions);
-          logger.info('PLACEMENT_BATCH_SUCCESS', { batchIndex: i + 1, count: questions.length });
-        } else {
-          logger.warn('PLACEMENT_BATCH_FAILED', { batchIndex: i + 1 });
-          results.failed++;
-        }
-
-        // Delay between batches (except after last one)
-        if (i < batches.length - 1 && !signal?.aborted) {
-          const delayMs = 8000; // 8s delay between batches
-          logger.info('PLACEMENT_BATCH_DELAY', { delayMs, nextBatch: i + 2 });
-          await this.sleepWithAbortCheck(delayMs, signal);
-        }
-      }
-
+      // Step 3: Generate all questions in a SINGLE AI request to save RPM
+      logger.info('PLACEMENT_PROCESSING_SINGLE_REQUEST', { totalToGenerate });
+      const questions = await this.generateQuestionsBatch(distribution, signal);
+      
       if (signal?.aborted) {
         results.stoppedEarly = true;
         results.reason = 'Cancelled by user';
         return results;
       }
 
-      if (allQuestions.length === 0) {
-        results.failed = batches.length;
+      if (!questions || questions.length === 0) {
+        results.failed = 1;
         results.errors.push({ error: 'No questions generated from AI' });
         results.stoppedEarly = true;
-        results.reason = 'AI returned no questions';
+        results.reason = 'AI returned no questions or all keys exhausted';
         return results;
       }
 
-      // Step 5: Save all questions to database
+      // Step 4: Save all questions to database
       let savedCount = 0;
-      for (const question of allQuestions) {
+      for (const question of questions) {
         if (signal?.aborted) {
           results.stoppedEarly = true;
           results.reason = 'Cancelled during saving';
@@ -289,7 +259,7 @@ class PlacementQuestionGenerator {
         system: 'Bạn là chuyên gia đánh giá trình độ tiếng Anh. Tạo câu hỏi placement test chất lượng cao.',
         prompt,
         maxOutputTokens: totalQuestions <= 10 ? 3000 : 5000,
-        timeoutMs: 60000,
+        timeoutMs: 90000, // Increased to 90s for 20 questions
       });
 
       if (signal?.aborted) {
