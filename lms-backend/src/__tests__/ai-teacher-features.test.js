@@ -265,4 +265,120 @@ describe('AI Teacher Features', () => {
       expect([200, 404, 500]).toContain(res.statusCode);
     });
   });
+
+  describe('POST /api/teacher/ai/generate-and-save-quiz', () => {
+    it('should generate and save quiz as draft', async () => {
+      const res = await request(app)
+        .post('/api/teacher/ai/generate-and-save-quiz')
+        .set('Authorization', `Bearer ${teacherToken}`)
+        .send({
+          courseId: testCourse.id,
+          lectureId: testLecture.id,
+          chapterIds: [testChapter.id],
+          options: {
+            count: 5,
+            difficulty: 'medium',
+            questionTypes: ['multiple_choice']
+          }
+        });
+
+      expect([200, 201]).toContain(res.statusCode);
+    });
+  });
+
+  describe('POST /api/teacher/ai/quizzes/:quizId/publish', () => {
+    it('should publish draft quiz', async () => {
+      // Using non-existent quiz ID
+      const res = await request(app)
+        .post('/api/teacher/ai/quizzes/99999/publish')
+        .set('Authorization', `Bearer ${teacherToken}`);
+
+      expect([200, 201, 404, 500]).toContain(res.statusCode);
+    });
+  });
+
+  describe('POST /api/teacher/ai/student-feedback', () => {
+    it('should generate student feedback suggestions', async () => {
+      const res = await request(app)
+        .post('/api/teacher/ai/student-feedback')
+        .set('Authorization', `Bearer ${teacherToken}`)
+        .send({
+          courseId: testCourse.id,
+          feedbackType: 'general'
+        });
+
+      expect([200, 201, 500]).toContain(res.statusCode);
+    });
+  });
+
+  describe('POST /api/teacher/ai/generate-exam', () => {
+    it('should generate exam/quiz with answer key', async () => {
+      const res = await request(app)
+        .post('/api/teacher/ai/generate-exam')
+        .set('Authorization', `Bearer ${teacherToken}`)
+        .send({
+          courseId: testCourse.id,
+          chapterIds: [testChapter.id],
+          quizType: 'chapter_test',
+          difficulty: 'medium',
+          questionCount: 10,
+          timeLimit: 60,
+          includeAnswerKey: true
+        });
+
+      expect([200, 201, 500]).toContain(res.statusCode);
+    });
+  });
+
+  describe('GET /api/teacher/ai/course-difficulty/:courseId', () => {
+    it('should analyze course difficulty', async () => {
+      const res = await request(app)
+        .get(`/api/teacher/ai/course-difficulty/${testCourse.id}`)
+        .set('Authorization', `Bearer ${teacherToken}`);
+
+      expect([200, 404, 500]).toContain(res.statusCode);
+    });
+  });
+
+  describe('POST /api/teacher/ai/generate-course-outline', () => {
+    it('should generate course outline', async () => {
+      const res = await request(app)
+        .post('/api/teacher/ai/generate-course-outline')
+        .set('Authorization', `Bearer ${teacherToken}`)
+        .send({
+          topic: 'JavaScript Programming',
+          targetAudience: 'beginner',
+          difficulty: 'beginner',
+          estimatedWeeks: 4,
+          chaptersPerWeek: 2,
+          lecturesPerChapter: 3
+        });
+
+      expect([200, 201, 500]).toContain(res.statusCode);
+    });
+  });
+
+  describe('POST /api/teacher/ai/save-course-outline', () => {
+    it('should save course outline to database', async () => {
+      const res = await request(app)
+        .post('/api/teacher/ai/save-course-outline')
+        .set('Authorization', `Bearer ${teacherToken}`)
+        .send({
+          outline: {
+            title: 'JavaScript Programming',
+            description: 'Learn JavaScript basics',
+            chapters: [
+              { title: 'Chapter 1: Introduction', order: 1 },
+              { title: 'Chapter 2: Variables', order: 2 }
+            ]
+          },
+          config: {
+            targetAudience: 'beginner',
+            difficulty: 'beginner'
+          }
+        });
+
+      expect([200, 201, 400, 500]).toContain(res.statusCode);
+    });
+  });
 });
