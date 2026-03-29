@@ -361,7 +361,7 @@ Yêu cầu:
         const count = await this.getQuestionCount(cefrLevel, skillType);
         stats[cefrLevel][skillType] = {
           count,
-          needed: Math.max(0, TARGET_QUESTIONS_PER_COMBO - count),
+          needed: Math.max(0, MAX_QUESTIONS_PER_COMBO - count),
         };
       }
     }
