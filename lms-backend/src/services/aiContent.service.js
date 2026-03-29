@@ -179,9 +179,18 @@ Format: Markdown với headings rõ ràng.`;
         chapterId,
         outlineData,
         error: error.message,
-        stack: error.stack,
         code: error.code,
       });
+
+      // Handle AI rate limit specifically
+      if (error.statusCode === 429 || error.code === 'ALL_KEYS_RATE_LIMITED' || error.code === 'GLOBAL_RATE_LIMITED') {
+        throw {
+          status: 429,
+          message: 'Hệ thống AI hiện đang bận do quá tải. Vui lòng thử lại sau 1-2 phút.',
+          code: 'AI_RATE_LIMIT_EXCEEDED',
+        };
+      }
+
       throw {
         status: error.status || 500,
         message: error.message || 'Không thể tạo lecture content',
@@ -275,10 +284,20 @@ Trả về danh sách các câu hỏi trong format JSON array.`;
           });
           break; // Success
         } catch (aiError) {
-          const isRetryable = aiError.message?.includes('429') || 
-                             aiError.message?.includes('503') ||
+          const isRateLimit = aiError.statusCode === 429 || 
+                             aiError.code === 'ALL_KEYS_RATE_LIMITED' || 
+                             aiError.code === 'GLOBAL_RATE_LIMITED';
+                             
+          if (isRateLimit) {
+            throw {
+              status: 429,
+              message: 'Hệ thống AI đang bận (Rate Limit). Vui lòng thử lại sau ít phút.',
+              code: 'AI_RATE_LIMIT',
+            };
+          }
+
+          const isRetryable = aiError.message?.includes('503') ||
                              aiError.message?.includes('timeout') ||
-                             aiError.statusCode === 429 || 
                              aiError.statusCode === 503;
                              
           if (isRetryable && retries < maxRetries - 1) {
@@ -375,6 +394,7 @@ Trả về danh sách các câu hỏi trong format JSON array.`;
    * Generate quiz and auto-save as draft
    */
   async generateAndSaveQuiz(lectureId, quizData, options = {}, userId) {
+    const transaction = await db.sequelize.transaction();
     try {
       const {
         title,
@@ -384,7 +404,7 @@ Trả về danh sách các câu hỏi trong format JSON array.`;
         maxScore = 100,
       } = quizData;
 
-      // Generate questions first
+      // Generate questions first (AI call outside transaction to avoid long locks)
       const generatedQuestions = await this.generateQuizQuestions(lectureId, options);
 
       // Get lecture info for courseId
@@ -419,7 +439,7 @@ Trả về danh sách các câu hỏi trong format JSON array.`;
         maxScore,
         status: 'draft',
         showResults: true,
-      });
+      }, { transaction });
 
       // Create questions in Question table (for quiz functionality)
       const questionRecords = [];
@@ -437,12 +457,13 @@ Trả về danh sách các câu hỏi trong format JSON array.`;
           explanation: q.explanation || null,
           points: 1,
           order: q.order,
-        });
+        }, { transaction });
         questionRecords.push(question);
         
         // Map difficulty to CEFR level and save to bank
-        const cefrLevel = mapQuizDifficultyToCefr(q.difficulty || options.difficulty || 'medium');
+        // Wrap in try-catch so if bank save fails, quiz still succeeds
         try {
+          const cefrLevel = mapQuizDifficultyToCefr(q.difficulty || options.difficulty || 'medium');
           const bankQuestion = await PlacementQuestionBank.create({
             cefrLevel,
             skillType: this.inferSkillType(q.type),
@@ -456,19 +477,21 @@ Trả về danh sách các câu hỏi trong format JSON array.`;
             lectureId,
             aiGenerated: true,
             isActive: true,
-          });
+          }, { transaction });
           bankQuestions.push(bankQuestion);
         } catch (bankError) {
-          logger.warn('QUESTION_BANK_SAVE_FAILED', {
+          logger.warn('QUESTION_BANK_SAVE_FAILED_DURING_QUIZ_GEN', {
             lectureId,
             question: q.question?.substring(0, 50),
             error: bankError.message,
           });
-          // Continue - quiz still works even if bank save fails
+          // Do NOT throw here, we want the quiz to be saved even if bank fails
         }
       }
 
-      // Analyze content quality
+      await transaction.commit();
+
+      // Analyze content quality (after commit, non-critical)
       let qualityScore = null;
       try {
         qualityScore = await this.analyzeQuizQuality(quiz.id);
@@ -477,7 +500,6 @@ Trả về danh sách các câu hỏi trong format JSON array.`;
           quizId: quiz.id,
           error: qualityError.message,
         });
-        // Continue without quality score
       }
 
       logger.info('QUIZ_GENERATED_AND_SAVED', {
@@ -503,6 +525,7 @@ Trả về danh sách các câu hỏi trong format JSON array.`;
         },
       };
     } catch (error) {
+      if (transaction) await transaction.rollback();
       logger.error('GENERATE_AND_SAVE_QUIZ_FAILED', {
         lectureId,
         quizData,

@@ -188,8 +188,6 @@ class LessonChatService {
    */
   async generateAiResponse(question, context) {
     try {
-      const prompt = this.buildRagPrompt(question, context);
-
       const response = await aiGateway.generateText({
         system: 'Bạn là trợ giảng AI. Trả lời câu hỏi dựa trên nội dung bài học. Nếu không chắc chắn, hãy nói rõ.',
         prompt,
@@ -208,10 +206,22 @@ class LessonChatService {
       };
     } catch (err) {
       logger.error('LESSON_AI_FAILED', { error: err.message });
+      
+      // Return a structured error response that the UI can handle
+      if (err.statusCode === 429 || err.code === 'GLOBAL_RATE_LIMITED' || err.code === 'ALL_KEYS_RATE_LIMITED') {
+        return {
+          content: 'Hệ thống AI hiện đang bận do quá tải (Rate Limit). Vui lòng thử lại sau 1-2 phút.',
+          confidence: 0,
+          sources: [],
+          error: 'RATE_LIMIT'
+        };
+      }
+      
       return {
-        content: '',
+        content: 'Xin lỗi, tôi gặp lỗi kỹ thuật khi xử lý câu hỏi này. Vui lòng thử lại sau.',
         confidence: 0,
         sources: [],
+        error: 'GENERIC_ERROR'
       };
     }
   }

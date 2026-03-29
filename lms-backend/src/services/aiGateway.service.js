@@ -524,10 +524,12 @@ async function embedText({ text }) {
 }
 
 module.exports = {
-  generateText: generateTextWithQueue,  // Use queue version
-  embedText: embedTextWithQueue,        // Use queue version
+  generateText: generateTextWithQueue,  // Use queue version by default
+  embedText: embedTextWithQueue,        // Use queue version by default
   generateTextSync: geminiGenerate,     // Direct sync version
   embedTextSync: geminiEmbed,           // Direct sync version
+  generateTextDirect: geminiGenerate,   // Alias for direct sync
+  embedTextDirect: geminiEmbed,         // Alias for direct sync
   getApiKeyCount: () => apiKeys.length,
   getCircuitBreakerState: () => circuitBreaker.getState(),
   isGlobalRateLimited,
