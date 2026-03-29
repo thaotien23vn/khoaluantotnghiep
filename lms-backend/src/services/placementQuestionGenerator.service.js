@@ -4,24 +4,18 @@ const logger = require('../utils/logger');
 
 const { PlacementQuestionBank } = db.models;
 
-// CEFR levels and skills to generate questions for
-// 6 combos: A1-grammar, A1-vocab, A2-grammar, A2-vocab, B1-grammar, B1-vocab
+// CEFR levels in order
 const CEFR_LEVELS = ['A1', 'A2', 'B1', 'B2', 'C1', 'C2'];
 const SKILL_TYPES = ['grammar', 'vocabulary', 'reading'];
-const CEFR_PRIORITY = { A1: 0, A2: 1, B1: 2, B2: 3, C1: 4, C2: 5 };
-const SKILL_PRIORITY = { grammar: 0, vocabulary: 1, reading: 2 };
 
-// Target: Total 20 questions per run, distributed to lowest count combos first
+// Target total questions per run
 const TOTAL_QUESTIONS_PER_RUN = 20;
-const MAX_QUESTIONS_PER_COMBO = 10; // Cap per combo to ensure distribution
-const BATCH_SIZE = 3; // Generate 3 at a time to be safer with rate limits
-const DELAY_BETWEEN_BATCHES_MS = 15000; // 15s delay between batches
-
-const MAX_CONSECUTIVE_FAILURES = 2; // Stop after 2 consecutive failures
+const MAX_QUESTIONS_PER_LEVEL = 20; // Cap per CEFR level
 
 class PlacementQuestionGenerator {
   /**
-   * Main entry point - run nightly to pre-generate questions
+   * Main entry point - generate 20 questions in a single AI call
+   * Distributed based on current database counts
    */
   async generateAllMissingQuestions(signal) {
     logger.info('PLACEMENT_BATCH_GENERATION_START', { targetTotal: TOTAL_QUESTIONS_PER_RUN });
@@ -31,256 +25,215 @@ class PlacementQuestionGenerator {
       errors: [],
       stoppedEarly: false,
       reason: null,
-      distribution: {}, // Track how many per combo
+      distribution: {},
     };
-    let consecutiveFailures = 0;
 
-    // Generate until we reach TOTAL_QUESTIONS_PER_RUN
-    while (results.generated < TOTAL_QUESTIONS_PER_RUN) {
-      // Check for abort signal
+    // Check for abort signal
+    if (signal?.aborted) {
+      logger.info('PLACEMENT_GENERATION_ABORTED_BY_USER');
+      results.stoppedEarly = true;
+      results.reason = 'Cancelled by user';
+      return results;
+    }
+
+    try {
+      // Step 1: Get current counts for all CEFR levels
+      const levelCounts = await this.getLevelCounts();
+      logger.info('PLACEMENT_CURRENT_LEVEL_COUNTS', { counts: levelCounts });
+
+      // Step 2: Calculate distribution for 20 new questions
+      const distribution = this.calculateDistribution(levelCounts);
+      logger.info('PLACEMENT_CALCULATED_DISTRIBUTION', { distribution });
+
+      // Check if distribution is empty (all levels at cap)
+      const totalToGenerate = Object.values(distribution).reduce((sum, count) => sum + count, 0);
+      if (totalToGenerate === 0) {
+        logger.info('PLACEMENT_ALL_LEVELS_AT_CAP');
+        results.stoppedEarly = true;
+        results.reason = 'All CEFR levels reached max questions';
+        return results;
+      }
+
+      // Step 3: Generate all questions in a single AI call
+      const questions = await this.generateQuestionsBatch(distribution, signal);
+      
       if (signal?.aborted) {
-        logger.info('PLACEMENT_GENERATION_ABORTED_BY_USER');
         results.stoppedEarly = true;
         results.reason = 'Cancelled by user';
         return results;
       }
 
-      // Check if too many consecutive failures
-      if (consecutiveFailures >= MAX_CONSECUTIVE_FAILURES) {
-        logger.error('PLACEMENT_GENERATION_STOPPED_TOO_MANY_FAILURES', {
-          consecutiveFailures,
-          maxAllowed: MAX_CONSECUTIVE_FAILURES,
-          generatedSoFar: results.generated,
-        });
+      if (!questions || questions.length === 0) {
+        results.failed = 1;
+        results.errors.push({ error: 'No questions generated from AI' });
         results.stoppedEarly = true;
-        results.reason = `Stopped after ${consecutiveFailures} consecutive failures`;
+        results.reason = 'AI returned no questions';
         return results;
       }
 
-      // Get current counts for ALL combos and find the one with lowest count
-      const allCombos = await this.getAllComboCounts();
-      const sortedCombos = allCombos
-        .filter(c => c.currentCount < MAX_QUESTIONS_PER_COMBO) // Don't exceed cap
-        .sort((a, b) => {
-          // First sort by count (ascending)
-          if (a.currentCount !== b.currentCount) {
-            return a.currentCount - b.currentCount;
-          }
-          // If counts equal, prioritize lower CEFR level
-          if (CEFR_PRIORITY[a.cefrLevel] !== CEFR_PRIORITY[b.cefrLevel]) {
-            return CEFR_PRIORITY[a.cefrLevel] - CEFR_PRIORITY[b.cefrLevel];
-          }
-          // If same level, prioritize grammar > vocabulary > reading
-          return SKILL_PRIORITY[a.skillType] - SKILL_PRIORITY[b.skillType];
-        });
+      // Step 4: Save all questions to database
+      let savedCount = 0;
+      for (const question of questions) {
+        if (signal?.aborted) {
+          results.stoppedEarly = true;
+          results.reason = 'Cancelled during saving';
+          break;
+        }
 
-      if (sortedCombos.length === 0) {
-        logger.info('PLACEMENT_ALL_COMBOS_AT_CAP', { generated: results.generated });
-        results.stoppedEarly = true;
-        results.reason = 'All combos reached max questions per combo';
-        break;
-      }
-
-      // Pick the combo with lowest count (first in sorted list)
-      const targetCombo = sortedCombos[0];
-      const { cefrLevel, skillType, currentCount } = targetCombo;
-
-      logger.info('PLACEMENT_GENERATING_SINGLE', {
-        cefrLevel,
-        skillType,
-        currentCount,
-        totalGenerated: results.generated,
-        targetTotal: TOTAL_QUESTIONS_PER_RUN,
-        remaining: TOTAL_QUESTIONS_PER_RUN - results.generated,
-      });
-
-      try {
-        // Generate 1 question at a time
-        const batchResult = await this.generateBatch(cefrLevel, skillType, 1, signal);
-        
-        if (batchResult.generated > 0) {
-          results.generated += batchResult.generated;
-          consecutiveFailures = 0;
+        try {
+          await this.saveQuestion(question);
+          savedCount++;
           
           // Track distribution
-          const key = `${cefrLevel}-${skillType}`;
+          const key = `${question.cefrLevel}-${question.skillType}`;
           results.distribution[key] = (results.distribution[key] || 0) + 1;
-          
-          logger.info('PLACEMENT_SINGLE_SUCCESS', {
-            cefrLevel,
-            skillType,
-            newCount: currentCount + 1,
-            totalGenerated: results.generated,
+        } catch (err) {
+          logger.error('PLACEMENT_SAVE_QUESTION_FAILED', {
+            question: question.content?.substring(0, 50),
+            error: err.message,
           });
-        } else {
-          consecutiveFailures++;
-          logger.warn('PLACEMENT_SINGLE_FAILED', {
-            cefrLevel,
-            skillType,
-            consecutiveFailures,
-          });
-          
-          // Check stop condition immediately after failure
-          if (consecutiveFailures >= MAX_CONSECUTIVE_FAILURES) {
-            logger.error('PLACEMENT_GENERATION_STOPPED_TOO_MANY_FAILURES', {
-              consecutiveFailures,
-              maxAllowed: MAX_CONSECUTIVE_FAILURES,
-              generatedSoFar: results.generated,
-              lastCefrLevel: cefrLevel,
-              lastSkillType: skillType,
-            });
-            results.stoppedEarly = true;
-            results.reason = `Stopped after ${consecutiveFailures} consecutive failures at ${cefrLevel}-${skillType}`;
-            return results;
-          }
-        }
-
-        // Small delay between individual questions (4s to avoid rate limits)
-        if (results.generated < TOTAL_QUESTIONS_PER_RUN) {
-          await this.sleepWithAbortCheck(4000, signal); // 4s between questions
-        }
-      } catch (err) {
-        logger.error('PLACEMENT_SINGLE_ERROR', {
-          cefrLevel,
-          skillType,
-          error: err.message,
-        });
-        results.failed++;
-        consecutiveFailures++;
-        results.errors.push({ cefrLevel, skillType, error: err.message });
-        
-        // Extra backoff if rate limited (429)
-        if (err.statusCode === 429 || err.code === 'ALL_KEYS_RATE_LIMITED' || 
-            err.message?.includes('429')) {
-          const backoffMs = Math.min(8000 * consecutiveFailures, 30000); // 8s, 16s, max 30s
-          logger.warn('PLACEMENT_RATE_LIMIT_BACKOFF', {
-            consecutiveFailures,
-            backoffMs,
-          });
-          await this.sleepWithAbortCheck(backoffMs, signal);
+          results.failed++;
+          results.errors.push({ question: question.content?.substring(0, 50), error: err.message });
         }
       }
+
+      results.generated = savedCount;
+
+      if (savedCount === 0) {
+        results.stoppedEarly = true;
+        results.reason = 'Failed to save any questions';
+      }
+
+    } catch (err) {
+      logger.error('PLACEMENT_GENERATION_ERROR', { error: err.message });
+      results.failed = 1;
+      results.errors.push({ error: err.message });
+      results.stoppedEarly = true;
+      results.reason = err.message;
     }
 
     logger.info('PLACEMENT_BATCH_GENERATION_COMPLETE', {
       ...results,
       distribution: results.distribution,
     });
+    
     return results;
   }
 
   /**
-   * Get counts for all combos
+   * Get total question count for each CEFR level (sum of all skill types)
    */
-  async getAllComboCounts() {
-    const combos = [];
-    for (const cefrLevel of CEFR_LEVELS) {
-      for (const skillType of SKILL_TYPES) {
-        const currentCount = await this.getQuestionCount(cefrLevel, skillType);
-        combos.push({ cefrLevel, skillType, currentCount });
+  async getLevelCounts() {
+    const counts = {};
+    for (const level of CEFR_LEVELS) {
+      const totalCount = await PlacementQuestionBank.count({
+        where: {
+          cefrLevel: level,
+          isActive: true,
+        },
+      });
+      counts[level] = totalCount;
+    }
+    return counts;
+  }
+
+  /**
+   * Calculate distribution of 20 questions across CEFR levels
+   * Based on inverse proportion to current counts
+   */
+  calculateDistribution(levelCounts) {
+    const distribution = {};
+    
+    // Calculate need scores
+    const needScores = {};
+    let totalNeed = 0;
+    
+    for (const level of CEFR_LEVELS) {
+      const currentCount = levelCounts[level] || 0;
+      const need = Math.max(0, MAX_QUESTIONS_PER_LEVEL - currentCount);
+      needScores[level] = need;
+      totalNeed += need;
+    }
+    
+    // If all levels at cap, return empty
+    if (totalNeed === 0) {
+      return distribution;
+    }
+    
+    // Calculate proportional distribution
+    const rawDistribution = {};
+    let allocatedTotal = 0;
+    
+    for (const level of CEFR_LEVELS) {
+      if (needScores[level] > 0) {
+        const proportion = needScores[level] / totalNeed;
+        const allocated = Math.floor(proportion * TOTAL_QUESTIONS_PER_RUN);
+        rawDistribution[level] = allocated;
+        allocatedTotal += allocated;
+      } else {
+        rawDistribution[level] = 0;
       }
     }
-    return combos;
-  }
-
-  /**
-   * Get current question count for a level-skill combination
-   */
-  async getQuestionCount(cefrLevel, skillType) {
-    return PlacementQuestionBank.count({
-      where: {
-        cefrLevel,
-        skillType,
-        isActive: true,
-      },
-    });
-  }
-
-  /**
-   * Generate a batch of questions
-   */
-  async generateBatch(cefrLevel, skillType, count, signal) {
-    let generated = 0;
-    let failedInBatch = 0;
-    let hadSuccess = false;
-    const batches = Math.ceil(count / BATCH_SIZE);
-
-    for (let i = 0; i < batches; i++) {
-      // Check for abort signal
-      if (signal?.aborted) {
-        return { generated, failedInBatch, hadSuccess };
-      }
-
-      const batchSize = Math.min(BATCH_SIZE, count - generated);
-      
-      for (let j = 0; j < batchSize; j++) {
-        // Check for abort signal
-        if (signal?.aborted) {
-          return { generated, failedInBatch, hadSuccess };
-        }
-
-        try {
-          const question = await this.generateSingleQuestion(cefrLevel, skillType);
-          if (question) {
-            await this.saveQuestion(question, cefrLevel, skillType);
-            generated++;
-            hadSuccess = true;
-          } else {
-            failedInBatch++;
-          }
-        } catch (err) {
-          logger.warn('PLACEMENT_SINGLE_GENERATE_FAILED', {
-            cefrLevel,
-            skillType,
-            error: err.message,
-          });
-          failedInBatch++;
-        }
-        
-        // Small delay between individual questions (5s to respect 15 RPM per key)
-        if (j < batchSize - 1) {
-          await this.sleepWithAbortCheck(5000, signal);
-        }
-      }
-
-      // Delay between batches
-      if (i < batches - 1) {
-        await this.sleepWithAbortCheck(DELAY_BETWEEN_BATCHES_MS, signal);
+    
+    // Distribute remaining questions
+    let remaining = TOTAL_QUESTIONS_PER_RUN - allocatedTotal;
+    const sortedLevels = CEFR_LEVELS.filter(l => needScores[l] > 0)
+      .sort((a, b) => needScores[b] - needScores[a]);
+    
+    for (const level of sortedLevels) {
+      if (remaining <= 0) break;
+      rawDistribution[level]++;
+      remaining--;
+    }
+    
+    // Build final distribution
+    for (const level of CEFR_LEVELS) {
+      if (rawDistribution[level] > 0) {
+        distribution[level] = rawDistribution[level];
       }
     }
-
-    return { generated, failedInBatch, hadSuccess };
+    
+    return distribution;
   }
 
   /**
-   * Generate a single question using AI
+   * Generate questions batch using single AI call
    */
-  async generateSingleQuestion(cefrLevel, skillType) {
-    const prompt = this.buildPrompt(cefrLevel, skillType);
-
+  async generateQuestionsBatch(distribution, signal) {
+    const prompt = this.buildBatchPrompt(distribution);
+    
     try {
+      logger.info('PLACEMENT_AI_BATCH_GENERATE_START', { distribution });
+      
       const aiResponse = await aiGateway.generateText({
         system: 'Bạn là chuyên gia đánh giá trình độ tiếng Anh. Tạo câu hỏi placement test chất lượng cao.',
         prompt,
-        maxOutputTokens: 800,
-        timeoutMs: 30000,
+        maxOutputTokens: 5000,
+        timeoutMs: 60000,
       });
 
-      return this.parseAiResponse(aiResponse.text);
-    } catch (err) {
-      logger.error('PLACEMENT_AI_GENERATE_FAILED', {
-        cefrLevel,
-        skillType,
-        error: err.message,
+      if (signal?.aborted) {
+        return [];
+      }
+
+      const questions = this.parseBatchResponse(aiResponse.text);
+      
+      logger.info('PLACEMENT_AI_BATCH_GENERATE_COMPLETE', { 
+        count: questions.length,
+        expected: TOTAL_QUESTIONS_PER_RUN 
       });
-      return null;
+      
+      return questions;
+    } catch (err) {
+      logger.error('PLACEMENT_AI_BATCH_GENERATE_FAILED', { error: err.message });
+      return [];
     }
   }
 
   /**
-   * Build prompt for AI
+   * Build prompt for generating batch of questions
    */
-  buildPrompt(cefrLevel, skillType) {
+  buildBatchPrompt(distribution) {
     const levelDescriptions = {
       'A1': 'người mới bắt đầu, từ vựng cơ bản, câu đơn giản',
       'A2': 'sơ cấp, giao tiếp hàng ngày đơn giản',
@@ -290,65 +243,134 @@ class PlacementQuestionGenerator {
       'C2': 'thành thạo, chính xác cao, phân biệt tinh tế',
     };
 
-    const skillPrompts = {
-      'grammar': 'ngữ pháp (thì, cấu trúc câu, giới từ)',
-      'vocabulary': 'từ vựng (nghĩa từ, collocation, phrasal verb)',
-      'reading': 'đọc hiểu (đoạn văn ngắn + câu hỏi)',
-    };
+    const distributionText = Object.entries(distribution)
+      .map(([level, count]) => {
+        return `- ${level}: ${count} câu (${levelDescriptions[level]})`;
+      })
+      .join('\n');
 
-    return `Tạo 1 câu hỏi placement test ${skillPrompts[skillType]} cho trình độ ${cefrLevel} (${levelDescriptions[cefrLevel]}).
+    const totalQuestions = Object.values(distribution).reduce((sum, c) => sum + c, 0);
 
-Format JSON:
-{
-  "type": "multiple_choice",
-  "content": "Câu hỏi...",
-  "options": ["A. ...", "B. ...", "C. ...", "D. ..."],
-  "correctAnswer": "A",
-  "explanation": "Giải thích ngắn gọn..."
-}
+    return `Tạo ${totalQuestions} câu hỏi placement test phân bổ theo trình độ CEFR:
 
-Yêu cầu:
-- Độ khó phù hợp ${cefrLevel}
-- 4 options cho multiple choice
-- Chỉ trả về JSON, không thêm text khác`;
+PHÂN BỔ CÂU HỎI:
+${distributionText}
+
+YÊU CẦU CHUNG:
+- Tổng ${totalQuestions} câu multiple choice
+- Mỗi câu có 4 options (A, B, C, D)
+- Câu hỏi đa dạng: grammar, vocabulary, reading comprehension
+- Độ khó phù hợp từng trình độ CEFR
+
+FORMAT JSON (MẢNG ${totalQuestions} CÂU):
+[
+  {
+    "cefrLevel": "A1",
+    "skillType": "grammar",
+    "type": "multiple_choice",
+    "content": "Câu hỏi...",
+    "options": ["A. ...", "B. ...", "C. ...", "D. ..."],
+    "correctAnswer": "A",
+    "explanation": "Giải thích ngắn gọn..."
+  },
+  ... (tổng ${totalQuestions} câu)
+]
+
+QUAN TRỌNG:
+- Chỉ trả về JSON array, không thêm text khác
+- Mỗi câu PHẢI có cefrLevel và skillType
+- Đảm bảo đúng số lượng mỗi trình độ theo phân bổ trên`;
   }
 
   /**
-   * Parse AI response
+   * Parse batch AI response
    */
-  parseAiResponse(text) {
+  parseBatchResponse(text) {
     try {
-      const jsonMatch = text.match(/\{[\s\S]*\}/);
-      if (jsonMatch) {
-        const parsed = JSON.parse(jsonMatch[0]);
-        return {
-          type: parsed.type || 'multiple_choice',
-          content: parsed.content,
-          options: parsed.options || [],
-          correctAnswer: parsed.correctAnswer,
-          explanation: parsed.explanation || '',
-        };
+      const jsonMatch = text.match(/\[[\s\S]*\]/);
+      if (!jsonMatch) {
+        logger.warn('PLACEMENT_BATCH_PARSE_NO_ARRAY', { text: text?.substring(0, 100) });
+        return [];
       }
+
+      const parsed = JSON.parse(jsonMatch[0]);
+      
+      if (!Array.isArray(parsed)) {
+        logger.warn('PLACEMENT_BATCH_PARSE_NOT_ARRAY', { parsed });
+        return [];
+      }
+
+      const validQuestions = parsed
+        .map((item, index) => this.normalizeQuestion(item, index))
+        .filter(q => q !== null);
+
+      logger.info('PLACEMENT_BATCH_PARSE_SUCCESS', { 
+        total: parsed.length, 
+        valid: validQuestions.length 
+      });
+
+      return validQuestions;
     } catch (err) {
-      logger.warn('PLACEMENT_AI_PARSE_FAILED', { text: text?.substring(0, 100) });
+      logger.error('PLACEMENT_BATCH_PARSE_FAILED', { 
+        error: err.message,
+        text: text?.substring(0, 200) 
+      });
+      return [];
     }
-    return null;
+  }
+
+  /**
+   * Normalize and validate a single question
+   */
+  normalizeQuestion(item, index) {
+    try {
+      if (!item.cefrLevel || !item.content || !item.options || !item.correctAnswer) {
+        logger.warn('PLACEMENT_QUESTION_MISSING_FIELDS', { index, item });
+        return null;
+      }
+
+      if (!CEFR_LEVELS.includes(item.cefrLevel)) {
+        logger.warn('PLACEMENT_QUESTION_INVALID_LEVEL', { index, level: item.cefrLevel });
+        return null;
+      }
+
+      const skillType = item.skillType || 'grammar';
+      if (!SKILL_TYPES.includes(skillType)) {
+        logger.warn('PLACEMENT_QUESTION_INVALID_SKILL', { index, skill: skillType });
+        return null;
+      }
+
+      return {
+        cefrLevel: item.cefrLevel,
+        skillType: skillType,
+        questionType: item.type || 'multiple_choice',
+        content: item.content,
+        options: Array.isArray(item.options) ? item.options : [],
+        correctAnswer: item.correctAnswer,
+        explanation: item.explanation || '',
+        aiGenerated: true,
+        isActive: true,
+      };
+    } catch (err) {
+      logger.warn('PLACEMENT_QUESTION_NORMALIZE_FAILED', { index, error: err.message });
+      return null;
+    }
   }
 
   /**
    * Save question to database
    */
-  async saveQuestion(question, cefrLevel, skillType) {
+  async saveQuestion(question) {
     await PlacementQuestionBank.create({
-      cefrLevel,
-      skillType,
-      questionType: question.type,
+      cefrLevel: question.cefrLevel,
+      skillType: question.skillType,
+      questionType: question.questionType,
       content: question.content,
       options: question.options,
       correctAnswer: question.correctAnswer,
       explanation: question.explanation,
-      aiGenerated: true,
-      isActive: true,
+      aiGenerated: question.aiGenerated,
+      isActive: question.isActive,
     });
   }
 
@@ -368,13 +390,6 @@ Yêu cầu:
   }
 
   /**
-   * Utility: sleep
-   */
-  sleep(ms) {
-    return new Promise(resolve => setTimeout(resolve, ms));
-  }
-
-  /**
    * Get statistics about question bank
    */
   async getBankStatistics() {
@@ -383,10 +398,16 @@ Yêu cầu:
     for (const cefrLevel of CEFR_LEVELS) {
       stats[cefrLevel] = {};
       for (const skillType of SKILL_TYPES) {
-        const count = await this.getQuestionCount(cefrLevel, skillType);
+        const count = await PlacementQuestionBank.count({
+          where: {
+            cefrLevel,
+            skillType,
+            isActive: true,
+          },
+        });
         stats[cefrLevel][skillType] = {
           count,
-          needed: Math.max(0, MAX_QUESTIONS_PER_COMBO - count),
+          needed: Math.max(0, 10 - count),
         };
       }
     }
