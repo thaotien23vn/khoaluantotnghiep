@@ -121,9 +121,9 @@ class PlacementQuestionGenerator {
           });
         }
 
-        // Small delay between individual questions
+        // Small delay between individual questions (4s to avoid rate limits)
         if (results.generated < TOTAL_QUESTIONS_PER_RUN) {
-          await this.sleepWithAbortCheck(2000, signal); // 2s between questions
+          await this.sleepWithAbortCheck(4000, signal); // 4s between questions
         }
       } catch (err) {
         logger.error('PLACEMENT_SINGLE_ERROR', {
@@ -134,6 +134,17 @@ class PlacementQuestionGenerator {
         results.failed++;
         consecutiveFailures++;
         results.errors.push({ cefrLevel, skillType, error: err.message });
+        
+        // Extra backoff if rate limited (429)
+        if (err.statusCode === 429 || err.code === 'ALL_KEYS_RATE_LIMITED' || 
+            err.message?.includes('429')) {
+          const backoffMs = Math.min(8000 * consecutiveFailures, 30000); // 8s, 16s, max 30s
+          logger.warn('PLACEMENT_RATE_LIMIT_BACKOFF', {
+            consecutiveFailures,
+            backoffMs,
+          });
+          await this.sleepWithAbortCheck(backoffMs, signal);
+        }
       }
     }
 
@@ -238,7 +249,7 @@ class PlacementQuestionGenerator {
         system: 'Bạn là chuyên gia đánh giá trình độ tiếng Anh. Tạo câu hỏi placement test chất lượng cao.',
         prompt,
         maxOutputTokens: 800,
-        timeoutMs: 15000,
+        timeoutMs: 30000,
       });
 
       return this.parseAiResponse(aiResponse.text);
