@@ -243,16 +243,16 @@ if (!isTest) {
         // Update course status based on results
         // Check if ALL lectures of ALL chapters have content
         const totalLectures = await Lecture.count({
-          where: { '$Chapter.courseId$': courseId },
-          include: [{ model: Chapter, attributes: [], required: true }],
+          where: { '$chapter.courseId$': courseId },
+          include: [{ model: Chapter, as: 'chapter', attributes: [], required: true }],
         });
         
         const lecturesWithContent = await Lecture.count({
           where: { 
             content: { [Op.ne]: null },
-            '$Chapter.courseId$': courseId,
+            '$chapter.courseId$': courseId,
           },
-          include: [{ model: Chapter, attributes: [], required: true }],
+          include: [{ model: Chapter, as: 'chapter', attributes: [], required: true }],
         });
         
         const allContentGenerated = lecturesWithContent >= totalLectures && totalLectures > 0;

@@ -234,7 +234,7 @@ class ChatPermissionService {
           {
             model: User,
             as: 'user',
-            attributes: ['id', 'fullName', 'email'],
+            attributes: ['id', 'name', 'email'],
           },
         ],
         order: [['createdAt', 'DESC']],

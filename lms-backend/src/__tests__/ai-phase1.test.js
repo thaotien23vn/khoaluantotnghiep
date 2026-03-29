@@ -4,6 +4,24 @@ const db = require('../models');
 const { loginByRole } = require('./testAuth');
 const { seedCore } = require('./jest.teardown');
 
+// Mock AI services để tránh timeout
+jest.mock('../services/aiGateway.service', () => ({
+  generateText: jest.fn(async () => ({ text: 'MOCK_AI_ANSWER' })),
+  embedText: jest.fn(async () => ({ embedding: [0.1, 0.2, 0.3] })),
+}));
+
+jest.mock('../services/aiAnalytics.service', () => ({
+  getSystemHealth: jest.fn(async () => ({
+    health: {
+      aiEnabled: true,
+      aiGatewayStatus: 'operational',
+      model: 'gemini-flash-latest',
+      provider: 'gemini',
+      timestamp: new Date().toISOString(),
+    },
+  })),
+}));
+
 const {
   UserLearningProfile,
   AiRecommendation,

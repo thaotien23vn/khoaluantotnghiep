@@ -419,6 +419,7 @@ class AiAnalyticsService {
         include: [
           {
             model: Chapter,
+            as: 'chapter',
             where: { courseId },
           },
         ],

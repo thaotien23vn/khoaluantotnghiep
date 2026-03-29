@@ -3,6 +3,19 @@ const app = require('../../app');
 const db = require('../../models');
 const { loginByRole } = require('../testAuth');
 
+// Mock AI services để tránh timeout
+jest.mock('../../services/aiGateway.service', () => ({
+  generateText: jest.fn(async () => ({ text: 'MOCK_AI_ANSWER' })),
+  embedText: jest.fn(async () => ({ embedding: [1, 0, 0] })),
+}));
+
+jest.mock('../../services/aiRag.service', () => ({
+  retrieveTopChunks: jest.fn(async () => [
+    { id: 1, text: 'MOCK_CHUNK_1', score: 0.9, lectureId: null, courseId: null },
+  ]),
+  ingestLecture: jest.fn(async () => ({ documentId: 1, chunks: 2 })),
+}));
+
 describe('AI Tutor Flow Integration Test', () => {
   let studentToken;
   let teacherToken;

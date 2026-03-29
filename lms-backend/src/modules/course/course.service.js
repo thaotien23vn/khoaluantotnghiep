@@ -64,8 +64,8 @@ const formatCourseDetail = (course) => {
     ? course.Chapters.map((chapter) => ({
         id: chapter.id.toString(),
         title: chapter.title,
-        lessons: chapter.Lectures
-          ? chapter.Lectures.map((lecture) => ({
+        lessons: chapter.lectures
+          ? chapter.lectures.map((lecture) => ({
               id: lecture.id.toString(),
               title: lecture.title,
               duration: lecture.duration
@@ -265,12 +265,13 @@ class CourseService {
         },
         {
           model: Chapter,
-          include: [Lecture],
+          as: 'Chapters',
+          include: [{ model: Lecture, as: 'lectures' }],
         },
       ],
       order: [
-        [Chapter, 'order', 'ASC'],
-        [Chapter, Lecture, 'order', 'ASC'],
+        ['Chapters', 'order', 'ASC'],
+        ['Chapters', 'lectures', 'order', 'ASC'],
       ],
     });
 
@@ -562,17 +563,17 @@ class CourseService {
 
     const chapters = await Chapter.findAll({
       where: { courseId: course.id },
-      include: [Lecture],
+      include: [{ model: Lecture, as: 'lectures' }],
       order: [
         ['order', 'ASC'],
-        [Lecture, 'order', 'ASC'],
+        ['lectures', 'order', 'ASC'],
       ],
     });
 
     const formattedChapters = chapters.map((chapter) => {
       const chapterData = chapter.get({ plain: true });
-      if (chapterData.Lectures) {
-        chapterData.Lectures = chapterData.Lectures.map((lecture) => ({
+      if (chapterData.lectures) {
+        chapterData.lectures = chapterData.lectures.map((lecture) => ({
           ...lecture,
           attachments: (() => {
             if (!lecture.attachments) return [];

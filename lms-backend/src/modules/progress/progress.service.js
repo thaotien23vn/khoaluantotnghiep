@@ -75,6 +75,7 @@ class ProgressService {
     const totalLectures = await Lecture.count({
       include: [{
         model: Chapter,
+        as: 'chapter',
         where: { courseId },
         required: true,
       }],
@@ -245,6 +246,7 @@ class ProgressService {
     return Lecture.count({
       include: [{
         model: Chapter,
+        as: 'chapter',
         where: { courseId },
         required: true,
       }],
