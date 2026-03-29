@@ -5,12 +5,15 @@ const logger = require('../utils/logger');
 const { PlacementQuestionBank } = db.models;
 
 // CEFR levels and skills to generate questions for
+// 6 combos: A1-grammar, A1-vocab, A2-grammar, A2-vocab, B1-grammar, B1-vocab
 const CEFR_LEVELS = ['A1', 'A2', 'B1', 'B2', 'C1', 'C2'];
 const SKILL_TYPES = ['grammar', 'vocabulary', 'reading'];
+const CEFR_PRIORITY = { A1: 0, A2: 1, B1: 2, B2: 3, C1: 4, C2: 5 };
+const SKILL_PRIORITY = { grammar: 0, vocabulary: 1, reading: 2 };
 
-// Target: 100 questions per level-skill combination
-const TARGET_QUESTIONS_PER_COMBO = 100;
-const MIN_QUESTIONS_THRESHOLD = 50; // Generate if below this
+// Target: Total 20 questions per run, distributed to lowest count combos first
+const TOTAL_QUESTIONS_PER_RUN = 20;
+const MAX_QUESTIONS_PER_COMBO = 10; // Cap per combo to ensure distribution
 const BATCH_SIZE = 3; // Generate 3 at a time to be safer with rate limits
 const DELAY_BETWEEN_BATCHES_MS = 15000; // 15s delay between batches
 
@@ -21,85 +24,138 @@ class PlacementQuestionGenerator {
    * Main entry point - run nightly to pre-generate questions
    */
   async generateAllMissingQuestions(signal) {
-    logger.info('PLACEMENT_BATCH_GENERATION_START');
+    logger.info('PLACEMENT_BATCH_GENERATION_START', { targetTotal: TOTAL_QUESTIONS_PER_RUN });
     const results = {
       generated: 0,
       failed: 0,
       errors: [],
       stoppedEarly: false,
       reason: null,
+      distribution: {}, // Track how many per combo
     };
     let consecutiveFailures = 0;
 
-    for (const cefrLevel of CEFR_LEVELS) {
-      for (const skillType of SKILL_TYPES) {
-        // Check for abort signal
-        if (signal?.aborted) {
-          logger.info('PLACEMENT_GENERATION_ABORTED_BY_USER');
-          results.stoppedEarly = true;
-          results.reason = 'Cancelled by user';
-          return results;
-        }
+    // Generate until we reach TOTAL_QUESTIONS_PER_RUN
+    while (results.generated < TOTAL_QUESTIONS_PER_RUN) {
+      // Check for abort signal
+      if (signal?.aborted) {
+        logger.info('PLACEMENT_GENERATION_ABORTED_BY_USER');
+        results.stoppedEarly = true;
+        results.reason = 'Cancelled by user';
+        return results;
+      }
 
-        // Check if too many consecutive failures
-        if (consecutiveFailures >= MAX_CONSECUTIVE_FAILURES) {
-          logger.error('PLACEMENT_GENERATION_STOPPED_TOO_MANY_FAILURES', {
-            consecutiveFailures,
-            maxAllowed: MAX_CONSECUTIVE_FAILURES,
-            generatedSoFar: results.generated,
-          });
-          results.stoppedEarly = true;
-          results.reason = `Stopped after ${consecutiveFailures} consecutive failures`;
-          return results;
-        }
+      // Check if too many consecutive failures
+      if (consecutiveFailures >= MAX_CONSECUTIVE_FAILURES) {
+        logger.error('PLACEMENT_GENERATION_STOPPED_TOO_MANY_FAILURES', {
+          consecutiveFailures,
+          maxAllowed: MAX_CONSECUTIVE_FAILURES,
+          generatedSoFar: results.generated,
+        });
+        results.stoppedEarly = true;
+        results.reason = `Stopped after ${consecutiveFailures} consecutive failures`;
+        return results;
+      }
 
-        try {
-          const count = await this.getQuestionCount(cefrLevel, skillType);
-          const needed = TARGET_QUESTIONS_PER_COMBO - count;
-
-          if (needed > 0) {
-            logger.info('PLACEMENT_GENERATING_BATCH', {
-              cefrLevel,
-              skillType,
-              currentCount: count,
-              needed,
-            });
-
-            const batchResult = await this.generateBatch(cefrLevel, skillType, Math.min(needed, 20), signal);
-            results.generated += batchResult.generated;
-            consecutiveFailures = batchResult.hadSuccess ? 0 : consecutiveFailures + batchResult.failedInBatch;
-
-            if (consecutiveFailures >= MAX_CONSECUTIVE_FAILURES) {
-              logger.error('PLACEMENT_GENERATION_STOPPED_TOO_MANY_FAILURES', {
-                consecutiveFailures,
-                maxAllowed: MAX_CONSECUTIVE_FAILURES,
-                generatedSoFar: results.generated,
-                lastCefrLevel: cefrLevel,
-                lastSkillType: skillType,
-              });
-              results.stoppedEarly = true;
-              results.reason = `Stopped after ${consecutiveFailures} consecutive failures at ${cefrLevel}-${skillType}`;
-              return results;
-            }
-
-            // Delay between combinations
-            await this.sleepWithAbortCheck(DELAY_BETWEEN_BATCHES_MS, signal);
+      // Get current counts for ALL combos and find the one with lowest count
+      const allCombos = await this.getAllComboCounts();
+      const sortedCombos = allCombos
+        .filter(c => c.currentCount < MAX_QUESTIONS_PER_COMBO) // Don't exceed cap
+        .sort((a, b) => {
+          // First sort by count (ascending)
+          if (a.currentCount !== b.currentCount) {
+            return a.currentCount - b.currentCount;
           }
-        } catch (err) {
-          logger.error('PLACEMENT_BATCH_GENERATE_ERROR', {
+          // If counts equal, prioritize lower CEFR level
+          if (CEFR_PRIORITY[a.cefrLevel] !== CEFR_PRIORITY[b.cefrLevel]) {
+            return CEFR_PRIORITY[a.cefrLevel] - CEFR_PRIORITY[b.cefrLevel];
+          }
+          // If same level, prioritize grammar > vocabulary > reading
+          return SKILL_PRIORITY[a.skillType] - SKILL_PRIORITY[b.skillType];
+        });
+
+      if (sortedCombos.length === 0) {
+        logger.info('PLACEMENT_ALL_COMBOS_AT_CAP', { generated: results.generated });
+        results.stoppedEarly = true;
+        results.reason = 'All combos reached max questions per combo';
+        break;
+      }
+
+      // Pick the combo with lowest count (first in sorted list)
+      const targetCombo = sortedCombos[0];
+      const { cefrLevel, skillType, currentCount } = targetCombo;
+
+      logger.info('PLACEMENT_GENERATING_SINGLE', {
+        cefrLevel,
+        skillType,
+        currentCount,
+        totalGenerated: results.generated,
+        targetTotal: TOTAL_QUESTIONS_PER_RUN,
+        remaining: TOTAL_QUESTIONS_PER_RUN - results.generated,
+      });
+
+      try {
+        // Generate 1 question at a time
+        const batchResult = await this.generateBatch(cefrLevel, skillType, 1, signal);
+        
+        if (batchResult.generated > 0) {
+          results.generated += batchResult.generated;
+          consecutiveFailures = 0;
+          
+          // Track distribution
+          const key = `${cefrLevel}-${skillType}`;
+          results.distribution[key] = (results.distribution[key] || 0) + 1;
+          
+          logger.info('PLACEMENT_SINGLE_SUCCESS', {
             cefrLevel,
             skillType,
-            error: err.message,
+            newCount: currentCount + 1,
+            totalGenerated: results.generated,
           });
-          results.failed++;
+        } else {
           consecutiveFailures++;
-          results.errors.push({ cefrLevel, skillType, error: err.message });
+          logger.warn('PLACEMENT_SINGLE_FAILED', {
+            cefrLevel,
+            skillType,
+            consecutiveFailures,
+          });
         }
+
+        // Small delay between individual questions
+        if (results.generated < TOTAL_QUESTIONS_PER_RUN) {
+          await this.sleepWithAbortCheck(2000, signal); // 2s between questions
+        }
+      } catch (err) {
+        logger.error('PLACEMENT_SINGLE_ERROR', {
+          cefrLevel,
+          skillType,
+          error: err.message,
+        });
+        results.failed++;
+        consecutiveFailures++;
+        results.errors.push({ cefrLevel, skillType, error: err.message });
       }
     }
 
-    logger.info('PLACEMENT_BATCH_GENERATION_COMPLETE', results);
+    logger.info('PLACEMENT_BATCH_GENERATION_COMPLETE', {
+      ...results,
+      distribution: results.distribution,
+    });
     return results;
+  }
+
+  /**
+   * Get counts for all combos
+   */
+  async getAllComboCounts() {
+    const combos = [];
+    for (const cefrLevel of CEFR_LEVELS) {
+      for (const skillType of SKILL_TYPES) {
+        const currentCount = await this.getQuestionCount(cefrLevel, skillType);
+        combos.push({ cefrLevel, skillType, currentCount });
+      }
+    }
+    return combos;
   }
 
   /**

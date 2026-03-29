@@ -56,10 +56,26 @@ class CircuitBreaker {
 
 const circuitBreaker = new CircuitBreaker(5, 60000); // 5 failures -> open for 60s
 
+// Request Queue with Throttling
+const requestQueue = [];
+const MAX_RPM_PER_KEY = 15; // Gemini free tier: 15 requests/min/key
+const MIN_DELAY_MS = Math.ceil(60000 / MAX_RPM_PER_KEY); // 4000ms between requests per key
+const MAX_QUEUE_SIZE = 100;
+const MAX_RETRY_ATTEMPTS = 3;
+
+let lastRequestTime = 0;
+let isProcessingQueue = false;
+let queueStats = {
+  totalQueued: 0,
+  totalProcessed: 0,
+  totalFailed: 0,
+  currentSize: 0,
+};
+
 // Global rate limit cooldown - when ALL keys are rate limited
 let globalRateLimitCooldown = 0;
-const MAX_CONSECUTIVE_FAILURES = 5; // Reduced from 15 to stop sooner when all keys fail
 const GLOBAL_COOLDOWN_MS = 60000; // 60 seconds
+const QUEUE_RETRY_DELAY_MS = 5000; // 5s delay before retrying queued request
 
 function isGlobalRateLimited() {
   if (Date.now() < globalRateLimitCooldown) {
@@ -73,6 +89,172 @@ function setGlobalRateLimit() {
   logger.error('GLOBAL_RATE_LIMIT_COOLDOWN_SET', { 
     cooldownSeconds: GLOBAL_COOLDOWN_MS / 1000,
     nextAttempt: new Date(globalRateLimitCooldown).toISOString()
+  });
+}
+
+// Queue management functions
+function getQueueStats() {
+  return { ...queueStats, currentSize: requestQueue.length };
+}
+
+function clearQueue() {
+  const cleared = requestQueue.length;
+  requestQueue.length = 0;
+  queueStats.currentSize = 0;
+  logger.info('AI_REQUEST_QUEUE_CLEARED', { cleared });
+  return cleared;
+}
+
+async function processQueue() {
+  if (isProcessingQueue || requestQueue.length === 0) return;
+  
+  isProcessingQueue = true;
+  logger.info('AI_QUEUE_PROCESSING_START', { queueSize: requestQueue.length });
+  
+  while (requestQueue.length > 0) {
+    // Check global rate limit
+    if (isGlobalRateLimited()) {
+      const waitTime = globalRateLimitCooldown - Date.now();
+      logger.warn('AI_QUEUE_WAITING_COOLDOWN', { waitMs: waitTime });
+      await new Promise(resolve => setTimeout(resolve, Math.max(waitTime, 1000)));
+      continue;
+    }
+    
+    // Check circuit breaker
+    if (!circuitBreaker.canExecute()) {
+      const state = circuitBreaker.getState();
+      logger.warn('AI_QUEUE_CIRCUIT_BREAKER_OPEN', { nextAttempt: state.nextAttempt });
+      break; // Stop processing until circuit closes
+    }
+    
+    // Throttling: ensure minimum delay between requests
+    const timeSinceLastRequest = Date.now() - lastRequestTime;
+    const effectiveMinDelay = MIN_DELAY_MS / Math.max(1, apiKeys.length); // Faster with more keys
+    if (timeSinceLastRequest < effectiveMinDelay) {
+      const waitTime = effectiveMinDelay - timeSinceLastRequest;
+      logger.info('AI_QUEUE_THROTTLING', { waitMs: waitTime });
+      await new Promise(resolve => setTimeout(resolve, waitTime));
+    }
+    
+    // Get next request from queue
+    const request = requestQueue.shift();
+    queueStats.currentSize = requestQueue.length;
+    
+    try {
+      lastRequestTime = Date.now();
+      let result;
+      
+      if (request.type === 'generate') {
+        result = await geminiGenerate(request.params);
+      } else if (request.type === 'embed') {
+        result = await geminiEmbed(request.params);
+      }
+      
+      queueStats.totalProcessed++;
+      request.resolve(result);
+      logger.info('AI_QUEUE_REQUEST_SUCCESS', { 
+        type: request.type, 
+        remaining: requestQueue.length 
+      });
+      
+    } catch (err) {
+      queueStats.totalFailed++;
+      
+      // Retry logic for rate limited requests
+      if ((err.statusCode === 429 || err.code === 'ALL_KEYS_RATE_LIMITED') && request.retries < MAX_RETRY_ATTEMPTS) {
+        request.retries++;
+        logger.warn('AI_QUEUE_RETRY', { 
+          type: request.type, 
+          retry: request.retries,
+          maxRetries: MAX_RETRY_ATTEMPTS 
+        });
+        // Put back at front of queue with delay
+        requestQueue.unshift(request);
+        await new Promise(resolve => setTimeout(resolve, QUEUE_RETRY_DELAY_MS));
+      } else {
+        request.reject(err);
+        logger.error('AI_QUEUE_REQUEST_FAILED', { 
+          type: request.type, 
+          error: err.message,
+          retries: request.retries 
+        });
+      }
+    }
+  }
+  
+  isProcessingQueue = false;
+  logger.info('AI_QUEUE_PROCESSING_COMPLETE', { 
+    processed: queueStats.totalProcessed,
+    failed: queueStats.totalFailed 
+  });
+}
+
+// Wrapper functions that use queue
+async function generateTextWithQueue({ system, prompt, maxOutputTokens, timeoutMs }) {
+  if (!isEnabled()) {
+    const err = new Error('AI is disabled');
+    err.statusCode = 503;
+    throw err;
+  }
+  
+  // If queue is too large, process synchronously with backoff
+  if (requestQueue.length >= MAX_QUEUE_SIZE) {
+    logger.warn('AI_QUEUE_FULL_PROCESSING_SYNC', { queueSize: requestQueue.length });
+    return geminiGenerate({ system, prompt, maxOutputTokens, timeoutMs });
+  }
+  
+  return new Promise((resolve, reject) => {
+    requestQueue.push({
+      type: 'generate',
+      params: { system, prompt, maxOutputTokens, timeoutMs },
+      resolve,
+      reject,
+      retries: 0,
+      timestamp: Date.now()
+    });
+    
+    queueStats.totalQueued++;
+    queueStats.currentSize = requestQueue.length;
+    logger.info('AI_REQUEST_QUEUED', { 
+      type: 'generate', 
+      queueSize: requestQueue.length 
+    });
+    
+    // Start processing queue
+    processQueue();
+  });
+}
+
+async function embedTextWithQueue({ text }) {
+  if (!isEnabled()) {
+    const err = new Error('AI is disabled');
+    err.statusCode = 503;
+    throw err;
+  }
+  
+  if (requestQueue.length >= MAX_QUEUE_SIZE) {
+    logger.warn('AI_QUEUE_FULL_PROCESSING_SYNC', { queueSize: requestQueue.length });
+    return geminiEmbed({ text });
+  }
+  
+  return new Promise((resolve, reject) => {
+    requestQueue.push({
+      type: 'embed',
+      params: { text },
+      resolve,
+      reject,
+      retries: 0,
+      timestamp: Date.now()
+    });
+    
+    queueStats.totalQueued++;
+    queueStats.currentSize = requestQueue.length;
+    logger.info('AI_REQUEST_QUEUED', { 
+      type: 'embed', 
+      queueSize: requestQueue.length 
+    });
+    
+    processQueue();
   });
 }
 
@@ -326,10 +508,14 @@ async function embedText({ text }) {
 }
 
 module.exports = {
-  generateText,
-  embedText,
+  generateText: generateTextWithQueue,  // Use queue version
+  embedText: embedTextWithQueue,        // Use queue version
+  generateTextSync: geminiGenerate,     // Direct sync version
+  embedTextSync: geminiEmbed,           // Direct sync version
   getApiKeyCount: () => apiKeys.length,
   getCircuitBreakerState: () => circuitBreaker.getState(),
   isGlobalRateLimited,
   getGlobalCooldownTime: () => globalRateLimitCooldown,
+  getQueueStats,
+  clearQueue,
 };
