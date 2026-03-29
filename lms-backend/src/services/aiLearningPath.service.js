@@ -148,6 +148,7 @@ class AiLearningPathService {
         include: [
           {
             model: Lecture,
+            as: 'lectures',
             order: [['order', 'ASC']],
           },
         ],
@@ -281,9 +282,7 @@ class AiLearningPathService {
 
     // Build stages based on course structure
     for (const chapter of courseStructure) {
-      const chapterLectures = (chapter.lectures || []).filter(
-        lecture => !progress.completedLectures.includes(lecture.id)
-      );
+      const chapterLectures = (chapter.lectures || []);
 
       if (chapterLectures.length === 0) continue;
 
@@ -305,7 +304,10 @@ class AiLearningPathService {
       );
 
       for (const lecture of sortedLectures) {
+        const isCompleted = progress.completedLectures.includes(lecture.id);
         const item = this.createLearningPathItem(lecture, learningStyle, weakAreas);
+        item.status = isCompleted ? 'completed' : 'pending';
+        
         stage.items.push(item);
         stage.estimatedDuration += lecture.estimatedDuration;
         accumulatedTime += lecture.estimatedDuration;
