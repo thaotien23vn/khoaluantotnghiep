@@ -1,4 +1,5 @@
 const aiService = require('./ai.service');
+const chatPermissionService = require('../../services/chatPermission.service');
 
 /**
  * Handle service errors
@@ -452,19 +453,87 @@ class AiController {
     }
   }
 
-  async saveTeacherCourseOutline(req, res) {
-    try {
-      const { outline, config } = req.body;
-      const userId = Number(req.user.id);
+  // ===================== Admin Chat Permission Operations =====================
 
-      const outlineData = { outline, config };
-      const result = await aiService.saveCourseOutline(outlineData, userId);
+  async getAdminChatPermissions(req, res) {
+    try {
+      const options = {
+        userId: req.query.userId ? Number(req.query.userId) : null,
+        courseId: req.query.courseId ? Number(req.query.courseId) : null,
+        lectureId: req.query.lectureId ? Number(req.query.lectureId) : null,
+        role: req.query.role,
+        page: req.query.page ? Number(req.query.page) : 1,
+        limit: req.query.limit ? Number(req.query.limit) : 20,
+      };
+      const result = await chatPermissionService.getChatPermissions(options);
+      res.json({ success: true, message: 'Chat permissions', data: result });
+    } catch (error) {
+      handleServiceError(error, res);
+    }
+  }
+
+  async muteUser(req, res) {
+    try {
+      const adminId = Number(req.user.id);
+      const { userId, courseId, lectureId, durationMinutes, reason } = req.body;
       
-      res.status(201).json({
-        success: true,
-        message: 'Course outline đã được lưu vào database',
-        data: result,
+      const result = await chatPermissionService.muteUser(adminId, {
+        userId: Number(userId),
+        courseId: courseId ? Number(courseId) : null,
+        lectureId: lectureId ? Number(lectureId) : null,
+        durationMinutes: Number(durationMinutes),
+        reason,
       });
+      
+      res.json({ success: true, message: 'User muted', data: result });
+    } catch (error) {
+      handleServiceError(error, res);
+    }
+  }
+
+  async unmuteUser(req, res) {
+    try {
+      const adminId = Number(req.user.id);
+      const { userId, courseId, lectureId } = req.body;
+      
+      const result = await chatPermissionService.unmuteUser(adminId, {
+        userId: Number(userId),
+        courseId: courseId ? Number(courseId) : null,
+        lectureId: lectureId ? Number(lectureId) : null,
+      });
+      
+      res.json({ success: true, message: 'User unmuted', data: result });
+    } catch (error) {
+      handleServiceError(error, res);
+    }
+  }
+
+  async setChatPermission(req, res) {
+    try {
+      const adminId = Number(req.user.id);
+      const { role, courseId, lectureId, canChat, reason } = req.body;
+      
+      const result = await chatPermissionService.setChatPermission(adminId, {
+        role,
+        courseId: courseId ? Number(courseId) : null,
+        lectureId: lectureId ? Number(lectureId) : null,
+        canChat,
+        reason,
+      });
+      
+      res.json({ success: true, message: 'Chat permission updated', data: result });
+    } catch (error) {
+      handleServiceError(error, res);
+    }
+  }
+
+  async deleteChatPermission(req, res) {
+    try {
+      const adminId = Number(req.user.id);
+      const permissionId = Number(req.params.id);
+      
+      const result = await chatPermissionService.deletePermission(adminId, permissionId);
+      res.json({ success: true, message: 'Permission deleted', data: result });
     } catch (error) {
       handleServiceError(error, res);
     }

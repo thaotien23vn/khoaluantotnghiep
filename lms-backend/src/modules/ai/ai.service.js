@@ -9,6 +9,7 @@ const aiPersonalization = require('../../services/aiPersonalization.service');
 const aiAnalytics = require('../../services/aiAnalytics.service');
 const aiContent = require('../../services/aiContent.service');
 const aiLearningPath = require('../../services/aiLearningPath.service');
+const chatPermissionService = require('../../services/chatPermission.service');
 const { courseGenerationQueue } = require('../../services/courseGeneration.queue');
 
 const {
@@ -121,13 +122,27 @@ class AiService {
       }
     }
 
-    const conv = await AiConversation.create({
-      userId,
-      role: String(role),
-      courseId,
-      lectureId: lectureId != null && Number.isFinite(lectureId) ? lectureId : null,
-      title: data?.title ? String(data.title) : null,
+    // Tìm conversation hiện có (1 lecture chỉ có 1 conversation)
+    const whereClause = { userId, courseId };
+    if (lectureId != null && Number.isFinite(lectureId)) {
+      whereClause.lectureId = lectureId;
+    }
+    
+    let conv = await AiConversation.findOne({
+      where: whereClause,
+      order: [['createdAt', 'DESC']],
     });
+    
+    // Nếu chưa có mới tạo mới
+    if (!conv) {
+      conv = await AiConversation.create({
+        userId,
+        role: String(role),
+        courseId,
+        lectureId: lectureId != null && Number.isFinite(lectureId) ? lectureId : null,
+        title: data?.title ? String(data.title) : null,
+      });
+    }
 
     return { conversation: conv };
   }
@@ -158,6 +173,22 @@ class AiService {
 
     if (Number(conv.userId) !== userId && role !== 'admin') {
       throw { status: 403, message: 'Không có quyền truy cập hội thoại' };
+    }
+
+    // Check chat permission
+    const permissionCheck = await chatPermissionService.canChat(
+      userId,
+      conv.courseId,
+      conv.lectureId,
+      role
+    );
+    
+    if (!permissionCheck.allowed) {
+      throw { 
+        status: 403, 
+        message: permissionCheck.reason || 'Bạn không có quyền chat',
+        mutedUntil: permissionCheck.mutedUntil,
+      };
     }
 
     if (!conv.courseId) {

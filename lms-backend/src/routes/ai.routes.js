@@ -400,4 +400,48 @@ router.get(
   aiController.getAdminSystemHealth
 );
 
+// ==========================================
+// ADMIN CHAT PERMISSION ROUTES
+// ==========================================
+
+// Get Chat Permissions
+router.get(
+  '/admin/ai/chat-permissions',
+  authMiddleware,
+  authorizeRole('admin'),
+  aiController.getAdminChatPermissions
+);
+
+// Mute User
+router.post(
+  '/admin/ai/chat-permissions/mute',
+  authMiddleware,
+  authorizeRole('admin'),
+  aiController.muteUser
+);
+
+// Unmute User
+router.post(
+  '/admin/ai/chat-permissions/unmute',
+  authMiddleware,
+  authorizeRole('admin'),
+  aiController.unmuteUser
+);
+
+// Set Chat Permission (role/course/lecture level)
+router.put(
+  '/admin/ai/chat-permissions',
+  authMiddleware,
+  authorizeRole('admin'),
+  aiController.setChatPermission
+);
+
+// Delete Chat Permission (soft delete)
+router.delete(
+  '/admin/ai/chat-permissions/:id',
+  authMiddleware,
+  authorizeRole('admin'),
+  aiController.deleteChatPermission
+);
+
 module.exports = router;
