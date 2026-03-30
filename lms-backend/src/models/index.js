@@ -86,6 +86,7 @@ const models = {};
   'aiAuditLog',
   'enrollment',
   'payment',
+  'cart',
   'quiz',
   'question',
   'attempt',

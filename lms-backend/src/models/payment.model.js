@@ -26,7 +26,7 @@ module.exports = (sequelize) => {
       defaultValue: 'USD',
     },
     provider: {
-      type: DataTypes.ENUM('stripe', 'paypal', 'bank_transfer', 'mock'),
+      type: DataTypes.ENUM('stripe', 'paypal', 'bank_transfer', 'mock', 'vnpay'),
       allowNull: false,
     },
     providerTxn: {
@@ -35,7 +35,7 @@ module.exports = (sequelize) => {
       field: 'provider_txn',
     },
     status: {
-      type: DataTypes.ENUM('pending', 'completed', 'failed', 'cancelled'),
+      type: DataTypes.ENUM('pending', 'completed', 'failed', 'cancelled', 'refunded'),
       defaultValue: 'pending',
     },
     paymentDetails: {

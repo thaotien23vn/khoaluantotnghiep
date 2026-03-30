@@ -1,6 +1,6 @@
 const request = require('supertest');
 const app = require('../app');
-const db = require('../models');
+const db = require('../models/index');
 const { seedCore, TEST_PREFIX } = require('./jest.teardown');
 
 async function loginStudent() {

@@ -6,6 +6,7 @@ const courseRoutes = require("./routes/course.routes");
 const categoryRoutes = require("./routes/category.routes");
 const quizRoutes = require("./routes/quiz.routes");
 const paymentRoutes = require("./routes/payment.routes");
+const cartRoutes = require("./routes/cart.routes");
 const reviewRoutes = require("./routes/review.routes");
 const notificationRoutes = require("./routes/notification.routes");
 const forumRoutes = require("./routes/forum.routes");
@@ -168,6 +169,9 @@ app.use("/api", chatRoutes);
 
 // Payment routes
 app.use("/api/student/payments", paymentRoutes);
+
+// Cart routes
+app.use("/api/cart", cartRoutes);
 
 // Protected routes (require authentication and authorization)
 app.use("/api/admin", protectedRoutes);

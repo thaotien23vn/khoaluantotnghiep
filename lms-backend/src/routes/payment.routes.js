@@ -1,76 +1,51 @@
 const express = require('express');
-const authMiddleware = require('../middlewares/auth');
-const authorizeRole = require('../middlewares/authorize');
 const paymentController = require('../modules/payment/payment.controller');
-const { body, query } = require('express-validator');
+const authMiddleware = require('../middlewares/auth');
+const {
+  createPaymentValidation,
+  processPaymentValidation,
+  getPaymentDetailValidation,
+  processRefundValidation,
+  createVNPayPaymentValidation,
+} = require('../middlewares/payment.validation');
 
 const router = express.Router();
 
-// Payment validation rules
-const paymentValidation = [
-  body('courseId').isInt().withMessage('ID khóa học phải là số nguyên'),
-  body('paymentMethod').isIn(['stripe', 'paypal', 'bank_transfer', 'mock']).withMessage('Phương thức thanh toán không hợp lệ'),
-  body('paymentDetails').optional().isObject().withMessage('Chi tiết thanh toán phải là object')
-];
+// All payment routes require authentication
+router.use(authMiddleware);
 
-const verificationValidation = [
-  body('paymentId').isInt().withMessage('ID thanh toán phải là số nguyên'),
-  body('verificationData').optional().isObject().withMessage('Dữ liệu xác thực phải là object')
-];
+// Create payment for single course (direct buy)
+router.post('/create', createPaymentValidation, paymentController.createPayment);
 
-/**
- * @route   POST /api/student/payments/process
- * @desc    Process payment for course enrollment
- * @access  Private (Student & Admin)
- */
-router.post(
-  '/process',
-  authMiddleware,
-  authorizeRole('student', 'admin'),
-  paymentValidation,
-  paymentController.processPayment
-);
+// Create payment from cart
+router.post('/cart', paymentController.createPaymentFromCart);
 
-/**
- * @route   POST /api/student/payments/verify
- * @desc    Verify payment and complete enrollment
- * @access  Private (Student & Admin)
- */
-router.post(
-  '/verify',
-  authMiddleware,
-  authorizeRole('student', 'admin'),
-  verificationValidation,
-  paymentController.verifyPayment
-);
+// Process cart checkout
+router.post('/cart/checkout', paymentController.processCartCheckout);
 
-/**
- * @route   GET /api/student/payments
- * @desc    Get payment history
- * @access  Private (Student & Admin)
- */
-router.get(
-  '/',
-  authMiddleware,
-  authorizeRole('student', 'admin'),
-  [
-    query('page').optional().isInt({ min: 1 }).withMessage('Trang phải là số nguyên dương'),
-    query('limit').optional().isInt({ min: 1, max: 100 }).withMessage('Giới hạn phải là số nguyên từ 1-100'),
-    query('status').optional().isIn(['pending', 'completed', 'failed', 'cancelled']).withMessage('Trạng thái không hợp lệ')
-  ],
-  paymentController.getPaymentHistory
-);
+// Process payment (verify/callback)
+router.post('/process', processPaymentValidation, paymentController.processPayment);
 
-/**
- * @route   GET /api/student/payments/:paymentId
- * @desc    Get payment details
- * @access  Private (Student & Admin)
- */
-router.get(
-  '/:paymentId',
-  authMiddleware,
-  authorizeRole('student', 'admin'),
-  paymentController.getPayment
-);
+// Verify payment (alias for process with completed status)
+router.post('/verify', processPaymentValidation, paymentController.verifyPayment);
+
+// Get payment history
+router.get('/history', paymentController.getPaymentHistory);
+
+// Get payment detail
+router.get('/:paymentId', getPaymentDetailValidation, paymentController.getPaymentDetail);
+
+// Process refund
+router.post('/:paymentId/refund', processRefundValidation, paymentController.processRefund);
+
+// VNPay Routes
+// Create VNPay payment URL
+router.post('/vnpay/:courseId', createVNPayPaymentValidation, paymentController.createVNPayPayment);
+
+// VNPay Return URL (no auth required - callback from VNPay)
+router.get('/vnpay/return', paymentController.handleVNPayReturn);
+
+// VNPay IPN (Instant Payment Notification - no auth required)
+router.get('/vnpay/ipn', paymentController.handleVNPayIpn);
 
 module.exports = router;
