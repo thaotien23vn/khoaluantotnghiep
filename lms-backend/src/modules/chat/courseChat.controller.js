@@ -47,17 +47,20 @@ class CourseChatController {
 
   /**
    * Send message
-   * POST /student/course-chat/:chatId/messages
+   * POST /student/courses/:courseId/chat/messages
    */
   async sendMessage(req, res, next) {
     try {
-      const { chatId } = req.params;
+      const { courseId } = req.params;
       const { content, parentId } = req.body;
       const userId = req.user?.id;
       const senderType = req.user?.role === 'admin' ? 'admin' :
                         req.user?.role === 'teacher' ? 'teacher' : 'student';
 
-      const result = await courseChatService.sendMessage(chatId, userId, content, {
+      // Get or create chat from courseId
+      const chat = await courseChatService.getOrCreateChat(courseId);
+
+      const result = await courseChatService.sendMessage(chat.id, userId, content, {
         parentId,
         senderType,
       });
@@ -72,7 +75,7 @@ class CourseChatController {
         },
       });
     } catch (err) {
-      logger.error('SEND_COURSE_MESSAGE_ERROR', { error: err.message, chatId: req.params.chatId });
+      logger.error('SEND_COURSE_MESSAGE_ERROR', { error: err.message, courseId: req.params.courseId });
       next(err);
     }
   }
@@ -101,17 +104,20 @@ class CourseChatController {
 
   /**
    * Reply to message (teacher/admin)
-   * POST /teacher/course-chat/:chatId/reply
-   * POST /admin/course-chat/:chatId/reply
+   * POST /teacher/courses/:courseId/chat/reply
+   * POST /admin/courses/:courseId/chat/reply
    */
   async reply(req, res, next) {
     try {
-      const { chatId } = req.params;
+      const { courseId } = req.params;
       const { content, parentId } = req.body;
       const userId = req.user?.id;
       const senderType = req.user?.role;
 
-      const result = await courseChatService.sendMessage(chatId, userId, content, {
+      // Get or create chat from courseId
+      const chat = await courseChatService.getOrCreateChat(courseId);
+
+      const result = await courseChatService.sendMessage(chat.id, userId, content, {
         parentId,
         senderType,
       });
@@ -178,12 +184,15 @@ class CourseChatController {
 
   async muteChat(req, res, next) {
     try {
-      const { chatId } = req.params;
+      const { courseId } = req.params;
       const { durationMinutes } = req.body;
       const userId = req.user?.id;
       const userRole = req.user?.role;
 
-      const result = await courseChatService.muteChat(chatId, userId, userRole, durationMinutes);
+      // Get chat from courseId
+      const chat = await courseChatService.getOrCreateChat(courseId);
+
+      const result = await courseChatService.muteChat(chat.id, userId, userRole, durationMinutes);
 
       res.json({ success: true, data: result });
     } catch (err) {
@@ -194,12 +203,15 @@ class CourseChatController {
 
   async banUser(req, res, next) {
     try {
-      const { chatId, userId: targetUserId } = req.params;
+      const { courseId, userId: targetUserId } = req.params;
       const { reason } = req.body;
       const userId = req.user?.id;
       const userRole = req.user?.role;
 
-      const result = await courseChatService.banUser(chatId, targetUserId, userId, userRole, reason);
+      // Get chat from courseId
+      const chat = await courseChatService.getOrCreateChat(courseId);
+
+      const result = await courseChatService.banUser(chat.id, targetUserId, userId, userRole, reason);
 
       res.json({ success: true, data: result });
     } catch (err) {
@@ -210,11 +222,14 @@ class CourseChatController {
 
   async toggleChat(req, res, next) {
     try {
-      const { chatId } = req.params;
+      const { courseId } = req.params;
       const userId = req.user?.id;
       const userRole = req.user?.role;
 
-      const result = await courseChatService.toggleChat(chatId, userId, userRole);
+      // Get chat from courseId
+      const chat = await courseChatService.getOrCreateChat(courseId);
+
+      const result = await courseChatService.toggleChat(chat.id, userId, userRole);
 
       res.json({ success: true, data: result });
     } catch (err) {
@@ -225,11 +240,14 @@ class CourseChatController {
 
   async clearHistory(req, res, next) {
     try {
-      const { chatId } = req.params;
+      const { courseId } = req.params;
       const userId = req.user?.id;
       const userRole = req.user?.role;
 
-      const result = await courseChatService.clearHistory(chatId, userId, userRole);
+      // Get chat from courseId
+      const chat = await courseChatService.getOrCreateChat(courseId);
+
+      const result = await courseChatService.clearHistory(chat.id, userId, userRole);
 
       res.json({ success: true, data: result });
     } catch (err) {
@@ -240,12 +258,15 @@ class CourseChatController {
 
   async getAnalytics(req, res, next) {
     try {
-      const { chatId } = req.params;
+      const { courseId } = req.params;
       const { startDate, endDate } = req.query;
       const userId = req.user?.id;
       const userRole = req.user?.role;
 
-      const result = await courseChatService.getAnalytics(chatId, userId, userRole, startDate, endDate);
+      // Get chat from courseId
+      const chat = await courseChatService.getOrCreateChat(courseId);
+
+      const result = await courseChatService.getAnalytics(chat.id, userId, userRole, startDate, endDate);
 
       res.json({ success: true, data: result });
     } catch (err) {
