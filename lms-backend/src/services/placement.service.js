@@ -963,6 +963,20 @@ ${typeFormat.requirements}
     }
   }
 
+  /**
+   * Shuffle array using Fisher-Yates algorithm
+   * @param {Array} array 
+   * @returns {Array} shuffled array
+   */
+  shuffleArray(array) {
+    const shuffled = [...array]; // Create copy to avoid mutating original
+    for (let i = shuffled.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
+    }
+    return shuffled;
+  }
+
   async getProgress(sessionId) {
     const session = await PlacementSession.findByPk(sessionId);
     if (!session) {
