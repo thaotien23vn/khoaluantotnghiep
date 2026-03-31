@@ -76,12 +76,16 @@ class VNPayService {
       
       vnp_Params.vnp_SecureHash = secureHash;
 
-      // Tạo URL
+      // Create URL
       const vnpUrl = this.isSandbox
         ? 'https://sandbox.vnpayment.vn/paymentv2/vpcpay.html'
         : 'https://pay.vnpay.vn/paymentv2/vpcpay.html';
       
-      const paymentUrl = `${vnpUrl}?${querystring.stringify(vnp_Params, { encode: true })}`;
+      const query = Object.entries(vnp_Params)
+        .map(([key, val]) => `${encodeURIComponent(key)}=${encodeURIComponent(val)}`)
+        .join('&');
+      
+      const paymentUrl = `${vnpUrl}?${query}`;
       
       return paymentUrl;
     } catch (error) {
