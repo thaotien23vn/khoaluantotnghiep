@@ -14,7 +14,7 @@ let courseGenerationWorker;
 
 if (!isTest) {
   const redisOptions = {
-    maxRetriesPerRequest: 3,
+    maxRetriesPerRequest: null, // BẮT BUỘC cho BullMQ Worker
     retryStrategy: (times) => Math.min(times * 100, 2000),
     lazyConnect: true, // Chỉ kết nối khi cần
     ...(process.env.REDIS_URL && process.env.REDIS_URL.startsWith('rediss') && {

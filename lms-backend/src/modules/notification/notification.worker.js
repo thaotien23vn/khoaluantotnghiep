@@ -9,8 +9,9 @@ let notificationWorker;
 
 if (!isTest) {
   // 1. Cấu hình Redis Connection - Tối ưu cho Upstash
+  // QUAN TRỌNG: BullMQ yêu cầu maxRetriesPerRequest = null cho blocking operations
   const redisOptions = {
-    maxRetriesPerRequest: 3,
+    maxRetriesPerRequest: null, // BẮT BUỘC cho BullMQ
     retryStrategy: (times) => Math.min(times * 100, 2000),
     lazyConnect: true,
     ...(process.env.REDIS_URL && process.env.REDIS_URL.startsWith('rediss') && {
