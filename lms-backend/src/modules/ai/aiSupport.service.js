@@ -1,8 +1,6 @@
-const db = require('../models');
-const aiGateway = require('../services/aiGateway.service');
-const aiRag = require('../services/aiRag.service');
-const aiPersonalization = require('../services/aiPersonalization.service');
-const logger = require('../utils/logger');
+const db = require('../../models/index');
+const aiGateway = require('../../services/aiGateway.service');
+const logger = require('../../utils/logger');
 const { Op } = require('sequelize');
 
 const {
@@ -10,25 +8,19 @@ const {
   AiMessage,
   AiChunk,
   Course,
-  Chapter,
-  Lecture,
   User,
   PlacementSession,
   UserLearningProfile,
   Enrollment,
-  AiRecommendation,
   Quiz,
   Attempt,
-  Notification,
 } = db.models;
 
-const AI_SUPPORT_USER_ID = 0;
 const MAX_CONTEXT_CHUNKS = 8;
-const CONVERSATION_LIMIT = 50;
 
 /**
  * AI Support 24/7 Service - Intelligent assistant with full system knowledge
- * Reuses: aiGateway, aiRag, aiPersonalization, AiConversation, AiMessage models
+ * Reuses: aiGateway, AiConversation, AiMessage, AiChunk models
  */
 class AiSupportService {
   /**
@@ -36,7 +28,7 @@ class AiSupportService {
    */
   async getOrCreateConversation(userId, options = {}) {
     try {
-      const { sessionId, context = {} } = options;
+      const { context = {} } = options;
       
       // Try to find existing active conversation
       let conversation = await AiConversation.findOne({
@@ -177,7 +169,7 @@ class AiSupportService {
    */
   async sendMessage(userId, content, options = {}) {
     try {
-      const { context = {}, sessionId, attachments = [] } = options;
+      const { context = {}, attachments = [] } = options;
 
       // Get or create conversation
       const { conversation } = await this.getOrCreateConversation(userId, options);
