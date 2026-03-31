@@ -285,8 +285,8 @@ class StripeService {
         },
       ],
       mode: 'payment',
-      success_url: successUrl || 'https://cicd-test1.onrender.com/api/payments/stripe/success?session_id={CHECKOUT_SESSION_ID}',
-      cancel_url: cancelUrl || 'https://cicd-test1.onrender.com/api/payments/stripe/cancel',
+      success_url: successUrl || 'https://cicd-test1.onrender.com/api/student/payments/stripe/success?session_id={CHECKOUT_SESSION_ID}',
+      cancel_url: cancelUrl || 'https://cicd-test1.onrender.com/api/student/payments/stripe/cancel',
       metadata: {
         userId: String(userId),
         courseId: String(courseId),
@@ -350,8 +350,8 @@ class StripeService {
       payment_method_types: ['card'],
       line_items: lineItems,
       mode: 'payment',
-      success_url: successUrl || 'https://cicd-test1.onrender.com/api/payments/stripe/success?session_id={CHECKOUT_SESSION_ID}',
-      cancel_url: cancelUrl || 'https://cicd-test1.onrender.com/api/payments/stripe/cancel',
+      success_url: successUrl || 'https://cicd-test1.onrender.com/api/student/payments/stripe/success?session_id={CHECKOUT_SESSION_ID}',
+      cancel_url: cancelUrl || 'https://cicd-test1.onrender.com/api/student/payments/stripe/cancel',
       metadata: {
         userId: String(userId),
         source: 'stripe_checkout_cart',
