@@ -48,9 +48,16 @@ class PaymentController {
       const validationError = handleValidationErrors(req, res);
       if (validationError) return;
 
-      const { courseId } = req.body;
+      const { courseId, provider } = req.body;
       const { id: userId } = req.user;
-      const result = await paymentService.createPayment(userId, courseId, req.body);
+
+      let result;
+      if (provider === 'vnpay') {
+        const ipAddr = req.ip || req.headers['x-forwarded-for'] || req.connection.remoteAddress;
+        result = await paymentService.createVNPayPayment(userId, courseId, ipAddr);
+      } else {
+        result = await paymentService.createPayment(userId, courseId, req.body);
+      }
       
       const statusCode = result.isNew ? 201 : 200;
       const message = result.isNew 
