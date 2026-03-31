@@ -72,7 +72,10 @@ class VNPayService {
       // Tạo chữ ký
       const sortedParams = this._sortObject(vnp_Params);
       const signData = querystring.stringify(sortedParams, { encode: false });
+      console.log('VNPay signData:', signData);
+      console.log('VNPay secret:', process.env.VNPAY_HASH_SECRET);
       const secureHash = this._generateHash(signData, process.env.VNPAY_HASH_SECRET);
+      console.log('VNPay secureHash:', secureHash);
       
       vnp_Params.vnp_SecureHash = secureHash;
 
