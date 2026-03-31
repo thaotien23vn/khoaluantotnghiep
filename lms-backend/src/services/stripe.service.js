@@ -318,21 +318,36 @@ class StripeService {
   }
 
   /**
-   * Handle Stripe Checkout Session completed (webhook)
+   * Handle Stripe Checkout Session completed
    * @param {Object} session - Checkout session object
    */
   async handleCheckoutCompleted(session) {
-    const { userId, courseId } = session.metadata;
+    console.log('handleCheckoutCompleted called with session:', {
+      id: session.id,
+      payment_status: session.payment_status,
+      metadata: session.metadata,
+    });
 
-    // Find and update payment
+    // Verify payment status
+    if (session.payment_status !== 'paid') {
+      throw { status: 400, message: `Payment not completed. Status: ${session.payment_status}` };
+    }
+
+    const { userId, courseId } = session.metadata;
+    console.log('Extracted metadata:', { userId, courseId });
+
+    // Find payment by session ID
     const payment = await Payment.findOne({
       where: { providerTxn: session.id },
     });
 
+    console.log('Found payment:', payment ? { id: payment.id, status: payment.status } : 'NOT FOUND');
+
     if (!payment) {
-      throw { status: 404, message: 'Không tìm thấy giao dịch' };
+      throw { status: 404, message: 'Không tìm thấy giao dịch với session ID: ' + session.id };
     }
 
+    // Update payment status
     payment.status = 'completed';
     payment.paymentDetails = {
       ...payment.paymentDetails,
@@ -340,11 +355,14 @@ class StripeService {
       receiptUrl: session.receipt_url,
     };
     await payment.save();
+    console.log('Payment updated to completed:', payment.id);
 
     // Create enrollment
     const existingEnrollment = await Enrollment.findOne({
       where: { userId: parseInt(userId), courseId: parseInt(courseId) },
     });
+
+    console.log('Existing enrollment:', existingEnrollment ? 'YES' : 'NO');
 
     if (!existingEnrollment) {
       await Enrollment.create({
@@ -353,10 +371,12 @@ class StripeService {
         status: 'enrolled',
         progressPercent: 0,
       });
+      console.log('Enrollment created for user', userId, 'course', courseId);
     }
 
     // Remove from cart
     await cartService.removeCourseFromCart(parseInt(userId), parseInt(courseId));
+    console.log('Course removed from cart');
 
     return { success: true, payment };
   }
