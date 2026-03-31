@@ -200,7 +200,8 @@ app.use((err, req, res, next) => {
   }
 
   const statusCode =
-    err && Number.isInteger(err.statusCode) ? err.statusCode : 500;
+    err && Number.isInteger(err.statusCode) ? err.statusCode :
+    err && Number.isInteger(err.status) ? err.status : 500;
 
   const log = {
     level: "error",

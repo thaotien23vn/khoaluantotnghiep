@@ -235,9 +235,9 @@ Payment.belongsTo(Enrollment, { foreignKey: 'enrollmentId' });
 User.hasMany(Payment, { foreignKey: 'userId' });
 Course.hasMany(Payment, { foreignKey: 'courseId' });
 
-// Quiz/Question/Attempt/Review/Notification/Payment models define associations with aliases.
+// Quiz/Question/Attempt/Review/Notification/Payment/Cart models define associations with aliases.
 // Wire them up here so controller `include: { as: ... }` works reliably.
-for (const model of [Payment, Review, Notification, Quiz, Question, Attempt]) {
+for (const model of [Payment, Review, Notification, Quiz, Question, Attempt, Cart]) {
   if (model && typeof model.associate === 'function') {
     model.associate(models);
   }
