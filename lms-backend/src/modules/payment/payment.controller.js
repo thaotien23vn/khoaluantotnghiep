@@ -48,7 +48,7 @@ class PaymentController {
       const validationError = handleValidationErrors(req, res);
       if (validationError) return;
 
-      const { courseId } = req.params;
+      const { courseId } = req.body;
       const { id: userId } = req.user;
       const result = await paymentService.createPayment(userId, courseId, req.body);
       
