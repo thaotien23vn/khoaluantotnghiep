@@ -4,7 +4,6 @@
  */
 
 const crypto = require('crypto');
-const { v4: uuidv4 } = require('uuid');
 
 class MoMoService {
   constructor() {
@@ -44,7 +43,7 @@ class MoMoService {
   async createPayment(params) {
     const { orderId, amount, orderInfo, extraData = '' } = params;
     
-    const requestId = uuidv4();
+    const requestId = crypto.randomUUID();
     const requestType = 'payWithMethod'; // Hoặc 'captureWallet' cho thanh toán QR
     
     // Tạo chữ ký
