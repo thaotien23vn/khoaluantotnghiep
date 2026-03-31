@@ -198,7 +198,7 @@ class PaymentService {
       const payment = await Payment.create({
         userId,
         courseId: item.courseId,
-        amount: Number(item.course.price || 0) * item.quantity,
+        amount: Number(item.course.price || 0),
         currency: 'USD',
         provider: 'mock',
         providerTxn: `${providerTxn}_course_${item.courseId}`,
@@ -207,7 +207,6 @@ class PaymentService {
           initiatedAt: new Date().toISOString(),
           source: 'cart',
           cartItemId: item.id,
-          quantity: item.quantity,
           parentTxn: providerTxn,
         },
       });
@@ -223,7 +222,6 @@ class PaymentService {
         id: item.courseId,
         title: item.course.title,
         price: item.course.price,
-        quantity: item.quantity,
       })),
     };
   }

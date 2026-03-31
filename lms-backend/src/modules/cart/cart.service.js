@@ -29,8 +29,8 @@ class CartService {
 
     for (const item of cartItems) {
       if (item.course && item.course.published) {
-        totalAmount += Number(item.course.price || 0) * item.quantity;
-        itemCount += item.quantity;
+        totalAmount += Number(item.course.price || 0);
+        itemCount++;
         validItems.push(item);
       }
     }
@@ -48,7 +48,7 @@ class CartService {
   /**
    * Add course to cart
    */
-  async addToCart(userId, courseId, quantity = 1, notes = '') {
+  async addToCart(userId, courseId, notes = '') {
     // Check if course exists and is published
     const course = await Course.findByPk(courseId);
     if (!course) {
@@ -67,24 +67,23 @@ class CartService {
       throw { status: 409, message: 'Bạn đã đăng ký khóa học này rồi' };
     }
 
-    // Check if already in cart
+    // Check if already in cart - just update notes if exists (quantity always 1 for courses)
     const existingCartItem = await Cart.findOne({
       where: { userId, courseId },
     });
 
     if (existingCartItem) {
-      // Update quantity if already in cart
-      existingCartItem.quantity += quantity;
+      // Just update notes, never increase quantity for courses
       if (notes) existingCartItem.notes = notes;
       await existingCartItem.save();
       return { item: existingCartItem, isNew: false };
     }
 
-    // Create new cart item
+    // Create new cart item with quantity = 1
     const cartItem = await Cart.create({
       userId,
       courseId,
-      quantity,
+      quantity: 1,
       notes,
       addedAt: new Date(),
     });
@@ -104,13 +103,9 @@ class CartService {
   }
 
   /**
-   * Update cart item quantity
+   * Update cart item (only notes, quantity is always 1 for courses)
    */
-  async updateCartItem(userId, cartItemId, quantity) {
-    if (quantity < 1) {
-      throw { status: 400, message: 'Số lượng phải ít nhất là 1' };
-    }
-
+  async updateCartItem(userId, cartItemId, notes = '') {
     const cartItem = await Cart.findOne({
       where: { id: cartItemId, userId },
       include: [
@@ -130,7 +125,8 @@ class CartService {
       throw { status: 400, message: 'Khóa học không còn khả dụng' };
     }
 
-    cartItem.quantity = quantity;
+    // Only update notes, quantity always 1 for courses
+    if (notes) cartItem.notes = notes;
     await cartItem.save();
 
     return { item: cartItem };
@@ -217,10 +213,10 @@ class CartService {
       validItems.push(item);
     }
 
-    // Calculate totals
+    // Calculate totals - each course counts as 1
     let totalAmount = 0;
     for (const item of validItems) {
-      totalAmount += Number(item.course.price || 0) * item.quantity;
+      totalAmount += Number(item.course.price || 0);
     }
 
     return {
@@ -288,7 +284,7 @@ class CartService {
       }
 
       validItems.push(item);
-      totalAmount += Number(item.course.price || 0) * item.quantity;
+      totalAmount += Number(item.course.price || 0);
     }
 
     if (validItems.length === 0) {

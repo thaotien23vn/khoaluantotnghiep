@@ -26,7 +26,7 @@ class CartController {
   async addToCart(req, res, next) {
     try {
       const userId = req.user.id;
-      const { courseId, quantity = 1, notes } = req.body;
+      const { courseId, notes } = req.body;
 
       if (!courseId) {
         return res.status(400).json({
@@ -35,11 +35,11 @@ class CartController {
         });
       }
 
-      const result = await cartService.addToCart(userId, courseId, quantity, notes);
+      const result = await cartService.addToCart(userId, courseId, notes);
       res.status(result.isNew ? 201 : 200).json({
         success: true,
         data: result.item,
-        message: result.isNew ? 'Đã thêm vào giỏ hàng' : 'Đã cập nhật số lượng trong giỏ hàng',
+        message: result.isNew ? 'Đã thêm vào giỏ hàng' : 'Khóa học đã có trong giỏ hàng',
       });
     } catch (error) {
       next(error);
@@ -47,26 +47,19 @@ class CartController {
   }
 
   /**
-   * Update cart item quantity
+   * Update cart item notes
    */
   async updateCartItem(req, res, next) {
     try {
       const userId = req.user.id;
       const { itemId } = req.params;
-      const { quantity } = req.body;
+      const { notes } = req.body;
 
-      if (!quantity || quantity < 1) {
-        return res.status(400).json({
-          success: false,
-          message: 'Số lượng không hợp lệ',
-        });
-      }
-
-      const result = await cartService.updateCartItem(userId, itemId, quantity);
+      const result = await cartService.updateCartItem(userId, itemId, notes);
       res.json({
         success: true,
         data: result.item,
-        message: 'Đã cập nhật giỏ hàng',
+        message: 'Đã cập nhật ghi chú',
       });
     } catch (error) {
       next(error);
