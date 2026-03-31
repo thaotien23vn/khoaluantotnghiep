@@ -55,9 +55,14 @@ class PaymentController {
       if (provider === 'vnpay') {
         const ipAddr = req.ip || req.headers['x-forwarded-for'] || req.connection.remoteAddress;
         result = await paymentService.createVNPayPayment(userId, courseId, ipAddr);
-      } else {
-        result = await paymentService.createPayment(userId, courseId, req.body);
+        return res.status(201).json({
+          success: true,
+          message: 'Tạo URL thanh toán VNPay thành công',
+          data: result,
+        });
       }
+      
+      result = await paymentService.createPayment(userId, courseId, req.body);
       
       const statusCode = result.isNew ? 201 : 200;
       const message = result.isNew 
