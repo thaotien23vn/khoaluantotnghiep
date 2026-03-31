@@ -2,11 +2,33 @@
  * Stripe Service - Payment integration with Stripe
  */
 
-const stripe = require('stripe')(process.env.STRIPE_SECRET_KEY);
 const db = require('../models');
 const cartService = require('../modules/cart/cart.service');
 
 const { Payment, Course, Enrollment } = db.models;
+
+// Initialize Stripe only if key is provided (for tests without env vars)
+let stripe;
+if (process.env.STRIPE_SECRET_KEY) {
+  stripe = require('stripe')(process.env.STRIPE_SECRET_KEY);
+} else {
+  // Mock stripe for tests - methods will throw if called
+  stripe = {
+    paymentIntents: {
+      create: () => { throw new Error('Stripe not configured'); },
+    },
+    checkout: {
+      sessions: {
+        create: () => { throw new Error('Stripe not configured'); },
+        retrieve: () => { throw new Error('Stripe not configured'); },
+      },
+    },
+    webhooks: {
+      constructEvent: () => { throw new Error('Stripe not configured'); },
+    },
+  };
+  console.warn('STRIPE_SECRET_KEY not set - Stripe features disabled');
+}
 
 class StripeService {
   /**
