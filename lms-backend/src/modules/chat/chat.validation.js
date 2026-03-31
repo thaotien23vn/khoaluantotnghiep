@@ -60,6 +60,53 @@ const getCourseChatValidation = [
 ];
 
 /**
+ * Send message validation - Course Chat (uses courseId)
+ */
+const sendCourseMessageValidation = [
+  param('courseId')
+    .notEmpty()
+    .withMessage('courseId là bắt buộc')
+    .isInt({ min: 1 })
+    .withMessage('courseId phải là số nguyên dương'),
+  body('content')
+    .notEmpty()
+    .withMessage('Nội dung tin nhắn là bắt buộc')
+    .isString()
+    .trim()
+    .isLength({ min: 1, max: 2000 })
+    .withMessage('Nội dung tin nhắn từ 1-2000 ký tự'),
+  body('parentId')
+    .optional()
+    .isInt({ min: 1 })
+    .withMessage('parentId phải là số nguyên dương'),
+  handleValidationErrors,
+];
+
+/**
+ * Reply message validation (teacher/admin) - Course Chat (uses courseId)
+ */
+const replyCourseMessageValidation = [
+  param('courseId')
+    .notEmpty()
+    .withMessage('courseId là bắt buộc')
+    .isInt({ min: 1 })
+    .withMessage('courseId phải là số nguyên dương'),
+  body('content')
+    .notEmpty()
+    .withMessage('Nội dung trả lời là bắt buộc')
+    .isString()
+    .trim()
+    .isLength({ min: 1, max: 2000 })
+    .withMessage('Nội dung trả lời từ 1-2000 ký tự'),
+  body('parentId')
+    .notEmpty()
+    .withMessage('parentId là bắt buộc (phải trả lời 1 tin nhắn)')
+    .isInt({ min: 1 })
+    .withMessage('parentId phải là số nguyên dương'),
+  handleValidationErrors,
+];
+
+/**
  * Send message validation
  */
 const sendMessageValidation = [
@@ -111,5 +158,7 @@ module.exports = {
   getCourseChatValidation,
   sendMessageValidation,
   replyMessageValidation,
+  sendCourseMessageValidation,
+  replyCourseMessageValidation,
   handleValidationErrors,
 };

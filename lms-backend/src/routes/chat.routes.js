@@ -8,6 +8,8 @@ const {
   getCourseChatValidation,
   sendMessageValidation,
   replyMessageValidation,
+  sendCourseMessageValidation,
+  replyCourseMessageValidation,
 } = require('../modules/chat/chat.validation');
 
 // Generic Message Routes (works for both lesson and course chat messages)
@@ -63,7 +65,7 @@ router.get('/admin/chat/:chatId/analytics', authMiddleware, lessonChatController
 router.get('/student/courses/:courseId/chat', authMiddleware, getCourseChatValidation, courseChatController.getChat);
 
 // POST /api/student/courses/:courseId/chat/messages - Send message
-router.post('/student/courses/:courseId/chat/messages', authMiddleware, sendMessageValidation, courseChatController.sendMessage);
+router.post('/student/courses/:courseId/chat/messages', authMiddleware, sendCourseMessageValidation, courseChatController.sendMessage);
 
 // PUT /api/student/courses/:courseId/chat/messages/:messageId - Edit message (Student own)
 // DELETE /api/student/courses/:courseId/chat/messages/:messageId - Delete message (Student own, Teacher/Admin all)
@@ -74,7 +76,7 @@ router.delete('/student/courses/:courseId/chat/messages/:messageId', authMiddlew
 // GET /api/teacher/courses/:courseId/chat
 router.get('/teacher/courses/:courseId/chat', authMiddleware, getCourseChatValidation, courseChatController.getChat);
 router.get('/teacher/course-chat/escalations', authMiddleware, courseChatController.getEscalations);
-router.post('/teacher/courses/:courseId/chat/reply', authMiddleware, replyMessageValidation, courseChatController.reply);
+router.post('/teacher/courses/:courseId/chat/reply', authMiddleware, replyCourseMessageValidation, courseChatController.reply);
 
 // POST /api/teacher/courses/:courseId/chat/pin/:messageId - Pin
 // DELETE /api/teacher/courses/:courseId/chat/pin/:messageId - Unpin
@@ -95,7 +97,7 @@ router.get('/teacher/courses/:courseId/chat/analytics', authMiddleware, courseCh
 // Admin Course Chat Routes
 router.get('/admin/courses/:courseId/chat', authMiddleware, getCourseChatValidation, courseChatController.getChat);
 router.get('/admin/course-chat/escalations', authMiddleware, courseChatController.getEscalations);
-router.post('/admin/courses/:courseId/chat/reply', authMiddleware, replyMessageValidation, courseChatController.reply);
+router.post('/admin/courses/:courseId/chat/reply', authMiddleware, replyCourseMessageValidation, courseChatController.reply);
 
 // POST /api/admin/courses/:courseId/chat/pin/:messageId - Pin
 // DELETE /api/admin/courses/:courseId/chat/pin/:messageId - Unpin
