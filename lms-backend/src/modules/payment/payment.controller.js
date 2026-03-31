@@ -323,6 +323,33 @@ class PaymentController {
   }
 
   /**
+   * Create Stripe Checkout Session (redirect to Stripe hosted page)
+   */
+  async createStripeCheckout(req, res) {
+    try {
+      const validationError = handleValidationErrors(req, res);
+      if (validationError) return;
+
+      const { courseId, successUrl, cancelUrl } = req.body;
+      const { id: userId } = req.user;
+
+      const result = await stripeService.createCheckoutSession(userId, courseId, successUrl, cancelUrl);
+      
+      res.status(201).json({
+        success: true,
+        message: 'Tạo Stripe Checkout Session thành công',
+        data: {
+          checkoutUrl: result.checkoutUrl,
+          sessionId: result.sessionId,
+          payment: result.payment,
+        },
+      });
+    } catch (error) {
+      handleServiceError(error, res);
+    }
+  }
+
+  /**
    * Create Stripe Payment Intent
    */
   async createStripePayment(req, res) {

@@ -49,6 +49,9 @@ router.get('/vnpay/return', paymentController.handleVNPayReturn);
 router.get('/vnpay/ipn', paymentController.handleVNPayIpn);
 
 // Stripe Routes
+// Create Stripe Checkout Session (redirect to Stripe hosted page)
+router.post('/stripe/checkout', paymentController.createStripeCheckout);
+
 // Create Stripe Payment Intent
 router.post('/stripe/create', paymentController.createStripePayment);
 

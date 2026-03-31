@@ -236,6 +236,132 @@ class StripeService {
   }
 
   /**
+   * Create Stripe Checkout Session (redirect to Stripe hosted page)
+   * @param {number} userId - User ID
+   * @param {number} courseId - Course ID
+   * @param {string} successUrl - Redirect URL after success
+   * @param {string} cancelUrl - Redirect URL after cancel
+   * @returns {Promise<Object>} - Checkout session URL
+   */
+  async createCheckoutSession(userId, courseId, successUrl, cancelUrl) {
+    // Check course exists and published
+    const course = await Course.findByPk(courseId);
+    if (!course) {
+      throw { status: 404, message: 'Không tìm thấy khóa học' };
+    }
+
+    if (!course.published) {
+      throw { status: 400, message: 'Khóa học chưa được xuất bản' };
+    }
+
+    // Check if already enrolled
+    const existingEnrollment = await Enrollment.findOne({
+      where: { userId, courseId },
+    });
+    if (existingEnrollment) {
+      throw { status: 409, message: 'Bạn đã đăng ký khóa học này rồi' };
+    }
+
+    const price = Number(course.price || 0);
+
+    if (price === 0) {
+      throw { status: 400, message: 'Khóa học miễn phí, không cần thanh toán' };
+    }
+
+    // Create Stripe Checkout Session
+    const session = await stripe.checkout.sessions.create({
+      payment_method_types: ['card'],
+      line_items: [
+        {
+          price_data: {
+            currency: 'usd',
+            product_data: {
+              name: course.title,
+              description: course.description || 'Khóa học trực tuyến',
+            },
+            unit_amount: Math.round(price * 100), // cents
+          },
+          quantity: 1,
+        },
+      ],
+      mode: 'payment',
+      success_url: successUrl || `${process.env.FRONTEND_URL}/payment/success?session_id={CHECKOUT_SESSION_ID}`,
+      cancel_url: cancelUrl || `${process.env.FRONTEND_URL}/payment/cancel`,
+      metadata: {
+        userId: String(userId),
+        courseId: String(courseId),
+        source: 'stripe_checkout',
+      },
+    });
+
+    // Create payment record
+    const payment = await Payment.create({
+      userId,
+      courseId,
+      amount: price,
+      currency: 'USD',
+      provider: 'stripe',
+      providerTxn: session.id,
+      status: 'pending',
+      paymentDetails: {
+        initiatedAt: new Date().toISOString(),
+        sessionId: session.id,
+        type: 'checkout_session',
+      },
+    });
+
+    return {
+      payment,
+      checkoutUrl: session.url,
+      sessionId: session.id,
+    };
+  }
+
+  /**
+   * Handle Stripe Checkout Session completed (webhook)
+   * @param {Object} session - Checkout session object
+   */
+  async handleCheckoutCompleted(session) {
+    const { userId, courseId } = session.metadata;
+
+    // Find and update payment
+    const payment = await Payment.findOne({
+      where: { providerTxn: session.id },
+    });
+
+    if (!payment) {
+      throw { status: 404, message: 'Không tìm thấy giao dịch' };
+    }
+
+    payment.status = 'completed';
+    payment.paymentDetails = {
+      ...payment.paymentDetails,
+      completedAt: new Date().toISOString(),
+      receiptUrl: session.receipt_url,
+    };
+    await payment.save();
+
+    // Create enrollment
+    const existingEnrollment = await Enrollment.findOne({
+      where: { userId: parseInt(userId), courseId: parseInt(courseId) },
+    });
+
+    if (!existingEnrollment) {
+      await Enrollment.create({
+        userId: parseInt(userId),
+        courseId: parseInt(courseId),
+        status: 'enrolled',
+        progressPercent: 0,
+      });
+    }
+
+    // Remove from cart
+    await cartService.removeCourseFromCart(parseInt(userId), parseInt(courseId));
+
+    return { success: true, payment };
+  }
+
+  /**
    * Get Stripe publishable key
    */
   getPublishableKey() {
