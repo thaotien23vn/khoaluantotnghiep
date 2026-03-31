@@ -41,54 +41,14 @@ class VNPayService {
     try {
       const { orderId, amount, orderDescription, ipAddr, txnRef, bankCode = '' } = params;
       
-      // Chuyển đổi số tiền sang đơn vị của VNPay (đồng)
-      // VNPay yêu cầu số tiền * 100
-      const vnpAmount = Math.round(amount * 100);
-      
-      // Tạo thời gian giao dịch
-      const createDate = this._formatDate(new Date());
-      
-      // Dữ liệu gửi đến VNPay
-      const vnp_Params = {
-        vnp_Version: '2.1.0',
-        vnp_Command: 'pay',
-        vnp_TmnCode: process.env.VNPAY_TMN_CODE,
-        vnp_Locale: 'vn',
-        vnp_CurrCode: 'VND',
-        vnp_TxnRef: txnRef,
-        vnp_OrderInfo: orderDescription || `Thanh toan don hang ${orderId}`,
-        vnp_OrderType: 'other',
-        vnp_Amount: String(vnpAmount),
-        vnp_ReturnUrl: this.returnUrl,
+      // Use vnpay library to build URL properly
+      const paymentUrl = await this.vnpay.buildPaymentUrl({
+        vnp_Amount: Math.round(amount * 100),
         vnp_IpAddr: ipAddr || '127.0.0.1',
-        vnp_CreateDate: createDate,
-      };
-
-      // Tùy chọn: Chọn ngân hàng
-      if (bankCode) {
-        vnp_Params.vnp_BankCode = bankCode;
-      }
-
-      // Tạo chữ ký
-      const sortedParams = this._sortObject(vnp_Params);
-      const signData = this._createSignData(sortedParams);
-      console.log('VNPay signData:', signData);
-      console.log('VNPay secret:', process.env.VNPAY_HASH_SECRET);
-      const secureHash = this._generateHash(signData, process.env.VNPAY_HASH_SECRET);
-      console.log('VNPay secureHash:', secureHash);
-      
-      vnp_Params.vnp_SecureHash = secureHash;
-
-      // Create URL
-      const vnpUrl = this.isSandbox
-        ? 'https://sandbox.vnpayment.vn/paymentv2/vpcpay.html'
-        : 'https://pay.vnpay.vn/paymentv2/vpcpay.html';
-      
-      const query = Object.entries(vnp_Params)
-        .map(([key, val]) => `${encodeURIComponent(key)}=${encodeURIComponent(val)}`)
-        .join('&');
-      
-      const paymentUrl = `${vnpUrl}?${query}`;
+        vnp_OrderInfo: orderDescription || `Thanh toan don hang ${orderId}`,
+        vnp_ReturnUrl: this.returnUrl,
+        vnp_TxnRef: txnRef,
+      });
       
       return paymentUrl;
     } catch (error) {
