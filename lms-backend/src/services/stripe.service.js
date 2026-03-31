@@ -285,8 +285,8 @@ class StripeService {
         },
       ],
       mode: 'payment',
-      success_url: successUrl || `${process.env.FRONTEND_URL}/payment/success?session_id={CHECKOUT_SESSION_ID}`,
-      cancel_url: cancelUrl || `${process.env.FRONTEND_URL}/payment/cancel`,
+      success_url: successUrl || 'https://cicd-test1.onrender.com/api/payments/stripe/success?session_id={CHECKOUT_SESSION_ID}',
+      cancel_url: cancelUrl || 'https://cicd-test1.onrender.com/api/payments/stripe/cancel',
       metadata: {
         userId: String(userId),
         courseId: String(courseId),

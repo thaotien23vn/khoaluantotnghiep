@@ -52,6 +52,10 @@ router.get('/vnpay/ipn', paymentController.handleVNPayIpn);
 // Create Stripe Checkout Session (redirect to Stripe hosted page)
 router.post('/stripe/checkout', paymentController.createStripeCheckout);
 
+// Stripe Checkout success/cancel (no auth required - callback from Stripe)
+router.get('/stripe/success', paymentController.handleStripeSuccess);
+router.get('/stripe/cancel', paymentController.handleStripeCancel);
+
 // Create Stripe Payment Intent
 router.post('/stripe/create', paymentController.createStripePayment);
 

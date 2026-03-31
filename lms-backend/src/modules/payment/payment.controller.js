@@ -301,6 +301,54 @@ class PaymentController {
   }
 
   /**
+   * Handle Stripe Checkout Session success
+   */
+  async handleStripeSuccess(req, res) {
+    try {
+      const { session_id: sessionId } = req.query;
+      
+      // Retrieve session from Stripe
+      const session = await require('stripe')(process.env.STRIPE_SECRET_KEY).checkout.sessions.retrieve(sessionId);
+      
+      if (session.payment_status === 'paid') {
+        // Process completed payment
+        await stripeService.handleCheckoutCompleted(session);
+        
+        res.json({
+          success: true,
+          message: 'Thanh toán thành công',
+          data: {
+            sessionId,
+            courseId: session.metadata.courseId,
+            amount: session.amount_total / 100,
+          },
+        });
+      } else {
+        res.status(400).json({
+          success: false,
+          message: 'Thanh toán chưa hoàn tất',
+        });
+      }
+    } catch (error) {
+      console.error('Stripe success handler error:', error);
+      res.status(500).json({
+        success: false,
+        message: 'Lỗi xử lý thanh toán',
+      });
+    }
+  }
+
+  /**
+   * Handle Stripe Checkout Session cancel
+   */
+  async handleStripeCancel(req, res) {
+    res.json({
+      success: false,
+      message: 'Thanh toán đã bị hủy',
+    });
+  }
+
+  /**
    * Handle VNPay IPN (Instant Payment Notification)
    */
   async handleVNPayIpn(req, res) {
