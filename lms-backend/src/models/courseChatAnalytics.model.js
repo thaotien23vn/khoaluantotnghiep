@@ -1,0 +1,83 @@
+const { DataTypes } = require('sequelize');
+
+module.exports = (sequelize) => {
+  const CourseChatAnalytics = sequelize.define('CourseChatAnalytics', {
+    id: {
+      type: DataTypes.INTEGER.UNSIGNED,
+      autoIncrement: true,
+      primaryKey: true,
+    },
+    chatId: {
+      type: DataTypes.INTEGER.UNSIGNED,
+      allowNull: false,
+      field: 'chat_id',
+    },
+    date: {
+      type: DataTypes.DATEONLY,
+      allowNull: false,
+      defaultValue: DataTypes.NOW,
+    },
+    totalMessages: {
+      type: DataTypes.INTEGER.UNSIGNED,
+      defaultValue: 0,
+      field: 'total_messages',
+    },
+    studentMessages: {
+      type: DataTypes.INTEGER.UNSIGNED,
+      defaultValue: 0,
+      field: 'student_messages',
+    },
+    teacherMessages: {
+      type: DataTypes.INTEGER.UNSIGNED,
+      defaultValue: 0,
+      field: 'teacher_messages',
+    },
+    adminMessages: {
+      type: DataTypes.INTEGER.UNSIGNED,
+      defaultValue: 0,
+      field: 'admin_messages',
+    },
+    aiResponses: {
+      type: DataTypes.INTEGER.UNSIGNED,
+      defaultValue: 0,
+      field: 'ai_responses',
+    },
+    uniqueParticipants: {
+      type: DataTypes.INTEGER.UNSIGNED,
+      defaultValue: 0,
+      field: 'unique_participants',
+    },
+    escalations: {
+      type: DataTypes.INTEGER.UNSIGNED,
+      defaultValue: 0,
+    },
+    resolvedQuestions: {
+      type: DataTypes.INTEGER.UNSIGNED,
+      defaultValue: 0,
+      field: 'resolved_questions',
+    },
+  }, {
+    tableName: 'course_chat_analytics',
+    timestamps: true,
+    createdAt: 'created_at',
+    updatedAt: 'updated_at',
+    indexes: [
+      { fields: ['chat_id', 'date'], unique: true },
+      { fields: ['chat_id'] },
+      { fields: ['date'] },
+    ],
+  });
+
+  CourseChatAnalytics.associate = (models) => {
+    CourseChatAnalytics.belongsTo(models.CourseChat, {
+      foreignKey: {
+        name: 'chatId',
+        allowNull: false,
+        onDelete: 'CASCADE',
+      },
+      as: 'chat',
+    });
+  };
+
+  return CourseChatAnalytics;
+};

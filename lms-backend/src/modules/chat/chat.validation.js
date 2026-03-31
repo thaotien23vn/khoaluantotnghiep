@@ -40,6 +40,26 @@ const getChatValidation = [
 ];
 
 /**
+ * Get course chat validation
+ */
+const getCourseChatValidation = [
+  param('courseId')
+    .notEmpty()
+    .withMessage('courseId là bắt buộc')
+    .isInt({ min: 1 })
+    .withMessage('courseId phải là số nguyên dương'),
+  query('limit')
+    .optional()
+    .isInt({ min: 1, max: 100 })
+    .withMessage('limit phải từ 1-100'),
+  query('offset')
+    .optional()
+    .isInt({ min: 0 })
+    .withMessage('offset không được âm'),
+  handleValidationErrors,
+];
+
+/**
  * Send message validation
  */
 const sendMessageValidation = [
@@ -88,6 +108,7 @@ const replyMessageValidation = [
 
 module.exports = {
   getChatValidation,
+  getCourseChatValidation,
   sendMessageValidation,
   replyMessageValidation,
   handleValidationErrors,

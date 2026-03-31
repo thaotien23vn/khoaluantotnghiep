@@ -155,9 +155,31 @@ class LessonChatController {
   }
 
   /**
-   * Delete message (Teacher/Admin)
-   * DELETE /teacher/chat/:messageId
-   * DELETE /admin/chat/:messageId
+   * Edit message (Student own within 10 min, Teacher/Admin any)
+   * PUT /api/chat/messages/:messageId
+   */
+  async editMessage(req, res, next) {
+    try {
+      const { messageId } = req.params;
+      const { content } = req.body;
+      const userId = req.user?.id;
+      const userRole = req.user?.role;
+
+      const result = await lessonChatService.editMessage(messageId, userId, userRole, content);
+
+      res.json({
+        success: true,
+        data: result,
+      });
+    } catch (err) {
+      logger.error('EDIT_MESSAGE_ERROR', { error: err.message });
+      next(err);
+    }
+  }
+
+  /**
+   * Delete message (Student own, Teacher/Admin any)
+   * DELETE /api/chat/messages/:messageId
    */
   async deleteMessage(req, res, next) {
     try {

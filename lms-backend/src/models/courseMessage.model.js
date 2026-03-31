@@ -1,0 +1,130 @@
+const { DataTypes } = require('sequelize');
+
+module.exports = (sequelize) => {
+  const CourseMessage = sequelize.define('CourseMessage', {
+    id: {
+      type: DataTypes.INTEGER.UNSIGNED,
+      autoIncrement: true,
+      primaryKey: true,
+    },
+    chatId: {
+      type: DataTypes.INTEGER.UNSIGNED,
+      allowNull: false,
+      field: 'chat_id',
+    },
+    senderId: {
+      type: DataTypes.INTEGER.UNSIGNED,
+      allowNull: false,
+      field: 'sender_id',
+    },
+    senderType: {
+      type: DataTypes.ENUM('student', 'teacher', 'admin', 'ai'),
+      allowNull: false,
+      field: 'sender_type',
+    },
+    content: {
+      type: DataTypes.TEXT,
+      allowNull: false,
+    },
+    parentId: {
+      type: DataTypes.INTEGER.UNSIGNED,
+      allowNull: true,
+      field: 'parent_id',
+    },
+    status: {
+      type: DataTypes.ENUM('active', 'answered', 'resolved'),
+      defaultValue: 'active',
+    },
+    answeredBy: {
+      type: DataTypes.ENUM('ai', 'teacher', 'admin'),
+      allowNull: true,
+      field: 'answered_by',
+    },
+    aiConfidence: {
+      type: DataTypes.FLOAT,
+      allowNull: true,
+      field: 'ai_confidence',
+    },
+    aiContext: {
+      type: DataTypes.JSON,
+      allowNull: true,
+      field: 'ai_context',
+    },
+    editedAt: {
+      type: DataTypes.DATE,
+      allowNull: true,
+      field: 'edited_at',
+    },
+    isDeleted: {
+      type: DataTypes.BOOLEAN,
+      defaultValue: false,
+      field: 'is_deleted',
+    },
+    deletedBy: {
+      type: DataTypes.INTEGER.UNSIGNED,
+      allowNull: true,
+      field: 'deleted_by',
+    },
+    deletedAt: {
+      type: DataTypes.DATE,
+      allowNull: true,
+      field: 'deleted_at',
+    },
+    isPinned: {
+      type: DataTypes.BOOLEAN,
+      defaultValue: false,
+      field: 'is_pinned',
+    },
+    pinnedBy: {
+      type: DataTypes.INTEGER.UNSIGNED,
+      allowNull: true,
+      field: 'pinned_by',
+    },
+    pinnedAt: {
+      type: DataTypes.DATE,
+      allowNull: true,
+      field: 'pinned_at',
+    },
+  }, {
+    tableName: 'course_messages',
+    timestamps: true,
+    createdAt: 'created_at',
+    updatedAt: 'updated_at',
+    indexes: [
+      { fields: ['chat_id'] },
+      { fields: ['chat_id', 'created_at'] },
+      { fields: ['chat_id', 'id'] },
+      { fields: ['parent_id'] },
+      { fields: ['sender_id'] },
+      { fields: ['status'] },
+    ],
+  });
+
+  CourseMessage.associate = (models) => {
+    CourseMessage.belongsTo(models.CourseChat, {
+      foreignKey: {
+        name: 'chatId',
+        allowNull: false,
+        onDelete: 'CASCADE',
+      },
+      as: 'chat',
+    });
+    CourseMessage.belongsTo(models.User, {
+      foreignKey: {
+        name: 'senderId',
+        allowNull: false,
+      },
+      as: 'sender',
+    });
+    CourseMessage.belongsTo(models.CourseMessage, {
+      foreignKey: 'parentId',
+      as: 'parent',
+    });
+    CourseMessage.hasMany(models.CourseMessage, {
+      foreignKey: 'parentId',
+      as: 'replies',
+    });
+  };
+
+  return CourseMessage;
+};

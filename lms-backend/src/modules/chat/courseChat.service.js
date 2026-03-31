@@ -5,98 +5,117 @@ const { Op } = require('sequelize');
 const { sequelize } = db;
 
 const {
-  LessonChat,
-  LessonMessage,
-  ChatParticipant,
-  ChatEscalation,
-  ChatAnalytics,
-  Lecture,
+  CourseChat,
+  CourseMessage,
+  CourseChatParticipant,
+  CourseChatEscalation,
+  CourseChatAnalytics,
   Course,
   User,
   Notification,
+  AiChunk,
 } = db.models;
 
-/**
- * Lesson Chat Service
- * Handles public chat for lessons with AI + Teacher + Admin support
- */
-// AI system user ID (reserved ID for AI assistant)
 const AI_SYSTEM_USER_ID = 0;
 
-class LessonChatService {
+/**
+ * Course Chat Service
+ * Handles public chat for courses with AI RAG from all course chunks
+ */
+class CourseChatService {
   /**
-   * Get or create chat for a lesson
+   * Get or create chat for course
    */
-  async getOrCreateChat(lessonId, courseId) {
-    let chat = await LessonChat.findOne({
-      where: { lessonId },
-      include: [
-        { model: LessonMessage, as: 'messages', limit: 50, order: [['created_at', 'DESC']] },
-      ],
+  async getOrCreateChat(courseId) {
+    let chat = await CourseChat.findOne({
+      where: { courseId },
+      include: [{ model: Course, as: 'course' }],
     });
 
     if (!chat) {
-      chat = await LessonChat.create({
-        lessonId,
+      const course = await Course.findByPk(courseId);
+      if (!course) {
+        throw { status: 404, message: 'Không tìm thấy khóa học' };
+      }
+
+      chat = await CourseChat.create({
         courseId,
-        title: 'Lesson Discussion',
+        title: `Thảo luận: ${course.title}`,
         isActive: true,
         aiEnabled: true,
+        isEnabled: true,
       });
-      logger.info('LESSON_CHAT_CREATED', { chatId: chat.id, lessonId, courseId });
+
+      // Auto-join course teacher as participant
+      await this.joinChat(chat.id, course.createdBy, 'teacher');
+
+      logger.info('COURSE_CHAT_CREATED', { chatId: chat.id, courseId });
     }
 
     return chat;
   }
 
   /**
-   * Get chat history with pagination
+   * Get chat history
    */
   async getChatHistory(chatId, options = {}) {
-    const { limit = 50, offset = 0, includeReplies = true } = options;
+    const { limit = 50, offset = 0 } = options;
 
-    const messages = await LessonMessage.findAll({
-      where: {
+    const messages = await CourseMessage.findAll({
+      where: { 
         chatId,
-        parentId: null, // Top level messages only
         isDeleted: false,
       },
       include: [
         {
           model: User,
           as: 'sender',
-          attributes: ['id', 'name', 'avatar'],
+          attributes: ['id', 'name', 'avatar', 'role'],
         },
-        ...(includeReplies ? [{
-          model: LessonMessage,
+        {
+          model: CourseMessage,
           as: 'replies',
-          where: { isDeleted: false },
-          required: false,
           include: [
             {
               model: User,
               as: 'sender',
-              attributes: ['id', 'name', 'avatar'],
+              attributes: ['id', 'name', 'avatar', 'role'],
             },
           ],
-        }] : []),
+        },
       ],
       order: [['created_at', 'DESC']],
       limit,
       offset,
     });
 
-    return messages.reverse(); // Oldest first
+    // Get pinned messages separately
+    const pinnedMessages = await CourseMessage.findAll({
+      where: { chatId, isPinned: true, isDeleted: false },
+      include: [
+        {
+          model: User,
+          as: 'sender',
+          attributes: ['id', 'name', 'avatar', 'role'],
+        },
+      ],
+      order: [['pinned_at', 'DESC']],
+    });
+
+    return { messages: messages.reverse(), pinnedMessages };
   }
 
   /**
-   * Send message - main entry point
+   * Send message with AI processing (RAG from all course chunks)
    */
   async sendMessage(chatId, userId, content, options = {}) {
     const { parentId = null, senderType = 'student' } = options;
 
-    // Save user message
-    const message = await LessonMessage.create({
+    // Check chat access
+    await this.checkChatAccess(chatId, userId, senderType);
+
+    // Create message
+    const message = await CourseMessage.create({
       chatId,
       senderId: userId,
       senderType,
@@ -105,97 +124,73 @@ class LessonChatService {
       status: 'active',
     });
 
-    logger.info('LESSON_MESSAGE_SENT', {
-      messageId: message.id,
-      chatId,
-      userId,
-      senderType,
-    });
+    // Record analytics
+    await this.recordAnalytics(chatId, senderType);
 
-    // If student question, try AI first
-    if (senderType === 'student' && !parentId) {
-      return this.handleStudentQuestion(chatId, message);
+    // If it's a question from student and AI is enabled, process with AI
+    let aiResponse = null;
+    let answeredBy = null;
+    let escalation = null;
+
+    const chat = await CourseChat.findByPk(chatId);
+    if (senderType === 'student' && chat?.aiEnabled) {
+      const aiResult = await this.processWithAI(content, chat.courseId);
+
+      if (aiResult.confidence >= 0.7) {
+        // AI can answer confidently
+        aiResponse = await CourseMessage.create({
+          chatId,
+          senderId: AI_SYSTEM_USER_ID,
+          senderType: 'ai',
+          content: aiResult.content,
+          parentId: message.id,
+          status: 'answered',
+          answeredBy: 'ai',
+          aiConfidence: aiResult.confidence,
+          aiContext: { sources: aiResult.sources },
+        });
+
+        await this.markAsAnswered(message.id, 'ai');
+        answeredBy = 'ai';
+
+        // Record AI analytics
+        await this.recordAnalytics(chatId, 'ai');
+      } else {
+        // AI confidence low - escalate to teacher
+        escalation = await this.escalateToTeacher(chatId, message.id, 'low_confidence', aiResult);
+      }
     }
 
-    // Teacher/Admin reply - mark parent as answered
-    if (parentId && (senderType === 'teacher' || senderType === 'admin')) {
-      await this.markAsAnswered(parentId, senderType, userId);
-    }
-
-    return { message, aiResponse: null };
+    return {
+      message: await CourseMessage.findByPk(message.id, {
+        include: [{ model: User, as: 'sender', attributes: ['id', 'name', 'avatar', 'role'] }],
+      }),
+      aiResponse: aiResponse
+        ? await CourseMessage.findByPk(aiResponse.id, {
+            include: [{ model: User, as: 'sender', attributes: ['id', 'name', 'avatar', 'role'] }],
+          })
+        : null,
+      answeredBy,
+      escalation,
+    };
   }
 
   /**
-   * Handle student question with AI + fallback
+   * Process with AI using RAG from all course chunks
    */
-  async handleStudentQuestion(chatId, message) {
-    const chat = await LessonChat.findByPk(chatId, {
-      include: [{ model: Course, as: 'course' }],
-    });
-
-    if (!chat.aiEnabled) {
-      return this.escalateToTeacher(chatId, message.id, 'AI disabled');
-    }
-
-    // Get lesson content for RAG context
-    const context = await this.getLessonContext(chat.lessonId);
-
-    // Try AI response
-    const aiResult = await this.generateAiResponse(message.content, context);
-
-    if (aiResult.confidence >= 0.7) {
-      // AI confident enough - save response
-      const aiMessage = await LessonMessage.create({
-        chatId,
-        senderId: AI_SYSTEM_USER_ID,
-        senderType: 'ai',
-        content: aiResult.content,
-        parentId: message.id,
-        status: 'active',
-        answeredBy: 'ai',
-        aiConfidence: aiResult.confidence,
-        aiContext: { sources: aiResult.sources },
-      });
-
-      // Update original message
-      await message.update({
-        status: 'answered',
-        answeredBy: 'ai',
-      });
-
-      logger.info('LESSON_AI_ANSWERED', {
-        messageId: message.id,
-        aiMessageId: aiMessage.id,
-        confidence: aiResult.confidence,
-      });
-
-      return {
-        message,
-        aiResponse: aiMessage,
-        answeredBy: 'ai',
-      };
-    }
-
-    // AI not confident - escalate
-    return this.escalateToTeacher(
-      chatId,
-      message.id,
-      `AI confidence too low: ${aiResult.confidence}`,
-      aiResult
-    );
-  }
-
-  /**
-   * Generate AI response with RAG
-   */
-  async generateAiResponse(question, context) {
+  async processWithAI(question, courseId) {
     try {
+      // Get all chunks for this course
+      const context = await this.getCourseContext(courseId);
+
+      const prompt = this.buildRagPrompt(question, context);
+
       const response = await aiGateway.generateText({
-        system: 'Bạn là trợ giảng AI. Trả lời câu hỏi dựa trên nội dung bài học. Nếu không chắc chắn, hãy nói rõ.',
+        system: `Bạn là trợ lý AI cho khóa học. Hãy trả lời câu hỏi dựa trên nội dung khóa học được cung cấp.
+Nếu không đủ thông tin, hãy nói "Tôi không chắc chắn" và giải thích lý do.
+Hãy trả lời ngắn gọn, rõ ràng và hữu ích.`,
         prompt,
-        maxOutputTokens: 800,
-        temperature: 0.3,
-        timeoutMs: 120000,
+        maxOutputTokens: 1024,
       });
 
       // Parse confidence from response or estimate
@@ -207,63 +202,87 @@ class LessonChatService {
         sources: context.sources || [],
       };
     } catch (err) {
-      logger.error('LESSON_AI_FAILED', { error: err.message });
-      
-      // Return a structured error response that the UI can handle
+      logger.error('COURSE_AI_FAILED', { error: err.message });
+
       if (err.statusCode === 429 || err.code === 'GLOBAL_RATE_LIMITED' || err.code === 'ALL_KEYS_RATE_LIMITED') {
         return {
-          content: 'Hệ thống AI hiện đang bận do quá tải (Rate Limit). Vui lòng thử lại sau 1-2 phút.',
+          content: 'Hệ thống AI hiện đang bận do quá tải. Vui lòng thử lại sau.',
           confidence: 0,
           sources: [],
-          error: 'RATE_LIMIT'
+          error: 'RATE_LIMIT',
         };
       }
-      
+
       return {
-        content: 'Xin lỗi, tôi gặp lỗi kỹ thuật khi xử lý câu hỏi này. Vui lòng thử lại sau.',
+        content: 'Xin lỗi, tôi gặp lỗi kỹ thuật. Vui lòng thử lại sau.',
         confidence: 0,
         sources: [],
-        error: 'GENERIC_ERROR'
+        error: 'GENERIC_ERROR',
       };
     }
   }
 
   /**
-   * Build RAG prompt with lesson context
+   * Build RAG context from all course chunks
    */
-  async getLessonContext(lessonId) {
-    const lecture = await Lecture.findByPk(lessonId);
+  async getCourseContext(courseId) {
+    // Get all chunks for this course
+    const chunks = await AiChunk.findAll({
+      where: { courseId },
+      order: [['chunkIndex', 'ASC']],
+      limit: 100, // Limit to prevent token overflow
+    });
+
+    const course = await Course.findByPk(courseId, {
+      attributes: ['id', 'title', 'description'],
+    });
+
+    // Combine all chunk texts
+    const combinedContent = chunks.map(c => c.text).join('\n\n---\n\n');
+
+    // Build sources list
+    const sources = chunks.map(c => ({
+      type: 'chunk',
+      id: c.id,
+      documentId: c.documentId,
+      chunkIndex: c.chunkIndex,
+    }));
+
     return {
-      content: lecture?.content || '',
-      title: lecture?.title || '',
-      sources: [{ type: 'lecture', id: lessonId }],
+      title: course?.title || 'Khóa học',
+      description: course?.description || '',
+      content: combinedContent,
+      sources,
+      chunkCount: chunks.length,
     };
   }
 
   /**
-   * Build prompt for AI
+   * Build RAG prompt with full course context
    */
   buildRagPrompt(question, context) {
-    return `Bài học: ${context.title}
+    return `Khóa học: ${context.title}
+Mô tả: ${context.description?.substring(0, 500) || 'Không có mô tả'}
 
-Nội dung bài học:
-${context.content?.substring(0, 3000) || 'Không có nội dung'}
+Nội dung khóa học (tổng hợp từ ${context.chunkCount} phần):
+${context.content?.substring(0, 8000) || 'Không có nội dung'}
 
 Câu hỏi: ${question}
 
-Trả lời dựa trên nội dung bài học trên. Nếu không có thông tin, hãy nói "Tôi không chắc chắn". Chỉ trả lời nếu bạn confident > 70%.`;
+Trả lời dựa trên toàn bộ nội dung khóa học trên. Nếu thông tin không đầy đủ, hãy nói "Tôi không chắc chắn". Chỉ trả lời nếu bạn tự tin > 70%.`;
   }
 
   /**
    * Estimate AI confidence
    */
   estimateConfidence(response, context) {
-    // Simple heuristic - can be improved
-    const hasUncertainty = /không chắc|không biết|không có thông tin|không tìm thấy/i.test(response);
-    const isRelevant = context.content && response.length > 50;
-    
+    const hasUncertainty = /không chắc|không biết|không có thông tin|không tìm thấy|không đủ thông tin/i.test(response);
+    const isRelevant = context.content && context.content.length > 100;
+    const hasSubstantialContent = response.length > 100;
+
     if (hasUncertainty) return 0.3;
-    if (!isRelevant) return 0.5;
+    if (!isRelevant) return 0.4;
+    if (!hasSubstantialContent) return 0.5;
     return 0.85;
   }
 
@@ -271,12 +290,11 @@ Trả lời dựa trên nội dung bài học trên. Nếu không có thông tin
    * Escalate to teacher
    */
   async escalateToTeacher(chatId, messageId, reason, aiResult = null) {
-    const chat = await LessonChat.findByPk(chatId, {
+    const chat = await CourseChat.findByPk(chatId, {
       include: [{ model: Course, as: 'course' }],
     });
 
-    // Create escalation record
-    const escalation = await ChatEscalation.create({
+    const escalation = await CourseChatEscalation.create({
       messageId,
       chatId,
       status: 'ai_failed',
@@ -284,22 +302,20 @@ Trả lời dựa trên nội dung bài học trên. Nếu không có thông tin
       escalationReason: reason,
     });
 
-    // Find course teacher
     const course = await Course.findByPk(chat.courseId);
     const teacher = await User.findByPk(course?.createdBy);
 
     if (teacher) {
-      // Notify teacher
       await Notification.create({
         userId: teacher.id,
         type: 'system',
         title: 'Câu hỏi cần trả lời',
-        message: `Học viên đã hỏi trong bài học và cần sự hỗ trợ của bạn.`,
+        message: `Học viên đã hỏi trong khóa học và cần sự hỗ trợ của bạn.`,
         payload: {
           chatId,
           messageId,
           escalationId: escalation.id,
-          type: 'chat_escalation',
+          type: 'course_chat_escalation',
         },
       });
 
@@ -308,7 +324,7 @@ Trả lời dựa trên nội dung bài học trên. Nếu không có thông tin
         teacherNotifiedAt: new Date(),
       });
 
-      logger.info('LESSON_ESCALATED_TEACHER', {
+      logger.info('COURSE_ESCALATED_TEACHER', {
         escalationId: escalation.id,
         teacherId: teacher.id,
         messageId,
@@ -316,14 +332,9 @@ Trả lời dựa trên nội dung bài học trên. Nếu không có thông tin
     }
 
     return {
-      message: await LessonMessage.findByPk(messageId),
-      aiResponse: null,
-      answeredBy: null,
-      escalation: {
-        id: escalation.id,
-        status: 'needs_teacher',
-        reason,
-      },
+      id: escalation.id,
+      status: 'needs_teacher',
+      reason,
     };
   }
 
@@ -331,13 +342,12 @@ Trả lời dựa trên nội dung bài học trên. Nếu không có thông tin
    * Mark message as answered
    */
   async markAsAnswered(messageId, answeredBy, userId) {
-    await LessonMessage.update(
+    await CourseMessage.update(
       { status: 'answered', answeredBy },
       { where: { id: messageId } }
     );
 
-    // Update escalation if exists
-    const escalation = await ChatEscalation.findOne({
+    const escalation = await CourseChatEscalation.findOne({
       where: { messageId },
     });
 
@@ -354,7 +364,7 @@ Trả lời dựa trên nội dung bài học trên. Nếu không có thông tin
    * Join chat as participant
    */
   async joinChat(chatId, userId, role) {
-    const [participant, created] = await ChatParticipant.findOrCreate({
+    const [participant, created] = await CourseChatParticipant.findOrCreate({
       where: { chatId, userId },
       defaults: {
         chatId,
@@ -364,8 +374,11 @@ Trả lời dựa trên nội dung bài học trên. Nếu không có thông tin
       },
     });
 
+    if (!created && participant.isBanned) {
+      throw { status: 403, message: 'Bạn đã bị ban khỏi chat này' };
+    }
+
     if (!created) {
-      // Update lastReadAt to show activity
       await participant.update({ lastReadAt: new Date() });
     }
 
@@ -373,66 +386,39 @@ Trả lời dựa trên nội dung bài học trên. Nếu không có thông tin
   }
 
   /**
-   * Mark messages as read for participant
-   */
-  async markMessagesAsRead(chatId, userId, lastMessageId) {
-    const participant = await ChatParticipant.findOne({
-      where: { chatId, userId },
-    });
-
-    if (!participant) {
-      throw { status: 404, message: 'Participant not found' };
-    }
-
-    await participant.update({
-      lastReadMessageId: lastMessageId,
-      lastReadAt: new Date(),
-    });
-
-    logger.info('LESSON_MESSAGES_READ', {
-      chatId,
-      userId,
-      lastReadMessageId: lastMessageId,
-    });
-
-    return participant;
-  }
-
-  /**
-   * Get participant read status
+   * Get pending escalations
    */
   async getPendingEscalations(userId, role) {
     const where = { status: { [Op.in]: ['ai_failed', 'notified_teacher'] } };
-    
+
     if (role === 'teacher') {
-      // Only show for courses owned by this teacher
       const courses = await Course.findAll({
         where: { createdBy: userId },
         attributes: ['id'],
       });
       const courseIds = courses.map(c => c.id);
-      
-      const chats = await LessonChat.findAll({
+
+      const chats = await CourseChat.findAll({
         where: { courseId: { [Op.in]: courseIds } },
         attributes: ['id'],
       });
       const chatIds = chats.map(c => c.id);
-      
+
       where.chatId = { [Op.in]: chatIds };
     }
 
-    return await ChatEscalation.findAll({
+    return await CourseChatEscalation.findAll({
       where,
       include: [
         {
-          model: LessonMessage,
+          model: CourseMessage,
           as: 'message',
           include: [
             { model: User, as: 'sender', attributes: ['id', 'name', 'avatar'] },
           ],
         },
         {
-          model: LessonChat,
+          model: CourseChat,
           as: 'chat',
           include: [{ model: Course, as: 'course', attributes: ['id', 'title'] }],
         },
@@ -442,28 +428,26 @@ Trả lời dựa trên nội dung bài học trên. Nếu không có thông tin
   }
 
   /**
-   * Admin escalation check - called by cron job
+   * Admin escalation check
    */
   async checkAdminEscalation() {
     const ESCALATION_TIMEOUT_HOURS = 24;
     const cutoffTime = new Date(Date.now() - ESCALATION_TIMEOUT_HOURS * 60 * 60 * 1000);
 
-    const pendingEscalations = await ChatEscalation.findAll({
+    const pendingEscalations = await CourseChatEscalation.findAll({
       where: {
         status: 'notified_teacher',
         teacherNotifiedAt: { [Op.lt]: cutoffTime },
       },
-      include: [{ model: LessonChat, as: 'chat' }],
+      include: [{ model: CourseChat, as: 'chat' }],
     });
 
     for (const escalation of pendingEscalations) {
-      // Find admin users
       const admins = await User.findAll({
         where: { role: 'admin' },
         attributes: ['id'],
       });
 
-      // Notify admins
       for (const admin of admins) {
         await Notification.create({
           userId: admin.id,
@@ -474,7 +458,7 @@ Trả lời dựa trên nội dung bài học trên. Nếu không có thông tin
             chatId: escalation.chatId,
             messageId: escalation.messageId,
             escalationId: escalation.id,
-            type: 'chat_escalation_admin',
+            type: 'course_chat_escalation_admin',
           },
         });
       }
@@ -484,7 +468,7 @@ Trả lời dựa trên nội dung bài học trên. Nếu không có thông tin
         adminNotifiedAt: new Date(),
       });
 
-      logger.info('LESSON_ESCALATED_ADMIN', {
+      logger.info('COURSE_ESCALATED_ADMIN', {
         escalationId: escalation.id,
         chatId: escalation.chatId,
       });
@@ -493,31 +477,17 @@ Trả lời dựa trên nội dung bài học trên. Nếu không có thông tin
     return pendingEscalations.length;
   }
 
-  /**
-   * ==================== PERMISSION METHODS ====================
-   */
+  // ==================== PERMISSION METHODS ====================
 
-  /**
-   * Check if user has permission for an action
-   * @param {string} action - Action to check
-   * @param {string} userRole - User role
-   * @param {number} userId - User ID
-   * @param {Object} chat - Chat object
-   * @returns {boolean}
-   */
   hasPermission(action, userRole, userId, chat) {
     const permissions = {
-      // Student: view, send, reply
       student: ['view', 'send', 'reply'],
-      // Teacher: view, send, reply, pin, delete, mute, analytics
       teacher: ['view', 'send', 'reply', 'pin', 'delete', 'mute', 'analytics'],
-      // Admin: all permissions
       admin: ['view', 'send', 'reply', 'pin', 'delete', 'mute', 'ban', 'clear_history', 'enable_disable', 'analytics'],
     };
 
     const rolePermissions = permissions[userRole] || [];
-    
-    // Teacher can only manage their own course chats
+
     if (userRole === 'teacher' && chat && chat.course) {
       if (chat.course.createdBy !== userId) {
         return action === 'view' ? rolePermissions.includes(action) : false;
@@ -527,12 +497,9 @@ Trả lời dựa trên nội dung bài học trên. Nếu không có thông tin
     return rolePermissions.includes(action);
   }
 
-  /**
-   * Pin/Unpin a message (Teacher/Admin only)
-   */
   async pinMessage(messageId, userId, userRole) {
-    const message = await LessonMessage.findByPk(messageId, {
-      include: [{ model: LessonChat, as: 'chat', include: [{ model: Course, as: 'course' }] }],
+    const message = await CourseMessage.findByPk(messageId, {
+      include: [{ model: CourseChat, as: 'chat', include: [{ model: Course, as: 'course' }] }],
     });
 
     if (!message) {
@@ -550,7 +517,7 @@ Trả lời dựa trên nội dung bài học trên. Nếu không có thông tin
       pinnedAt: isPinned ? new Date() : null,
     });
 
-    logger.info('MESSAGE_PINNED', { messageId, userId, isPinned });
+    logger.info('COURSE_MESSAGE_PINNED', { messageId, userId, isPinned });
 
     return {
       message: isPinned ? 'Đã pin tin nhắn' : 'Đã bỏ pin tin nhắn',
@@ -562,8 +529,8 @@ Trả lời dựa trên nội dung bài học trên. Nếu không có thông tin
    * Edit a message (Student can edit own message within 10 minutes, Teacher/Admin can edit any)
    */
   async editMessage(messageId, userId, userRole, newContent) {
-    const message = await LessonMessage.findByPk(messageId, {
-      include: [{ model: LessonChat, as: 'chat', include: [{ model: Course, as: 'course' }] }],
+    const message = await CourseMessage.findByPk(messageId, {
+      include: [{ model: CourseChat, as: 'chat', include: [{ model: Course, as: 'course' }] }],
     });
 
     if (!message) {
@@ -597,7 +564,7 @@ Trả lời dựa trên nội dung bài học trên. Nếu không có thông tin
       editedAt: new Date(),
     });
 
-    logger.info('MESSAGE_EDITED', { messageId, userId, userRole });
+    logger.info('COURSE_MESSAGE_EDITED', { messageId, userId, userRole });
 
     return {
       message: 'Đã sửa tin nhắn',
@@ -605,12 +572,9 @@ Trả lời dựa trên nội dung bài học trên. Nếu không có thông tin
     };
   }
 
-  /**
-   * Delete a message (Teacher/Admin only)
-   */
   async deleteMessage(messageId, userId, userRole) {
-    const message = await LessonMessage.findByPk(messageId, {
-      include: [{ model: LessonChat, as: 'chat', include: [{ model: Course, as: 'course' }] }],
+    const message = await CourseMessage.findByPk(messageId, {
+      include: [{ model: CourseChat, as: 'chat', include: [{ model: Course, as: 'course' }] }],
     });
 
     if (!message) {
@@ -627,16 +591,13 @@ Trả lời dựa trên nội dung bài học trên. Nếu không có thông tin
       deletedAt: new Date(),
     });
 
-    logger.info('MESSAGE_DELETED', { messageId, userId });
+    logger.info('COURSE_MESSAGE_DELETED', { messageId, userId });
 
     return { message: 'Đã xóa tin nhắn' };
   }
 
-  /**
-   * Mute/Unmute chat (Teacher/Admin only)
-   */
   async muteChat(chatId, userId, userRole, durationMinutes = null) {
-    const chat = await LessonChat.findByPk(chatId, {
+    const chat = await CourseChat.findByPk(chatId, {
       include: [{ model: Course, as: 'course' }],
     });
 
@@ -651,7 +612,7 @@ Trả lời dựa trên nội dung bài học trên. Nếu không có thông tin
     const mutedUntil = durationMinutes ? new Date(Date.now() + durationMinutes * 60000) : null;
     await chat.update({ mutedUntil });
 
-    logger.info('CHAT_MUTED', { chatId, userId, mutedUntil });
+    logger.info('COURSE_CHAT_MUTED', { chatId, userId, mutedUntil });
 
     return {
       message: durationMinutes ? `Đã khóa chat trong ${durationMinutes} phút` : 'Đã mở khóa chat',
@@ -659,11 +620,8 @@ Trả lời dựa trên nội dung bài học trên. Nếu không có thông tin
     };
   }
 
-  /**
-   * Ban/Unban user from chat (Admin only)
-   */
   async banUser(chatId, targetUserId, userId, userRole, reason = null) {
-    const chat = await LessonChat.findByPk(chatId, {
+    const chat = await CourseChat.findByPk(chatId, {
       include: [{ model: Course, as: 'course' }],
     });
 
@@ -675,7 +633,7 @@ Trả lời dựa trên nội dung bài học trên. Nếu không có thông tin
       throw { status: 403, message: 'Chỉ admin có quyền ban user' };
     }
 
-    const participant = await ChatParticipant.findOne({
+    const participant = await CourseChatParticipant.findOne({
       where: { chatId, userId: targetUserId },
     });
 
@@ -691,7 +649,7 @@ Trả lời dựa trên nội dung bài học trên. Nếu không có thông tin
       banReason: isBanned ? reason : null,
     });
 
-    logger.info(isBanned ? 'USER_BANNED' : 'USER_UNBANNED', {
+    logger.info(isBanned ? 'COURSE_USER_BANNED' : 'COURSE_USER_UNBANNED', {
       chatId,
       targetUserId,
       userId,
@@ -704,11 +662,8 @@ Trả lời dựa trên nội dung bài học trên. Nếu không có thông tin
     };
   }
 
-  /**
-   * Enable/Disable chat (Admin only)
-   */
   async toggleChat(chatId, userId, userRole) {
-    const chat = await LessonChat.findByPk(chatId, {
+    const chat = await CourseChat.findByPk(chatId, {
       include: [{ model: Course, as: 'course' }],
     });
 
@@ -723,7 +678,7 @@ Trả lời dựa trên nội dung bài học trên. Nếu không có thông tin
     const isEnabled = !chat.isEnabled;
     await chat.update({ isEnabled });
 
-    logger.info(isEnabled ? 'CHAT_ENABLED' : 'CHAT_DISABLED', { chatId, userId });
+    logger.info(isEnabled ? 'COURSE_CHAT_ENABLED' : 'COURSE_CHAT_DISABLED', { chatId, userId });
 
     return {
       message: isEnabled ? 'Đã bật chat' : 'Đã tắt chat',
@@ -731,11 +686,8 @@ Trả lời dựa trên nội dung bài học trên. Nếu không có thông tin
     };
   }
 
-  /**
-   * Clear chat history (Admin only)
-   */
   async clearHistory(chatId, userId, userRole) {
-    const chat = await LessonChat.findByPk(chatId, {
+    const chat = await CourseChat.findByPk(chatId, {
       include: [{ model: Course, as: 'course' }],
     });
 
@@ -747,22 +699,19 @@ Trả lời dựa trên nội dung bài học trên. Nếu không có thông tin
       throw { status: 403, message: 'Chỉ admin có quyền xóa lịch sử chat' };
     }
 
-    await LessonMessage.destroy({ where: { chatId } });
+    await CourseMessage.destroy({ where: { chatId } });
     await chat.update({
       deletedAt: new Date(),
       deletedBy: userId,
     });
 
-    logger.info('CHAT_HISTORY_CLEARED', { chatId, userId });
+    logger.info('COURSE_CHAT_HISTORY_CLEARED', { chatId, userId });
 
     return { message: 'Đã xóa toàn bộ lịch sử chat' };
   }
 
-  /**
-   * Get chat analytics (Teacher/Admin only)
-   */
   async getAnalytics(chatId, userId, userRole, startDate = null, endDate = null) {
-    const chat = await LessonChat.findByPk(chatId, {
+    const chat = await CourseChat.findByPk(chatId, {
       include: [{ model: Course, as: 'course' }],
     });
 
@@ -776,15 +725,15 @@ Trả lời dựa trên nội dung bài học trên. Nếu không có thông tin
 
     const where = { chatId };
     if (startDate && endDate) {
-      where.date = { $between: [startDate, endDate] };
+      where.date = { [Op.between]: [startDate, endDate] };
     }
 
-    const analytics = await ChatAnalytics.findAll({
+    const analytics = await CourseChatAnalytics.findAll({
       where,
       order: [['date', 'DESC']],
     });
 
-    const summary = await ChatAnalytics.findOne({
+    const summary = await CourseChatAnalytics.findOne({
       where: { chatId },
       attributes: [
         [sequelize.fn('SUM', sequelize.col('total_messages')), 'totalMessages'],
@@ -803,13 +752,10 @@ Trả lời dựa trên nội dung bài học trên. Nếu không có thông tin
     };
   }
 
-  /**
-   * Record analytics event
-   */
   async recordAnalytics(chatId, type) {
     const today = new Date().toISOString().split('T')[0];
-    
-    const [analytics, created] = await ChatAnalytics.findOrCreate({
+
+    const [analytics, created] = await CourseChatAnalytics.findOrCreate({
       where: { chatId, date: today },
       defaults: { chatId, date: today },
     });
@@ -832,14 +778,11 @@ Trả lời dựa trên nội dung bài học trên. Nếu không có thông tin
     return analytics;
   }
 
-  /**
-   * Check if chat is available for user
-   */
   async checkChatAccess(chatId, userId, userRole) {
-    const chat = await LessonChat.findByPk(chatId, {
+    const chat = await CourseChat.findByPk(chatId, {
       include: [
         { model: Course, as: 'course' },
-        { model: ChatParticipant, as: 'participants', where: { userId }, required: false },
+        { model: CourseChatParticipant, as: 'participants', where: { userId }, required: false },
       ],
     });
 
@@ -847,17 +790,14 @@ Trả lời dựa trên nội dung bài học trên. Nếu không có thông tin
       throw { status: 404, message: 'Không tìm thấy chat' };
     }
 
-    // Check if chat is enabled
     if (!chat.isEnabled) {
       throw { status: 403, message: 'Chat đã bị tắt' };
     }
 
-    // Check if chat is muted
     if (chat.mutedUntil && new Date() < new Date(chat.mutedUntil)) {
       throw { status: 403, message: 'Chat đang bị khóa tạm thời' };
     }
 
-    // Check if user is banned
     const participant = chat.participants?.[0];
     if (participant?.isBanned) {
       throw { status: 403, message: 'Bạn đã bị ban khỏi chat này' };
@@ -867,4 +807,4 @@ Trả lời dựa trên nội dung bài học trên. Nếu không có thông tin
   }
 }
 
-module.exports = new LessonChatService();
+module.exports = new CourseChatService();

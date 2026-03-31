@@ -108,6 +108,11 @@ const models = {};
   'chatEscalation',
   'chatPermission',
   'chatAnalytics',
+  'courseChat',
+  'courseMessage',
+  'courseChatParticipant',
+  'courseChatEscalation',
+  'courseChatAnalytics',
 ].forEach((name) => {
   models[name.charAt(0).toUpperCase() + name.slice(1)] = require(`./${name}.model`)(sequelize);
 });
@@ -154,6 +159,11 @@ const {
   ChatEscalation,
   ChatPermission,
   ChatAnalytics,
+  CourseChat,
+  CourseMessage,
+  CourseChatParticipant,
+  CourseChatEscalation,
+  CourseChatAnalytics,
 } = models;
 
 User.hasMany(Course, { foreignKey: 'createdBy', as: 'createdCourses' });
@@ -291,6 +301,13 @@ PlacementResponse.belongsTo(PlacementQuestion, { foreignKey: 'questionId', as: '
 
 // Lesson Chat Associations
 for (const model of [LessonChat, LessonMessage, ChatParticipant, ChatEscalation, ChatAnalytics]) {
+  if (model && typeof model.associate === 'function') {
+    model.associate(models);
+  }
+}
+
+// Course Chat Associations
+for (const model of [CourseChat, CourseMessage, CourseChatParticipant, CourseChatEscalation, CourseChatAnalytics]) {
   if (model && typeof model.associate === 'function') {
     model.associate(models);
   }
