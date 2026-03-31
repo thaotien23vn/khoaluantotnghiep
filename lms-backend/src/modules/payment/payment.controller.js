@@ -306,13 +306,22 @@ class PaymentController {
   async handleStripeSuccess(req, res) {
     try {
       const { session_id: sessionId } = req.query;
+      console.log('Stripe success callback - sessionId:', sessionId);
       
       // Retrieve session from Stripe
-      const session = await require('stripe')(process.env.STRIPE_SECRET_KEY).checkout.sessions.retrieve(sessionId);
+      const stripe = require('stripe')(process.env.STRIPE_SECRET_KEY);
+      const session = await stripe.checkout.sessions.retrieve(sessionId);
+      console.log('Stripe session retrieved:', { 
+        id: session.id, 
+        payment_status: session.payment_status,
+        metadata: session.metadata 
+      });
       
       if (session.payment_status === 'paid') {
+        console.log('Payment is paid, calling handleCheckoutCompleted...');
         // Process completed payment
-        await stripeService.handleCheckoutCompleted(session);
+        const result = await stripeService.handleCheckoutCompleted(session);
+        console.log('handleCheckoutCompleted result:', result);
         
         res.json({
           success: true,
@@ -324,9 +333,11 @@ class PaymentController {
           },
         });
       } else {
+        console.log('Payment not paid, status:', session.payment_status);
         res.status(400).json({
           success: false,
           message: 'Thanh toán chưa hoàn tất',
+          paymentStatus: session.payment_status,
         });
       }
     } catch (error) {
@@ -334,6 +345,7 @@ class PaymentController {
       res.status(500).json({
         success: false,
         message: 'Lỗi xử lý thanh toán',
+        error: error.message,
       });
     }
   }
