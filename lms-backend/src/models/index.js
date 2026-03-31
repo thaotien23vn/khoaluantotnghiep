@@ -131,6 +131,7 @@ const {
   AiAuditLog,
   Enrollment,
   Payment,
+  Cart,
   Quiz,
   Question,
   Attempt,
