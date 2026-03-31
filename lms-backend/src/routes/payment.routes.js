@@ -49,8 +49,11 @@ router.get('/vnpay/return', paymentController.handleVNPayReturn);
 router.get('/vnpay/ipn', paymentController.handleVNPayIpn);
 
 // Stripe Routes
-// Create Stripe Checkout Session (redirect to Stripe hosted page)
+// Create Stripe Checkout Session (single course - direct payment)
 router.post('/stripe/checkout', paymentController.createStripeCheckout);
+
+// Create Stripe Checkout Session from cart
+router.post('/stripe/checkout/cart', paymentController.createStripeCartCheckout);
 
 // Stripe Checkout success/cancel (no auth required - callback from Stripe)
 router.get('/stripe/success', paymentController.handleStripeSuccess);

@@ -318,6 +318,77 @@ class StripeService {
   }
 
   /**
+   * Create Stripe Checkout Session for cart (multiple courses)
+   * @param {number} userId - User ID
+   * @param {Array} selectedItems - Optional specific cart items
+   * @param {string} successUrl - Redirect URL after success
+   * @param {string} cancelUrl - Redirect URL after cancel
+   * @returns {Promise<Object>} - Checkout session URL
+   */
+  async createCheckoutSessionFromCart(userId, selectedItems = null, successUrl, cancelUrl) {
+    const cartData = await cartService.convertCartToPayment(userId, selectedItems);
+
+    if (cartData.items.length === 0) {
+      throw { status: 400, message: 'Giỏ hàng trống hoặc không có khóa học hợp lệ' };
+    }
+
+    // Build line items from cart
+    const lineItems = cartData.items.map(item => ({
+      price_data: {
+        currency: 'usd',
+        product_data: {
+          name: item.courseTitle,
+          description: item.notes || 'Khóa học trực tuyến',
+        },
+        unit_amount: Math.round(Number(item.price) * 100),
+      },
+      quantity: 1,
+    }));
+
+    // Create Stripe Checkout Session
+    const session = await stripe.checkout.sessions.create({
+      payment_method_types: ['card'],
+      line_items: lineItems,
+      mode: 'payment',
+      success_url: successUrl || 'https://cicd-test1.onrender.com/api/payments/stripe/success?session_id={CHECKOUT_SESSION_ID}',
+      cancel_url: cancelUrl || 'https://cicd-test1.onrender.com/api/payments/stripe/cancel',
+      metadata: {
+        userId: String(userId),
+        source: 'stripe_checkout_cart',
+        courseIds: JSON.stringify(cartData.items.map(i => i.courseId)),
+      },
+    });
+
+    // Create payment records for each course
+    const payments = [];
+    for (const item of cartData.items) {
+      const payment = await Payment.create({
+        userId,
+        courseId: item.courseId,
+        amount: item.price,
+        currency: 'USD',
+        provider: 'stripe',
+        providerTxn: session.id,
+        status: 'pending',
+        paymentDetails: {
+          initiatedAt: new Date().toISOString(),
+          sessionId: session.id,
+          type: 'checkout_session_cart',
+        },
+      });
+      payments.push(payment);
+    }
+
+    return {
+      payments,
+      checkoutUrl: session.url,
+      sessionId: session.id,
+      itemCount: cartData.items.length,
+      totalAmount: cartData.totalAmount,
+    };
+  }
+
+  /**
    * Handle Stripe Checkout Session completed
    * @param {Object} session - Checkout session object
    */
@@ -333,9 +404,52 @@ class StripeService {
       throw { status: 400, message: `Payment not completed. Status: ${session.payment_status}` };
     }
 
-    const { userId, courseId } = session.metadata;
-    console.log('Extracted metadata:', { userId, courseId });
+    const { userId, courseId, courseIds } = session.metadata;
+    console.log('Extracted metadata:', { userId, courseId, courseIds });
 
+    // Handle cart payment (multiple courses)
+    if (courseIds) {
+      const courseIdList = JSON.parse(courseIds);
+      console.log('Processing cart payment for courses:', courseIdList);
+      
+      // Find all payments with this session ID
+      const payments = await Payment.findAll({
+        where: { providerTxn: session.id },
+      });
+      
+      console.log('Found payments:', payments.length);
+      
+      for (const payment of payments) {
+        payment.status = 'completed';
+        payment.paymentDetails = {
+          ...payment.paymentDetails,
+          completedAt: new Date().toISOString(),
+          receiptUrl: session.receipt_url,
+        };
+        await payment.save();
+        
+        // Create enrollment
+        const existingEnrollment = await Enrollment.findOne({
+          where: { userId: parseInt(userId), courseId: payment.courseId },
+        });
+        
+        if (!existingEnrollment) {
+          await Enrollment.create({
+            userId: parseInt(userId),
+            courseId: payment.courseId,
+            status: 'enrolled',
+            progressPercent: 0,
+          });
+        }
+        
+        // Remove from cart
+        await cartService.removeCourseFromCart(parseInt(userId), payment.courseId);
+      }
+      
+      return { success: true, payments };
+    }
+
+    // Handle single course payment
     // Find payment by session ID
     const payment = await Payment.findOne({
       where: { providerTxn: session.id },

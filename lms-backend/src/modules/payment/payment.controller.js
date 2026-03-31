@@ -383,6 +383,34 @@ class PaymentController {
   }
 
   /**
+   * Create Stripe Checkout Session from cart
+   */
+  async createStripeCartCheckout(req, res) {
+    try {
+      const validationError = handleValidationErrors(req, res);
+      if (validationError) return;
+
+      const { id: userId } = req.user;
+      const { selectedItems, successUrl, cancelUrl } = req.body;
+
+      const result = await stripeService.createCheckoutSessionFromCart(userId, selectedItems, successUrl, cancelUrl);
+      
+      res.status(201).json({
+        success: true,
+        message: `Tạo Stripe Checkout Session cho ${result.itemCount} khóa học trong giỏ hàng`,
+        data: {
+          checkoutUrl: result.checkoutUrl,
+          sessionId: result.sessionId,
+          payments: result.payments,
+          totalAmount: result.totalAmount,
+        },
+      });
+    } catch (error) {
+      handleServiceError(error, res);
+    }
+  }
+
+  /**
    * Create Stripe Checkout Session (redirect to Stripe hosted page)
    */
   async createStripeCheckout(req, res) {
