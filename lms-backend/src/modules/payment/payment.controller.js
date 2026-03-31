@@ -60,6 +60,13 @@ class PaymentController {
           message: 'Tạo URL thanh toán VNPay thành công',
           data: result,
         });
+      } else if (provider === 'momo') {
+        result = await paymentService.createMoMoPayment(userId, courseId);
+        return res.status(201).json({
+          success: true,
+          message: 'Tạo thanh toán MoMo thành công',
+          data: result,
+        });
       }
       
       result = await paymentService.createPayment(userId, courseId, req.body);
@@ -344,6 +351,77 @@ class PaymentController {
       });
     } catch (error) {
       handleServiceError(error, res);
+    }
+  }
+
+  /**
+   * Create MoMo payment
+   */
+  async createMoMoPayment(req, res) {
+    try {
+      const validationError = handleValidationErrors(req, res);
+      if (validationError) return;
+
+      const { courseId } = req.params;
+      const { id: userId } = req.user;
+
+      const result = await paymentService.createMoMoPayment(userId, courseId);
+      
+      res.status(201).json({
+        success: true,
+        message: 'Tạo thanh toán MoMo thành công',
+        data: {
+          payUrl: result.payUrl,
+          deeplink: result.deeplink,
+          qrCodeUrl: result.qrCodeUrl,
+          orderId: result.orderId,
+          payment: result.payment,
+          course: result.course,
+        },
+      });
+    } catch (error) {
+      handleServiceError(error, res);
+    }
+  }
+
+  /**
+   * Handle MoMo return callback
+   */
+  async handleMoMoReturn(req, res) {
+    try {
+      const callbackData = req.query;
+      const result = await paymentService.processMoMoReturn(callbackData);
+      
+      if (result.success) {
+        res.redirect(`${process.env.FRONTEND_URL}/payment/success?orderId=${result.orderId}`);
+      } else {
+        res.redirect(`${process.env.FRONTEND_URL}/payment/failed?message=${encodeURIComponent(result.message)}`);
+      }
+    } catch (error) {
+      console.error('MoMo return error:', error);
+      res.redirect(`${process.env.FRONTEND_URL}/payment/failed?message=${encodeURIComponent('Có lỗi xảy ra')}`);
+    }
+  }
+
+  /**
+   * Handle MoMo IPN (Instant Payment Notification)
+   */
+  async handleMoMoIpn(req, res) {
+    try {
+      const callbackData = req.body;
+      const result = await paymentService.processMoMoIpn(callbackData);
+      
+      // MoMo expects 200 status with success response
+      res.status(200).json({
+        success: result.success,
+        message: result.message,
+      });
+    } catch (error) {
+      console.error('MoMo IPN error:', error);
+      res.status(200).json({
+        success: false,
+        message: 'Unknown error',
+      });
     }
   }
 }

@@ -48,4 +48,14 @@ router.get('/vnpay/return', paymentController.handleVNPayReturn);
 // VNPay IPN (Instant Payment Notification - no auth required)
 router.get('/vnpay/ipn', paymentController.handleVNPayIpn);
 
+// MoMo Routes
+// Create MoMo payment
+router.post('/momo/:courseId', paymentController.createMoMoPayment);
+
+// MoMo Return URL (no auth required - callback from MoMo)
+router.get('/momo/return', paymentController.handleMoMoReturn);
+
+// MoMo IPN (Instant Payment Notification - no auth required)
+router.post('/momo/ipn', paymentController.handleMoMoIpn);
+
 module.exports = router;
