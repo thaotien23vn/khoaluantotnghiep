@@ -71,7 +71,7 @@ class VNPayService {
 
       // Tạo chữ ký
       const sortedParams = this._sortObject(vnp_Params);
-      const signData = querystring.stringify(sortedParams, { encode: false });
+      const signData = this._createSignData(sortedParams);
       console.log('VNPay signData:', signData);
       console.log('VNPay secret:', process.env.VNPAY_HASH_SECRET);
       const secureHash = this._generateHash(signData, process.env.VNPAY_HASH_SECRET);
@@ -293,17 +293,26 @@ class VNPayService {
   }
 
   /**
-   * Sắp xếp object theo key
+   * Sắp xếp object và tạo query string thủ công
    */
   _sortObject(obj) {
     const sorted = {};
     const keys = Object.keys(obj).sort();
     for (const key of keys) {
       if (obj[key] !== '' && obj[key] !== undefined && obj[key] !== null) {
-        sorted[key] = obj[key];
+        sorted[key] = String(obj[key]);
       }
     }
     return sorted;
+  }
+
+  /**
+   * Tạo query string từ object đã sort
+   */
+  _createSignData(sortedObj) {
+    return Object.entries(sortedObj)
+      .map(([key, val]) => `${key}=${val}`)
+      .join('&');
   }
 
   /**
