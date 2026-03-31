@@ -647,8 +647,22 @@ Trả lời dựa trên nội dung bài học trên. Nếu không có thông tin
       throw { status: 404, message: 'Không tìm thấy tin nhắn' };
     }
 
-    if (!this.hasPermission('delete', userRole, userId, message.chat)) {
-      throw { status: 403, message: 'Bạn không có quyền xóa tin nhắn' };
+    // Check permissions
+    const isOwner = message.senderId === userId;
+    const canDeleteAny = this.hasPermission('delete', userRole, userId, message.chat); // Teacher/Admin
+
+    if (userRole === 'student') {
+      // Student can only delete own messages within 10 minutes
+      if (!isOwner) {
+        throw { status: 403, message: 'Bạn chỉ có thể xóa tin nhắn của mình' };
+      }
+      const messageAge = Date.now() - new Date(message.createdAt).getTime();
+      const TEN_MINUTES = 10 * 60 * 1000;
+      if (messageAge > TEN_MINUTES) {
+        throw { status: 403, message: 'Chỉ có thể xóa tin nhắn trong vòng 10 phút' };
+      }
+    } else if (!canDeleteAny) {
+      throw { status: 403, message: 'Bạn không có quyền xóa tin nhắn này' };
     }
 
     await message.update({
@@ -806,7 +820,7 @@ Trả lời dựa trên nội dung bài học trên. Nếu không có thông tin
 
     const where = { chatId };
     if (startDate && endDate) {
-      where.date = { $between: [startDate, endDate] };
+      where.date = { [Op.between]: [startDate, endDate] };
     }
 
     const analytics = await ChatAnalytics.findAll({
@@ -827,9 +841,22 @@ Trả lời dựa trên nội dung bài học trên. Nếu không có thông tin
       ],
     });
 
+    // Normalize summary values (convert null to 0)
+    const normalize = (val) => val === null ? 0 : Number(val);
+    const summaryData = summary?.dataValues || {};
+    const normalizedSummary = {
+      totalMessages: normalize(summaryData.totalMessages),
+      studentMessages: normalize(summaryData.studentMessages),
+      teacherMessages: normalize(summaryData.teacherMessages),
+      adminMessages: normalize(summaryData.adminMessages),
+      aiResponses: normalize(summaryData.aiResponses),
+      escalations: normalize(summaryData.escalations),
+      resolvedQuestions: normalize(summaryData.resolvedQuestions),
+    };
+
     return {
       daily: analytics,
-      summary: summary?.dataValues || {},
+      summary: normalizedSummary,
     };
   }
 

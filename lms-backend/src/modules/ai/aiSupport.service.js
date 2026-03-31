@@ -389,18 +389,39 @@ class AiSupportService {
   }
 
   /**
-   * Build RAG context from all available chunks (unified knowledge base)
+   * Build RAG context from all available chunks using two-step filtering
+   * Step 1: Keyword pre-filtering (reduce candidate pool)
+   * Step 2: Embedding similarity ranking (fine-grained)
    */
   async buildRagContext(query, options = {}) {
     try {
       const { courseId, currentPage } = options;
+      const queryLower = query.toLowerCase();
 
-      // Build where clause - if courseId specified, prioritize but still search all
-      const where = {};
+      // ==========================================
+      // STEP 1: KEYWORD PRE-FILTERING (Candidate Selection)
+      // Extract keywords from query for text search
+      // ==========================================
+      const keywords = this.extractKeywords(query);
       
-      // Search all chunks
-      const chunks = await AiChunk.findAll({
-        where,
+      // Build where clause with keyword filtering
+      const whereClause = {};
+      
+      // If courseId specified, prioritize that course
+      if (courseId) {
+        whereClause.courseId = courseId;
+      }
+      
+      // Keyword filtering using Op.or (PostgreSQL ILIKE)
+      if (keywords.length > 0) {
+        whereClause[Op.or] = keywords.map(kw => ({
+          text: { [Op.iLike]: `%${kw}%` }
+        }));
+      }
+
+      // Get pre-filtered candidates (limit 50 for performance)
+      const candidateChunks = await AiChunk.findAll({
+        where: whereClause,
         attributes: ['id', 'text', 'embeddingJson', 'courseId', 'lectureId', 'chunkIndex'],
         include: [
           {
@@ -410,19 +431,34 @@ class AiSupportService {
             required: false,
           },
         ],
-        limit: 200, // Limit for performance
+        limit: 50, // Reduced from 200
       });
+
+      // If no candidates with keywords, fall back to all chunks with lower limit
+      let chunks = candidateChunks;
+      if (!chunks.length && !courseId) {
+        chunks = await AiChunk.findAll({
+          attributes: ['id', 'text', 'embeddingJson', 'courseId', 'lectureId', 'chunkIndex'],
+          include: [{ model: Course, as: 'course', attributes: ['id', 'title', 'level'], required: false }],
+          limit: 30, // Even lower for fallback
+        });
+      }
 
       if (!chunks.length) {
         return { context: '', sources: [] };
       }
 
-      // Get embedding for query
+      // ==========================================
+      // STEP 2: FINE-GRAINED RANKING (Embedding Similarity)
+      // Only compute similarity on filtered candidates
+      // ==========================================
+      
+      // Get embedding for query (only once)
       const { embedding: queryEmbedding } = await aiGateway.embedText({
-        text: query.slice(0, 1000), // Limit query length
+        text: query.slice(0, 1000),
       });
 
-      // Score and sort by relevance
+      // Score and sort by relevance (on reduced set)
       const scored = chunks
         .map((chunk) => {
           const score = this.cosineSimilarity(queryEmbedding, chunk.embeddingJson);
@@ -456,6 +492,29 @@ class AiSupportService {
       logger.error('BUILD_RAG_CONTEXT_FAILED', { error: error.message });
       return { context: '', sources: [] };
     }
+  }
+
+  /**
+   * Extract keywords from query for pre-filtering
+   */
+  extractKeywords(query) {
+    // Remove common stop words in Vietnamese and English
+    const stopWords = new Set([
+      'là', 'của', 'và', 'các', 'có', 'được', 'cho', 'trong', 'với', 'về', 'để', 'một', 'những',
+      'the', 'is', 'of', 'and', 'a', 'to', 'in', 'for', 'with', 'on', 'at', 'by', 'from',
+      'gì', 'bao', 'nhiêu', 'như', 'thế', 'nào', 'tại', 'sao', 'ai', 'khi', 'này', 'kia',
+      'what', 'how', 'why', 'who', 'where', 'when', 'which', 'can', 'you', 'me', 'it',
+    ]);
+    
+    // Extract meaningful words (3+ chars)
+    const words = query
+      .toLowerCase()
+      .replace(/[^\w\sàáạảãâầấậẩẫăằắặẳẵèéẹẻẽêềếệểễìíịỉĩòóọỏõôồốộổỗơờớợởỡùúụủũưừứựửữỳýỵỷỹđ]/gi, ' ')
+      .split(/\s+/)
+      .filter(w => w.length >= 3 && !stopWords.has(w));
+    
+    // Return unique keywords (max 5)
+    return [...new Set(words)].slice(0, 5);
   }
 
   /**
