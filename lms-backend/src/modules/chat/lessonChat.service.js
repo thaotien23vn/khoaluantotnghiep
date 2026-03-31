@@ -96,6 +96,16 @@ class LessonChatService {
   async sendMessage(chatId, userId, content, options = {}) {
     const { parentId = null, senderType = 'student' } = options;
 
+    // Check if user is banned before sending
+    if (senderType === 'student') {
+      const participant = await ChatParticipant.findOne({
+        where: { chatId, userId },
+      });
+      if (participant?.isBanned) {
+        throw { status: 403, message: 'Bạn đã bị ban khỏi chat này' };
+      }
+    }
+
     // Save user message
     const message = await LessonMessage.create({
       chatId,
@@ -113,8 +123,12 @@ class LessonChatService {
       senderType,
     });
 
-    // Record analytics
-    await this.recordAnalytics(chatId, senderType);
+    // Record analytics - with await to catch errors
+    try {
+      await this.recordAnalytics(chatId, senderType);
+    } catch (analyticsError) {
+      logger.error('ANALYTICS_RECORD_FAILED', { chatId, senderType, error: analyticsError.message });
+    }
 
     // If student question, try AI first
     if (senderType === 'student' && !parentId) {
