@@ -91,6 +91,11 @@ router.delete('/teacher/courses/:courseId/chat/mute', authMiddleware, (req, res,
   courseChatController.muteChat(req, res, next);
 });
 
+// POST /api/teacher/courses/:courseId/chat/ban/:userId - Ban
+// DELETE /api/teacher/courses/:courseId/chat/ban/:userId - Unban
+router.post('/teacher/courses/:courseId/chat/ban/:userId', authMiddleware, courseChatController.banUser);
+router.delete('/teacher/courses/:courseId/chat/ban/:userId', authMiddleware, courseChatController.banUser);
+
 // GET /api/teacher/courses/:courseId/chat/analytics
 router.get('/teacher/courses/:courseId/chat/analytics', authMiddleware, courseChatController.getAnalytics);
 
