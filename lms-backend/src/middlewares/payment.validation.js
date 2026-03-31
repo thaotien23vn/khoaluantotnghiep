@@ -34,7 +34,7 @@ const createPaymentValidation = [
     .withMessage('Currency phải là VND hoặc USD'),
   body('provider')
     .optional()
-    .isIn(['stripe', 'paypal', 'bank_transfer', 'mock', 'vnpay', 'momo'])
+    .isIn(['stripe', 'paypal', 'bank_transfer', 'mock', 'vnpay'])
     .withMessage('Provider không hợp lệ'),
   handleValidationErrors,
 ];

@@ -1,5 +1,6 @@
 const { validationResult } = require('express-validator');
 const paymentService = require('./payment.service');
+const stripeService = require('../../services/stripe.service');
 
 /**
  * Handle validation errors
@@ -58,13 +59,6 @@ class PaymentController {
         return res.status(201).json({
           success: true,
           message: 'Tạo URL thanh toán VNPay thành công',
-          data: result,
-        });
-      } else if (provider === 'momo') {
-        result = await paymentService.createMoMoPayment(userId, courseId);
-        return res.status(201).json({
-          success: true,
-          message: 'Tạo thanh toán MoMo thành công',
           data: result,
         });
       }
@@ -329,6 +323,90 @@ class PaymentController {
   }
 
   /**
+   * Create Stripe Payment Intent
+   */
+  async createStripePayment(req, res) {
+    try {
+      const validationError = handleValidationErrors(req, res);
+      if (validationError) return;
+
+      const { courseId } = req.body;
+      const { id: userId } = req.user;
+
+      const result = await stripeService.createPaymentIntent(userId, courseId);
+      
+      res.status(result.isNew ? 201 : 200).json({
+        success: true,
+        message: result.isNew ? 'Tạo Payment Intent thành công' : 'Payment Intent đang chờ xử lý',
+        data: {
+          clientSecret: result.clientSecret,
+          publishableKey: stripeService.getPublishableKey(),
+          payment: result.payment,
+        },
+      });
+    } catch (error) {
+      handleServiceError(error, res);
+    }
+  }
+
+  /**
+   * Create Stripe Payment Intent from cart
+   */
+  async createStripeCartPayment(req, res) {
+    try {
+      const validationError = handleValidationErrors(req, res);
+      if (validationError) return;
+
+      const { id: userId } = req.user;
+      const { selectedItems } = req.body;
+
+      const result = await stripeService.createPaymentIntentFromCart(userId, selectedItems);
+      
+      res.status(201).json({
+        success: true,
+        message: `Đã tạo ${result.clientSecrets.length} Payment Intent từ giỏ hàng`,
+        data: {
+          clientSecrets: result.clientSecrets,
+          publishableKey: stripeService.getPublishableKey(),
+          payments: result.payments,
+          totalAmount: result.totalAmount,
+        },
+      });
+    } catch (error) {
+      handleServiceError(error, res);
+    }
+  }
+
+  /**
+   * Handle Stripe webhook
+   */
+  async handleStripeWebhook(req, res) {
+    try {
+      const signature = req.headers['stripe-signature'];
+      
+      if (!signature) {
+        return res.status(400).json({
+          success: false,
+          message: 'Thiếu Stripe signature',
+        });
+      }
+
+      const result = await stripeService.handleWebhook(req.body, signature);
+      
+      res.status(200).json({
+        received: true,
+        event: result.event,
+      });
+    } catch (error) {
+      console.error('Stripe webhook error:', error);
+      res.status(400).json({
+        success: false,
+        message: 'Webhook error',
+      });
+    }
+  }
+
+  /**
    * Verify payment (alias for processPayment - backward compatibility)
    */
   async verifyPayment(req, res) {
@@ -351,77 +429,6 @@ class PaymentController {
       });
     } catch (error) {
       handleServiceError(error, res);
-    }
-  }
-
-  /**
-   * Create MoMo payment
-   */
-  async createMoMoPayment(req, res) {
-    try {
-      const validationError = handleValidationErrors(req, res);
-      if (validationError) return;
-
-      const { courseId } = req.params;
-      const { id: userId } = req.user;
-
-      const result = await paymentService.createMoMoPayment(userId, courseId);
-      
-      res.status(201).json({
-        success: true,
-        message: 'Tạo thanh toán MoMo thành công',
-        data: {
-          payUrl: result.payUrl,
-          deeplink: result.deeplink,
-          qrCodeUrl: result.qrCodeUrl,
-          orderId: result.orderId,
-          payment: result.payment,
-          course: result.course,
-        },
-      });
-    } catch (error) {
-      handleServiceError(error, res);
-    }
-  }
-
-  /**
-   * Handle MoMo return callback
-   */
-  async handleMoMoReturn(req, res) {
-    try {
-      const callbackData = req.query;
-      const result = await paymentService.processMoMoReturn(callbackData);
-      
-      if (result.success) {
-        res.redirect(`${process.env.FRONTEND_URL}/payment/success?orderId=${result.orderId}`);
-      } else {
-        res.redirect(`${process.env.FRONTEND_URL}/payment/failed?message=${encodeURIComponent(result.message)}`);
-      }
-    } catch (error) {
-      console.error('MoMo return error:', error);
-      res.redirect(`${process.env.FRONTEND_URL}/payment/failed?message=${encodeURIComponent('Có lỗi xảy ra')}`);
-    }
-  }
-
-  /**
-   * Handle MoMo IPN (Instant Payment Notification)
-   */
-  async handleMoMoIpn(req, res) {
-    try {
-      const callbackData = req.body;
-      const result = await paymentService.processMoMoIpn(callbackData);
-      
-      // MoMo expects 200 status with success response
-      res.status(200).json({
-        success: result.success,
-        message: result.message,
-      });
-    } catch (error) {
-      console.error('MoMo IPN error:', error);
-      res.status(200).json({
-        success: false,
-        message: 'Unknown error',
-      });
     }
   }
 }

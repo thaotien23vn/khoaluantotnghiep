@@ -26,7 +26,7 @@ module.exports = (sequelize) => {
       defaultValue: 'USD',
     },
     provider: {
-      type: DataTypes.ENUM('stripe', 'paypal', 'bank_transfer', 'mock', 'vnpay', 'momo'),
+      type: DataTypes.ENUM('stripe', 'paypal', 'bank_transfer', 'mock', 'vnpay'),
       allowNull: false,
     },
     providerTxn: {

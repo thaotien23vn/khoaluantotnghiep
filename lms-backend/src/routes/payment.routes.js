@@ -48,14 +48,14 @@ router.get('/vnpay/return', paymentController.handleVNPayReturn);
 // VNPay IPN (Instant Payment Notification - no auth required)
 router.get('/vnpay/ipn', paymentController.handleVNPayIpn);
 
-// MoMo Routes
-// Create MoMo payment
-router.post('/momo/:courseId', paymentController.createMoMoPayment);
+// Stripe Routes
+// Create Stripe Payment Intent
+router.post('/stripe/create', paymentController.createStripePayment);
 
-// MoMo Return URL (no auth required - callback from MoMo)
-router.get('/momo/return', paymentController.handleMoMoReturn);
+// Create Stripe Payment Intent from cart
+router.post('/stripe/cart', paymentController.createStripeCartPayment);
 
-// MoMo IPN (Instant Payment Notification - no auth required)
-router.post('/momo/ipn', paymentController.handleMoMoIpn);
+// Stripe Webhook (no auth required - raw body needed)
+router.post('/stripe/webhook', express.raw({ type: 'application/json' }), paymentController.handleStripeWebhook);
 
 module.exports = router;
