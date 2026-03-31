@@ -221,6 +221,10 @@ ForumTopic.belongsTo(Lecture, { foreignKey: 'lectureId', as: 'lecture' });
 AiDocument.hasMany(AiChunk, { foreignKey: 'documentId', as: 'chunks' });
 AiChunk.belongsTo(AiDocument, { foreignKey: 'documentId', as: 'document' });
 
+// AiChunk associations for unified knowledge base
+Course.hasMany(AiChunk, { foreignKey: 'courseId', as: 'aiChunks' });
+AiChunk.belongsTo(Course, { foreignKey: 'courseId', as: 'course' });
+
 User.hasMany(AiPromptTemplate, { foreignKey: 'createdByAdminId', as: 'aiPromptTemplates' });
 AiPromptTemplate.belongsTo(User, { foreignKey: 'createdByAdminId', as: 'createdByAdmin' });
 

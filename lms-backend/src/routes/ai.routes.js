@@ -3,6 +3,7 @@ const authMiddleware = require('../middlewares/auth');
 const authorizeRole = require('../middlewares/authorize');
 const { body } = require('express-validator');
 const aiController = require('../modules/ai/ai.controller');
+const aiSupportController = require('../modules/ai/aiSupport.controller');
 const aiTeachingAssistantController = require('../modules/ai/aiTeachingAssistant.controller');
 const {
   createStudentConversationValidation,
@@ -40,6 +41,11 @@ const {
   generateStudentFeedbackValidation,
   generateTeacherExamValidation,
   generateTeachingMaterialsValidation,
+  // AI Support 24/7
+  sendSupportMessageValidation,
+  getSupportChatHistoryValidation,
+  handleQuickActionValidation,
+  supportConversationIdValidation,
 } = require('../modules/ai/ai.validation');
 
 const router = express.Router();
@@ -442,6 +448,87 @@ router.delete(
   authMiddleware,
   authorizeRole('admin'),
   aiController.deleteChatPermission
+);
+
+// ==========================================
+// AI SUPPORT 24/7 ROUTES - Global AI Assistant
+// ==========================================
+
+// Get or create support chat
+router.post(
+  '/support/chat',
+  authMiddleware,
+  authorizeRole('student', 'teacher', 'admin'),
+  aiSupportController.getOrCreateChat
+);
+
+// Get chat history
+router.get(
+  '/support/chat/:conversationId/history',
+  authMiddleware,
+  authorizeRole('student', 'teacher', 'admin'),
+  getSupportChatHistoryValidation,
+  aiSupportController.getChatHistory
+);
+
+// Send message
+router.post(
+  '/support/chat/message',
+  authMiddleware,
+  authorizeRole('student', 'teacher', 'admin'),
+  sendSupportMessageValidation,
+  aiSupportController.sendMessage
+);
+
+// Get user's conversations
+router.get(
+  '/support/conversations',
+  authMiddleware,
+  authorizeRole('student', 'teacher', 'admin'),
+  aiSupportController.getConversations
+);
+
+// Clear conversation
+router.post(
+  '/support/chat/:conversationId/clear',
+  authMiddleware,
+  authorizeRole('student', 'teacher', 'admin'),
+  supportConversationIdValidation,
+  aiSupportController.clearConversation
+);
+
+// Delete conversation
+router.delete(
+  '/support/chat/:conversationId',
+  authMiddleware,
+  authorizeRole('student', 'teacher', 'admin'),
+  supportConversationIdValidation,
+  aiSupportController.deleteConversation
+);
+
+// Get quick suggestions
+router.get(
+  '/support/suggestions',
+  authMiddleware,
+  authorizeRole('student', 'teacher', 'admin'),
+  aiSupportController.getQuickSuggestions
+);
+
+// Handle quick action
+router.post(
+  '/support/action',
+  authMiddleware,
+  authorizeRole('student', 'teacher', 'admin'),
+  handleQuickActionValidation,
+  aiSupportController.handleQuickAction
+);
+
+// Get system stats (admin only)
+router.get(
+  '/admin/support/stats',
+  authMiddleware,
+  authorizeRole('admin'),
+  aiSupportController.getSystemStats
 );
 
 module.exports = router;

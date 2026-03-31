@@ -190,6 +190,8 @@ class LessonChatService {
    */
   async generateAiResponse(question, context) {
     try {
+      const prompt = this.buildRagPrompt(question, context);
+      
       const response = await aiGateway.generateText({
         system: 'Bạn là trợ giảng AI. Trả lời câu hỏi dựa trên nội dung bài học. Nếu không chắc chắn, hãy nói rõ.',
         prompt,

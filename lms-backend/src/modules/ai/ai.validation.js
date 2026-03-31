@@ -732,6 +732,88 @@ const generateTeachingMaterialsValidation = [
   handleValidationErrors,
 ];
 
+// ==========================================
+// AI Support 24/7 Validations
+// ==========================================
+
+/**
+ * AI Support - Send Message Validation
+ */
+const sendSupportMessageValidation = [
+  body('content')
+    .notEmpty()
+    .withMessage('Nội dung tin nhắn là bắt buộc')
+    .isString()
+    .trim()
+    .isLength({ min: 1, max: 2000 })
+    .withMessage('Tin nhắn phải từ 1-2000 ký tự'),
+  body('context')
+    .optional()
+    .isObject()
+    .withMessage('context phải là object'),
+  body('context.currentPage')
+    .optional()
+    .isString()
+    .trim()
+    .isLength({ max: 500 })
+    .withMessage('currentPage tối đa 500 ký tự'),
+  body('context.courseId')
+    .optional()
+    .isInt({ min: 1 })
+    .withMessage('courseId phải là số nguyên dương'),
+  handleValidationErrors,
+];
+
+/**
+ * AI Support - Get Chat History Validation
+ */
+const getSupportChatHistoryValidation = [
+  param('conversationId')
+    .notEmpty()
+    .withMessage('conversationId là bắt buộc')
+    .isInt({ min: 1 })
+    .withMessage('conversationId phải là số nguyên dương'),
+  query('limit')
+    .optional()
+    .isInt({ min: 1, max: 100 })
+    .withMessage('limit phải từ 1-100'),
+  query('offset')
+    .optional()
+    .isInt({ min: 0 })
+    .withMessage('offset không được âm'),
+  handleValidationErrors,
+];
+
+/**
+ * AI Support - Handle Quick Action Validation
+ */
+const handleQuickActionValidation = [
+  body('action')
+    .notEmpty()
+    .withMessage('action là bắt buộc')
+    .isString()
+    .trim()
+    .isIn(['find_courses', 'show_recommendations', 'start_placement', 'continue_learning', 'practice_quiz', 'show_quizzes', 'explain_lesson', 'tech_support'])
+    .withMessage('action không hợp lệ'),
+  body('context')
+    .optional()
+    .isObject()
+    .withMessage('context phải là object'),
+  handleValidationErrors,
+];
+
+/**
+ * AI Support - Conversation ID Param Validation
+ */
+const supportConversationIdValidation = [
+  param('conversationId')
+    .notEmpty()
+    .withMessage('conversationId là bắt buộc')
+    .isInt({ min: 1 })
+    .withMessage('conversationId phải là số nguyên dương'),
+  handleValidationErrors,
+];
+
 module.exports = {
   handleValidationErrors,
   createStudentConversationValidation,
@@ -769,4 +851,9 @@ module.exports = {
   getAdminPlatformAnalyticsValidation,
   getAdminContentQualityReportValidation,
   triggerAdminRecommendationsValidation,
+  // AI Support 24/7
+  sendSupportMessageValidation,
+  getSupportChatHistoryValidation,
+  handleQuickActionValidation,
+  supportConversationIdValidation,
 };
