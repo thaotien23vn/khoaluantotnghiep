@@ -41,6 +41,26 @@ module.exports = (sequelize) => {
       allowNull: true,
       field: 'left_at',
     },
+    isBanned: {
+      type: DataTypes.BOOLEAN,
+      defaultValue: false,
+      field: 'is_banned',
+    },
+    bannedAt: {
+      type: DataTypes.DATE,
+      allowNull: true,
+      field: 'banned_at',
+    },
+    bannedBy: {
+      type: DataTypes.INTEGER.UNSIGNED,
+      allowNull: true,
+      field: 'banned_by',
+    },
+    banReason: {
+      type: DataTypes.STRING,
+      allowNull: true,
+      field: 'ban_reason',
+    },
   }, {
     tableName: 'chat_participants',
     timestamps: true,

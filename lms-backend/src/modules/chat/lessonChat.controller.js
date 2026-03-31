@@ -128,6 +128,169 @@ class LessonChatController {
       next(err);
     }
   }
+
+  // ==================== PERMISSION CONTROLLERS ====================
+
+  /**
+   * Pin/Unpin message (Teacher/Admin)
+   * POST /teacher/chat/:messageId/pin
+   * POST /admin/chat/:messageId/pin
+   */
+  async pinMessage(req, res, next) {
+    try {
+      const { messageId } = req.params;
+      const userId = req.user?.id;
+      const userRole = req.user?.role;
+
+      const result = await lessonChatService.pinMessage(messageId, userId, userRole);
+
+      res.json({
+        success: true,
+        data: result,
+      });
+    } catch (err) {
+      logger.error('PIN_MESSAGE_ERROR', { error: err.message });
+      next(err);
+    }
+  }
+
+  /**
+   * Delete message (Teacher/Admin)
+   * DELETE /teacher/chat/:messageId
+   * DELETE /admin/chat/:messageId
+   */
+  async deleteMessage(req, res, next) {
+    try {
+      const { messageId } = req.params;
+      const userId = req.user?.id;
+      const userRole = req.user?.role;
+
+      const result = await lessonChatService.deleteMessage(messageId, userId, userRole);
+
+      res.json({
+        success: true,
+        data: result,
+      });
+    } catch (err) {
+      logger.error('DELETE_MESSAGE_ERROR', { error: err.message });
+      next(err);
+    }
+  }
+
+  /**
+   * Mute/Unmute chat (Teacher/Admin)
+   * POST /teacher/chat/:chatId/mute
+   * POST /admin/chat/:chatId/mute
+   */
+  async muteChat(req, res, next) {
+    try {
+      const { chatId } = req.params;
+      const { durationMinutes } = req.body;
+      const userId = req.user?.id;
+      const userRole = req.user?.role;
+
+      const result = await lessonChatService.muteChat(chatId, userId, userRole, durationMinutes);
+
+      res.json({
+        success: true,
+        data: result,
+      });
+    } catch (err) {
+      logger.error('MUTE_CHAT_ERROR', { error: err.message });
+      next(err);
+    }
+  }
+
+  /**
+   * Ban/Unban user (Admin only)
+   * POST /admin/chat/:chatId/ban/:userId
+   */
+  async banUser(req, res, next) {
+    try {
+      const { chatId, userId: targetUserId } = req.params;
+      const { reason } = req.body;
+      const userId = req.user?.id;
+      const userRole = req.user?.role;
+
+      const result = await lessonChatService.banUser(chatId, targetUserId, userId, userRole, reason);
+
+      res.json({
+        success: true,
+        data: result,
+      });
+    } catch (err) {
+      logger.error('BAN_USER_ERROR', { error: err.message });
+      next(err);
+    }
+  }
+
+  /**
+   * Enable/Disable chat (Admin only)
+   * POST /admin/chat/:chatId/toggle
+   */
+  async toggleChat(req, res, next) {
+    try {
+      const { chatId } = req.params;
+      const userId = req.user?.id;
+      const userRole = req.user?.role;
+
+      const result = await lessonChatService.toggleChat(chatId, userId, userRole);
+
+      res.json({
+        success: true,
+        data: result,
+      });
+    } catch (err) {
+      logger.error('TOGGLE_CHAT_ERROR', { error: err.message });
+      next(err);
+    }
+  }
+
+  /**
+   * Clear chat history (Admin only)
+   * DELETE /admin/chat/:chatId/history
+   */
+  async clearHistory(req, res, next) {
+    try {
+      const { chatId } = req.params;
+      const userId = req.user?.id;
+      const userRole = req.user?.role;
+
+      const result = await lessonChatService.clearHistory(chatId, userId, userRole);
+
+      res.json({
+        success: true,
+        data: result,
+      });
+    } catch (err) {
+      logger.error('CLEAR_HISTORY_ERROR', { error: err.message });
+      next(err);
+    }
+  }
+
+  /**
+   * Get chat analytics (Teacher/Admin)
+   * GET /teacher/chat/:chatId/analytics
+   * GET /admin/chat/:chatId/analytics
+   */
+  async getAnalytics(req, res, next) {
+    try {
+      const { chatId } = req.params;
+      const { startDate, endDate } = req.query;
+      const userId = req.user?.id;
+      const userRole = req.user?.role;
+
+      const result = await lessonChatService.getAnalytics(chatId, userId, userRole, startDate, endDate);
+
+      res.json({
+        success: true,
+        data: result,
+      });
+    } catch (err) {
+      logger.error('GET_ANALYTICS_ERROR', { error: err.message });
+      next(err);
+    }
+  }
 }
 
 module.exports = new LessonChatController();

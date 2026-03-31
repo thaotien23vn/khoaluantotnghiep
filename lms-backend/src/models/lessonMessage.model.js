@@ -60,6 +60,31 @@ module.exports = (sequelize) => {
       defaultValue: false,
       field: 'is_deleted',
     },
+    deletedBy: {
+      type: DataTypes.INTEGER.UNSIGNED,
+      allowNull: true,
+      field: 'deleted_by',
+    },
+    deletedAt: {
+      type: DataTypes.DATE,
+      allowNull: true,
+      field: 'deleted_at',
+    },
+    isPinned: {
+      type: DataTypes.BOOLEAN,
+      defaultValue: false,
+      field: 'is_pinned',
+    },
+    pinnedBy: {
+      type: DataTypes.INTEGER.UNSIGNED,
+      allowNull: true,
+      field: 'pinned_by',
+    },
+    pinnedAt: {
+      type: DataTypes.DATE,
+      allowNull: true,
+      field: 'pinned_at',
+    },
   }, {
     tableName: 'lesson_messages',
     timestamps: true,

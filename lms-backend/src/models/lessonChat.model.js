@@ -31,6 +31,32 @@ module.exports = (sequelize) => {
       defaultValue: true,
       field: 'ai_enabled',
     },
+    isEnabled: {
+      type: DataTypes.BOOLEAN,
+      defaultValue: true,
+      field: 'is_enabled',
+    },
+    mutedUntil: {
+      type: DataTypes.DATE,
+      allowNull: true,
+      field: 'muted_until',
+    },
+    bannedUsers: {
+      type: DataTypes.JSON,
+      allowNull: true,
+      defaultValue: [],
+      field: 'banned_users',
+    },
+    deletedAt: {
+      type: DataTypes.DATE,
+      allowNull: true,
+      field: 'deleted_at',
+    },
+    deletedBy: {
+      type: DataTypes.INTEGER.UNSIGNED,
+      allowNull: true,
+      field: 'deleted_by',
+    },
   }, {
     tableName: 'lesson_chats',
     timestamps: true,

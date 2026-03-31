@@ -2,12 +2,14 @@ const db = require('../../models/index');
 const aiGateway = require('../../services/aiGateway.service');
 const logger = require('../../utils/logger');
 const { Op } = require('sequelize');
+const { sequelize } = db;
 
 const {
   LessonChat,
   LessonMessage,
   ChatParticipant,
   ChatEscalation,
+  ChatAnalytics,
   Lecture,
   Course,
   User,
@@ -489,6 +491,332 @@ Trả lời dựa trên nội dung bài học trên. Nếu không có thông tin
     }
 
     return pendingEscalations.length;
+  }
+
+  /**
+   * ==================== PERMISSION METHODS ====================
+   */
+
+  /**
+   * Check if user has permission for an action
+   * @param {string} action - Action to check
+   * @param {string} userRole - User role
+   * @param {number} userId - User ID
+   * @param {Object} chat - Chat object
+   * @returns {boolean}
+   */
+  hasPermission(action, userRole, userId, chat) {
+    const permissions = {
+      // Student: view, send, reply
+      student: ['view', 'send', 'reply'],
+      // Teacher: view, send, reply, pin, delete, mute, analytics
+      teacher: ['view', 'send', 'reply', 'pin', 'delete', 'mute', 'analytics'],
+      // Admin: all permissions
+      admin: ['view', 'send', 'reply', 'pin', 'delete', 'mute', 'ban', 'clear_history', 'enable_disable', 'analytics'],
+    };
+
+    const rolePermissions = permissions[userRole] || [];
+    
+    // Teacher can only manage their own course chats
+    if (userRole === 'teacher' && chat && chat.course) {
+      if (chat.course.createdBy !== userId) {
+        return action === 'view' ? rolePermissions.includes(action) : false;
+      }
+    }
+
+    return rolePermissions.includes(action);
+  }
+
+  /**
+   * Pin/Unpin a message (Teacher/Admin only)
+   */
+  async pinMessage(messageId, userId, userRole) {
+    const message = await LessonMessage.findByPk(messageId, {
+      include: [{ model: LessonChat, as: 'chat', include: [{ model: Course, as: 'course' }] }],
+    });
+
+    if (!message) {
+      throw { status: 404, message: 'Không tìm thấy tin nhắn' };
+    }
+
+    if (!this.hasPermission('pin', userRole, userId, message.chat)) {
+      throw { status: 403, message: 'Bạn không có quyền pin tin nhắn' };
+    }
+
+    const isPinned = !message.isPinned;
+    await message.update({
+      isPinned,
+      pinnedBy: isPinned ? userId : null,
+      pinnedAt: isPinned ? new Date() : null,
+    });
+
+    logger.info('MESSAGE_PINNED', { messageId, userId, isPinned });
+
+    return {
+      message: isPinned ? 'Đã pin tin nhắn' : 'Đã bỏ pin tin nhắn',
+      isPinned,
+    };
+  }
+
+  /**
+   * Delete a message (Teacher/Admin only)
+   */
+  async deleteMessage(messageId, userId, userRole) {
+    const message = await LessonMessage.findByPk(messageId, {
+      include: [{ model: LessonChat, as: 'chat', include: [{ model: Course, as: 'course' }] }],
+    });
+
+    if (!message) {
+      throw { status: 404, message: 'Không tìm thấy tin nhắn' };
+    }
+
+    if (!this.hasPermission('delete', userRole, userId, message.chat)) {
+      throw { status: 403, message: 'Bạn không có quyền xóa tin nhắn' };
+    }
+
+    await message.update({
+      isDeleted: true,
+      deletedBy: userId,
+      deletedAt: new Date(),
+    });
+
+    logger.info('MESSAGE_DELETED', { messageId, userId });
+
+    return { message: 'Đã xóa tin nhắn' };
+  }
+
+  /**
+   * Mute/Unmute chat (Teacher/Admin only)
+   */
+  async muteChat(chatId, userId, userRole, durationMinutes = null) {
+    const chat = await LessonChat.findByPk(chatId, {
+      include: [{ model: Course, as: 'course' }],
+    });
+
+    if (!chat) {
+      throw { status: 404, message: 'Không tìm thấy chat' };
+    }
+
+    if (!this.hasPermission('mute', userRole, userId, chat)) {
+      throw { status: 403, message: 'Bạn không có quyền khóa chat' };
+    }
+
+    const mutedUntil = durationMinutes ? new Date(Date.now() + durationMinutes * 60000) : null;
+    await chat.update({ mutedUntil });
+
+    logger.info('CHAT_MUTED', { chatId, userId, mutedUntil });
+
+    return {
+      message: durationMinutes ? `Đã khóa chat trong ${durationMinutes} phút` : 'Đã mở khóa chat',
+      mutedUntil,
+    };
+  }
+
+  /**
+   * Ban/Unban user from chat (Admin only)
+   */
+  async banUser(chatId, targetUserId, userId, userRole, reason = null) {
+    const chat = await LessonChat.findByPk(chatId, {
+      include: [{ model: Course, as: 'course' }],
+    });
+
+    if (!chat) {
+      throw { status: 404, message: 'Không tìm thấy chat' };
+    }
+
+    if (!this.hasPermission('ban', userRole, userId, chat)) {
+      throw { status: 403, message: 'Chỉ admin có quyền ban user' };
+    }
+
+    const participant = await ChatParticipant.findOne({
+      where: { chatId, userId: targetUserId },
+    });
+
+    if (!participant) {
+      throw { status: 404, message: 'User không tham gia chat này' };
+    }
+
+    const isBanned = !participant.isBanned;
+    await participant.update({
+      isBanned,
+      bannedAt: isBanned ? new Date() : null,
+      bannedBy: isBanned ? userId : null,
+      banReason: isBanned ? reason : null,
+    });
+
+    logger.info(isBanned ? 'USER_BANNED' : 'USER_UNBANNED', {
+      chatId,
+      targetUserId,
+      userId,
+      reason,
+    });
+
+    return {
+      message: isBanned ? 'Đã ban user' : 'Đã unban user',
+      isBanned,
+    };
+  }
+
+  /**
+   * Enable/Disable chat (Admin only)
+   */
+  async toggleChat(chatId, userId, userRole) {
+    const chat = await LessonChat.findByPk(chatId, {
+      include: [{ model: Course, as: 'course' }],
+    });
+
+    if (!chat) {
+      throw { status: 404, message: 'Không tìm thấy chat' };
+    }
+
+    if (!this.hasPermission('enable_disable', userRole, userId, chat)) {
+      throw { status: 403, message: 'Chỉ admin có quyền bật/tắt chat' };
+    }
+
+    const isEnabled = !chat.isEnabled;
+    await chat.update({ isEnabled });
+
+    logger.info(isEnabled ? 'CHAT_ENABLED' : 'CHAT_DISABLED', { chatId, userId });
+
+    return {
+      message: isEnabled ? 'Đã bật chat' : 'Đã tắt chat',
+      isEnabled,
+    };
+  }
+
+  /**
+   * Clear chat history (Admin only)
+   */
+  async clearHistory(chatId, userId, userRole) {
+    const chat = await LessonChat.findByPk(chatId, {
+      include: [{ model: Course, as: 'course' }],
+    });
+
+    if (!chat) {
+      throw { status: 404, message: 'Không tìm thấy chat' };
+    }
+
+    if (!this.hasPermission('clear_history', userRole, userId, chat)) {
+      throw { status: 403, message: 'Chỉ admin có quyền xóa lịch sử chat' };
+    }
+
+    await LessonMessage.destroy({ where: { chatId } });
+    await chat.update({
+      deletedAt: new Date(),
+      deletedBy: userId,
+    });
+
+    logger.info('CHAT_HISTORY_CLEARED', { chatId, userId });
+
+    return { message: 'Đã xóa toàn bộ lịch sử chat' };
+  }
+
+  /**
+   * Get chat analytics (Teacher/Admin only)
+   */
+  async getAnalytics(chatId, userId, userRole, startDate = null, endDate = null) {
+    const chat = await LessonChat.findByPk(chatId, {
+      include: [{ model: Course, as: 'course' }],
+    });
+
+    if (!chat) {
+      throw { status: 404, message: 'Không tìm thấy chat' };
+    }
+
+    if (!this.hasPermission('analytics', userRole, userId, chat)) {
+      throw { status: 403, message: 'Bạn không có quyền xem analytics' };
+    }
+
+    const where = { chatId };
+    if (startDate && endDate) {
+      where.date = { $between: [startDate, endDate] };
+    }
+
+    const analytics = await ChatAnalytics.findAll({
+      where,
+      order: [['date', 'DESC']],
+    });
+
+    const summary = await ChatAnalytics.findOne({
+      where: { chatId },
+      attributes: [
+        [sequelize.fn('SUM', sequelize.col('total_messages')), 'totalMessages'],
+        [sequelize.fn('SUM', sequelize.col('student_messages')), 'studentMessages'],
+        [sequelize.fn('SUM', sequelize.col('teacher_messages')), 'teacherMessages'],
+        [sequelize.fn('SUM', sequelize.col('admin_messages')), 'adminMessages'],
+        [sequelize.fn('SUM', sequelize.col('ai_responses')), 'aiResponses'],
+        [sequelize.fn('SUM', sequelize.col('escalations')), 'escalations'],
+        [sequelize.fn('SUM', sequelize.col('resolved_questions')), 'resolvedQuestions'],
+      ],
+    });
+
+    return {
+      daily: analytics,
+      summary: summary?.dataValues || {},
+    };
+  }
+
+  /**
+   * Record analytics event
+   */
+  async recordAnalytics(chatId, type) {
+    const today = new Date().toISOString().split('T')[0];
+    
+    const [analytics, created] = await ChatAnalytics.findOrCreate({
+      where: { chatId, date: today },
+      defaults: { chatId, date: today },
+    });
+
+    const fieldMap = {
+      student: 'studentMessages',
+      teacher: 'teacherMessages',
+      admin: 'adminMessages',
+      ai: 'aiResponses',
+      escalation: 'escalations',
+      resolved: 'resolvedQuestions',
+    };
+
+    const field = fieldMap[type];
+    if (field) {
+      await analytics.increment(field);
+    }
+    await analytics.increment('totalMessages');
+
+    return analytics;
+  }
+
+  /**
+   * Check if chat is available for user
+   */
+  async checkChatAccess(chatId, userId, userRole) {
+    const chat = await LessonChat.findByPk(chatId, {
+      include: [
+        { model: Course, as: 'course' },
+        { model: ChatParticipant, as: 'participants', where: { userId }, required: false },
+      ],
+    });
+
+    if (!chat) {
+      throw { status: 404, message: 'Không tìm thấy chat' };
+    }
+
+    // Check if chat is enabled
+    if (!chat.isEnabled) {
+      throw { status: 403, message: 'Chat đã bị tắt' };
+    }
+
+    // Check if chat is muted
+    if (chat.mutedUntil && new Date() < new Date(chat.mutedUntil)) {
+      throw { status: 403, message: 'Chat đang bị khóa tạm thời' };
+    }
+
+    // Check if user is banned
+    const participant = chat.participants?.[0];
+    if (participant?.isBanned) {
+      throw { status: 403, message: 'Bạn đã bị ban khỏi chat này' };
+    }
+
+    return { chat, participant };
   }
 }
 
