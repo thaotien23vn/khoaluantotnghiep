@@ -1,4 +1,5 @@
 const db = require('../../models/index');
+const aiRag = require('../../services/aiRag.service');
 const aiGateway = require('../../services/aiGateway.service');
 const logger = require('../../utils/logger');
 const { Op } = require('sequelize');
@@ -137,8 +138,8 @@ class LessonChatService {
       return this.escalateToTeacher(chatId, message.id, 'AI disabled');
     }
 
-    // Get lesson content for RAG context
-    const context = await this.getLessonContext(chat.lessonId);
+    // Get lesson content for RAG context (using question to retrieve relevant chunks)
+    const context = await this.getLessonContext(chat.lessonId, message.content);
 
     // Try AI response
     const aiResult = await this.generateAiResponse(message.content, context);
@@ -231,14 +232,41 @@ class LessonChatService {
   }
 
   /**
-   * Build RAG prompt with lesson context
+   * Build RAG context using AiChunk with embeddings
    */
-  async getLessonContext(lessonId) {
-    const lecture = await Lecture.findByPk(lessonId);
+  async getLessonContext(lessonId, question) {
+    const lecture = await Lecture.findByPk(lessonId, {
+      include: [{ model: db.models.Chapter, as: 'chapter', attributes: ['courseId'] }],
+    });
+    
+    if (!lecture?.chapter?.courseId) {
+      return { content: '', title: lecture?.title || '', sources: [] };
+    }
+
+    // Use RAG to get relevant chunks from AiChunk
+    const topChunks = await aiRag.retrieveTopChunks({
+      courseId: lecture.chapter.courseId,
+      lectureId: lessonId,
+      query: question,
+      topK: 5,
+    });
+
+    if (!topChunks.length) {
+      // Fallback to raw content if no chunks
+      return {
+        content: lecture?.content?.substring(0, 3000) || '',
+        title: lecture?.title || '',
+        sources: [{ type: 'lecture', id: lessonId }],
+      };
+    }
+
+    // Build context from relevant chunks
+    const contextParts = topChunks.map((chunk, idx) => `[${idx + 1}] ${chunk.text}`);
+    
     return {
-      content: lecture?.content || '',
+      content: contextParts.join('\n\n'),
       title: lecture?.title || '',
-      sources: [{ type: 'lecture', id: lessonId }],
+      sources: topChunks.map(c => ({ type: 'chunk', id: c.id, lectureId: c.lectureId, score: c.score })),
     };
   }
 
