@@ -307,11 +307,12 @@ class VNPayService {
   }
 
   /**
-   * Tạo query string từ object đã sort
+   * Tạo query string từ object đã sort (for signing)
+   * encodeURIComponent value theo chuẩn VNPay
    */
   _createSignData(sortedObj) {
     return Object.entries(sortedObj)
-      .map(([key, val]) => `${key}=${val}`)
+      .map(([key, val]) => `${key}=${encodeURIComponent(val)}`)
       .join('&');
   }
 
