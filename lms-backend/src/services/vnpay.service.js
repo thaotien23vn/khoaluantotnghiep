@@ -308,11 +308,14 @@ class VNPayService {
 
   /**
    * Tạo query string từ object đã sort (for signing)
-   * encodeURIComponent value theo chuẩn VNPay
+   * VNPay: space → + (không phải %20)
    */
   _createSignData(sortedObj) {
     return Object.entries(sortedObj)
-      .map(([key, val]) => `${key}=${encodeURIComponent(val)}`)
+      .map(([key, val]) => {
+        const encodedVal = encodeURIComponent(val).replace(/%20/g, '+');
+        return `${key}=${encodedVal}`;
+      })
       .join('&');
   }
 
