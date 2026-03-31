@@ -113,6 +113,9 @@ class LessonChatService {
       senderType,
     });
 
+    // Record analytics
+    await this.recordAnalytics(chatId, senderType);
+
     // If student question, try AI first
     if (senderType === 'student' && !parentId) {
       return this.handleStudentQuestion(chatId, message);
@@ -170,6 +173,9 @@ class LessonChatService {
         confidence: aiResult.confidence,
       });
 
+      // Record AI response analytics
+      await this.recordAnalytics(chatId, 'ai');
+
       return {
         message,
         aiResponse: aiMessage,
@@ -178,12 +184,17 @@ class LessonChatService {
     }
 
     // AI not confident - escalate
-    return this.escalateToTeacher(
+    const escalationResult = await this.escalateToTeacher(
       chatId,
       message.id,
       `AI confidence too low: ${aiResult.confidence}`,
       aiResult
     );
+
+    // Record escalation analytics
+    await this.recordAnalytics(chatId, 'escalation');
+
+    return escalationResult;
   }
 
   /**
@@ -377,6 +388,9 @@ Trả lời dựa trên nội dung bài học trên. Nếu không có thông tin
         answeredAt: new Date(),
         answeredBy: userId,
       });
+
+      // Record resolved analytics
+      await this.recordAnalytics(escalation.chatId, 'resolved');
     }
   }
 
