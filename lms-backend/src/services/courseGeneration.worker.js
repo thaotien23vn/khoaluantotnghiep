@@ -14,7 +14,9 @@ let courseGenerationWorker;
 
 if (!isTest) {
   const redisOptions = {
-    maxRetriesPerRequest: null,
+    maxRetriesPerRequest: 3,
+    retryStrategy: (times) => Math.min(times * 100, 2000),
+    lazyConnect: true, // Chỉ kết nối khi cần
     ...(process.env.REDIS_URL && process.env.REDIS_URL.startsWith('rediss') && {
       tls: {
         rejectUnauthorized: false,
@@ -309,7 +311,8 @@ if (!isTest) {
       concurrency: 1, // Process one at a time to avoid AI overload
       lockDuration: 300000, // 5 minutes - AI calls can take up to 180s
       stalledInterval: 60000, // Check stalled jobs every minute
-      maxStalledCount: 3, // Allow 3 stall events before failing
+      maxStalledCount: 2, // Reduced from 3 to minimize Redis calls
+      drainDelay: 10000, // Wait 10s before polling when queue is empty
       limiter: {
         max: 1,
         duration: 5000, // 5 seconds between jobs

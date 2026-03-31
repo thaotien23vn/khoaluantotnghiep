@@ -878,29 +878,39 @@ Trả lời dựa trên nội dung bài học trên. Nếu không có thông tin
    * Record analytics event
    */
   async recordAnalytics(chatId, type) {
-    const today = new Date().toISOString().split('T')[0];
-    
-    const [analytics, created] = await ChatAnalytics.findOrCreate({
-      where: { chatId, date: today },
-      defaults: { chatId, date: today },
-    });
+    try {
+      const today = new Date().toISOString().split('T')[0];
+      
+      logger.info('RECORD_ANALYTICS_START', { chatId, type, date: today });
+      
+      const [analytics, created] = await ChatAnalytics.findOrCreate({
+        where: { chatId, date: today },
+        defaults: { chatId, date: today },
+      });
 
-    const fieldMap = {
-      student: 'studentMessages',
-      teacher: 'teacherMessages',
-      admin: 'adminMessages',
-      ai: 'aiResponses',
-      escalation: 'escalations',
-      resolved: 'resolvedQuestions',
-    };
+      logger.info('RECORD_ANALYTICS_DB', { chatId, type, created, analyticsId: analytics.id });
 
-    const field = fieldMap[type];
-    if (field) {
-      await analytics.increment(field);
+      const fieldMap = {
+        student: 'studentMessages',
+        teacher: 'teacherMessages',
+        admin: 'adminMessages',
+        ai: 'aiResponses',
+        escalation: 'escalations',
+        resolved: 'resolvedQuestions',
+      };
+
+      const field = fieldMap[type];
+      if (field) {
+        await analytics.increment(field);
+        logger.info('RECORD_ANALYTICS_INCREMENT', { chatId, type, field });
+      }
+      await analytics.increment('totalMessages');
+
+      return analytics;
+    } catch (error) {
+      logger.error('RECORD_ANALYTICS_FAILED', { chatId, type, error: error.message });
+      return null;
     }
-    await analytics.increment('totalMessages');
-
-    return analytics;
   }
 
   /**

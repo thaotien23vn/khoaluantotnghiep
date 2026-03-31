@@ -8,14 +8,13 @@ const isTest = process.env.NODE_ENV === 'test';
 let notificationWorker;
 
 if (!isTest) {
-  // 1. Cấu hình Redis Connection
+  // 1. Cấu hình Redis Connection - Tối ưu cho Upstash
   const redisOptions = {
-    maxRetriesPerRequest: null, // BẮT BUỘC: BullMQ sẽ báo lỗi nếu không có dòng này
-    // Tự động kích hoạt TLS nếu URL bắt đầu bằng rediss:// (Dành cho Upstash/Render)
+    maxRetriesPerRequest: 3,
+    retryStrategy: (times) => Math.min(times * 100, 2000),
+    lazyConnect: true,
     ...(process.env.REDIS_URL && process.env.REDIS_URL.startsWith('rediss') && {
-      tls: {
-        rejectUnauthorized: false,
-      },
+      tls: { rejectUnauthorized: false },
     }),
   };
 
@@ -33,32 +32,17 @@ if (!isTest) {
     console.error('❌ [RedisWorker] Connection Error:', err.message);
   });
 
-  // 2. Khởi tạo BullMQ Worker
+  // 2. Khởi tạo BullMQ Worker với cấu hình tối ưu cho Upstash
   notificationWorker = new Worker(
     'notificationQueue',
     async (job) => {
-      const { 
-        type, 
-        userId, 
-        title, 
-        message, 
-        payload, 
-        dedupeKey, 
-        dedupeHours 
-      } = job.data;
+      const { type, userId, title, message, payload, dedupeKey, dedupeHours } = job.data;
       
       console.log(`🔔 [Worker] Processing Job ${job.id} | User: ${userId} | Type: ${type}`);
 
       try {
-        // Gọi Service để xử lý logic lưu Database và check trùng (Deduplication)
         const result = await notificationService.createNotification({
-          userId,
-          title,
-          message,
-          type,
-          payload,
-          dedupeKey,
-          dedupeHours,
+          userId, title, message, type, payload, dedupeKey, dedupeHours,
         });
         
         return { 
@@ -68,22 +52,26 @@ if (!isTest) {
         };
       } catch (error) {
         console.error(`❌ [Worker] Error in Job ${job.id}:`, error.message);
-        // Quăng lỗi ra ngoài để BullMQ biết và thực hiện retry (nếu có config)
         throw error;
       }
     },
     {
       connection: redisConnection,
-      concurrency: 5, // Xử lý tối đa 5 thông báo cùng lúc để tối ưu hiệu năng
+      concurrency: 3, // Giảm từ 5 xuống 3
+      // Tối ưu polling cho Upstash - Giảm số request Redis
+      lockDuration: 30000, // 30s thay vì 5s mặc định
+      stalledInterval: 30000, // 30s thay vì 30s mặc định
+      maxStalledCount: 1,
+      drainDelay: 5000, // Đợi 5s trước khi poll tiếp khi queue empty
     }
   );
 
-  // 3. Lắng nghe các sự kiện của Worker để tiện Debug trên Render Logs
+  // 3. Lắng nghe các sự kiện của Worker
   notificationWorker.on('completed', (job, result) => {
     if (result.skipped) {
-      console.log(`⚠️ [Worker] Job ${job.id} SKIPPED (Duplicate found via dedupeKey)`);
+      console.log(`⚠️ [Worker] Job ${job.id} SKIPPED (Duplicate)`);
     } else {
-      console.log(`✅ [Worker] Job ${job.id} COMPLETED (Notification sent)`);
+      console.log(`✅ [Worker] Job ${job.id} COMPLETED`);
     }
   });
 
@@ -91,13 +79,11 @@ if (!isTest) {
     console.error(`❌ [Worker] Job ${job.id} FAILED:`, err.message);
   });
 
-  console.log('🚀 [Worker] Notification Worker is running and listening for jobs...');
+  console.log('🚀 [Worker] Notification Worker optimized for Upstash');
 
 } else {
   // Mock Worker cho môi trường Testing
-  notificationWorker = {
-    on: () => {}, 
-  };
+  notificationWorker = { on: () => {} };
 }
 
 module.exports = { notificationWorker };

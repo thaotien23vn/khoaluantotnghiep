@@ -7,9 +7,14 @@ let notificationQueue;
 let redisConnection;
 
 if (!isTest) {
-  // Cấu hình Redis chung
+  // Cấu hình Redis tối ưu cho Upstash - Giảm số request
   const redisOptions = {
-    maxRetriesPerRequest: null, 
+    maxRetriesPerRequest: 3,
+    retryStrategy: (times) => {
+      // Exponential backoff: 100ms, 200ms, 400ms
+      return Math.min(times * 100, 2000);
+    },
+    lazyConnect: true, // Chỉ kết nối khi cần
     ...(process.env.REDIS_URL && process.env.REDIS_URL.startsWith('rediss') && {
       tls: {
         rejectUnauthorized: false,
@@ -33,21 +38,27 @@ if (!isTest) {
     console.error('❌ Redis Queue Connection Error:', err.message);
   });
 
-  // Khởi tạo BullMQ Queue
+  // Khởi tạo BullMQ Queue với cấu hình tối ưu cho Upstash
   notificationQueue = new Queue('notificationQueue', {
     connection: redisConnection,
     defaultJobOptions: {
-      removeOnComplete: 100,
-      removeOnFail: 50,
-      attempts: 3,
+      removeOnComplete: { count: 20 }, // Giữ 20 job cuối thay vì 100
+      removeOnFail: { count: 10 }, // Giữ 10 job fail
+      attempts: 2,
       backoff: {
         type: 'exponential',
         delay: 5000,
       },
     },
+    // Tối ưu cho môi trường serverless/free tier
+    settings: {
+      lockDuration: 30000, // 30s thay vì mặc định 5s
+      stalledInterval: 30000, // Kiểm tra stalled job mỗi 30s
+      maxStalledCount: 1,
+    },
   });
 
-  console.log('🚀 Notification Queue initialized');
+  console.log('🚀 Notification Queue initialized (optimized)');
 } else {
   // Mock cho môi trường Test
   notificationQueue = {
