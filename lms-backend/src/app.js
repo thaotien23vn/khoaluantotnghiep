@@ -203,9 +203,13 @@ app.use((err, req, res, next) => {
     err && Number.isInteger(err.statusCode) ? err.statusCode :
     err && Number.isInteger(err.status) ? err.status : 500;
 
+  const isClientError = statusCode >= 400 && statusCode < 500;
+  const logLevel = isClientError ? "warn" : "error";
+  const logMsg = isClientError ? "client_error" : "unhandled_error";
+
   const log = {
-    level: "error",
-    msg: "unhandled_error",
+    level: logLevel,
+    msg: logMsg,
     correlationId: req.correlationId,
     method: req.method,
     path: req.originalUrl,
