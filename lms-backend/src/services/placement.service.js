@@ -14,7 +14,32 @@ const {
 // CEFR levels in order
 const CEFR_LEVELS = ['A1', 'A2', 'B1', 'B2', 'C1', 'C2'];
 
-// Adaptive logic constants
+// CEFR Level to difficulty score mapping (1-6)
+const CEFR_SCORE_MAP = {
+  'A1': 1,
+  'A2': 2,
+  'B1': 3,
+  'B2': 4,
+  'C1': 5,
+  'C2': 6
+};
+
+// Score to CEFR level mapping
+const SCORE_TO_CEFR = [
+  { max: 1.5, level: 'A1' },
+  { max: 2.5, level: 'A2' },
+  { max: 3.5, level: 'B1' },
+  { max: 4.5, level: 'B2' },
+  { max: 5.5, level: 'C1' },
+  { max: Infinity, level: 'C2' }
+];
+
+// Ability-based adaptive constants
+const ABILITY_CORRECT_BONUS = 0.6;  // bonus multiplier for correct answer
+const ABILITY_WRONG_PENALTY = 0.8;  // penalty multiplier for wrong answer (harsher)
+const STARTING_ABILITY = 3.0;         // Start at B1 level
+
+// Legacy streak-based constants (keeping for compatibility)
 const LEVEL_UP_STREAK = 2;    // 2 correct -> level up
 const LEVEL_DOWN_STREAK = 3;  // 3 wrong -> level down
 const MAX_QUESTIONS = 20;     // Max questions per test
@@ -86,6 +111,7 @@ class PlacementService {
       targetCourseId,
       selfAssessedLevel: selfAssessedLevel || 'unknown',
       currentCefrLevel: startingLevel,
+      abilityScore: CEFR_SCORE_MAP[startingLevel] || STARTING_ABILITY, // Initialize ability score
       status: 'in_progress',
       isQuickCheck: isQuickCheck || false,
       isRetake: isRetake || false,
@@ -168,39 +194,49 @@ class PlacementService {
         .filter(id => id)
     );
     
-    // Get content of all questions already asked (for AI duplicate check)
+    // Get content of all questions already asked (for duplicate check)
     const askedContents = existingQuestions.map(q => this.normalizeContent(q.content));
 
-    const currentLevel = session.currentCefrLevel;
+    // Ability-based adaptive: Calculate current level from ability score
+    const currentAbility = session.abilityScore || STARTING_ABILITY;
+    const targetLevel = this.getLevelFromAbility(currentAbility);
     const skillType = this.selectSkillType(session.questionCount);
     
-    // Randomly select question type for variety
+    // All question types to try in order
     const questionTypes = ['multiple_choice', 'fill_blank', 'listening', 'sentence_ordering'];
-    const selectedType = questionTypes[Math.floor(Math.random() * questionTypes.length)];
     
-    // Try to get from question bank first - fetch multiple at once
     let question = null;
-    const SIMILARITY_THRESHOLD = 0.6; // Reduced from 0.8
+    let selectedType = null;
+    const SIMILARITY_THRESHOLD = 0.6;
     
-    const bankQuestions = await this.getFromQuestionBank(
-      currentLevel, 
-      skillType, 
-      selectedType, 
-      Array.from(askedBankQuestionIdsSet),
-      20 // Fetch 20 at once
-    );
-    
-    if (bankQuestions.length === 0) {
-      logger.info('PLACEMENT_BANK_EMPTY', {
-        sessionId: session.id,
-        cefrLevel: currentLevel,
-        skillType,
-        questionType: selectedType,
-        askedCount: askedBankQuestionIdsSet.size,
-      });
-    } else {
-      // Filter in memory for non-duplicate
-      for (const bankQuestion of bankQuestions) {
+    // Try each question type until we find one from bank at the target level
+    for (const qType of questionTypes) {
+      if (question) break;
+      
+      const bankQuestions = await this.getFromQuestionBank(
+        currentAbility, 
+        skillType, 
+        qType, 
+        Array.from(askedBankQuestionIdsSet),
+        20
+      );
+      
+      if (bankQuestions.length === 0) {
+        logger.info('PLACEMENT_BANK_EMPTY_FOR_TYPE', {
+          sessionId: session.id,
+          cefrLevel: targetLevel,
+          skillType,
+          questionType: qType,
+        });
+        continue;
+      }
+      
+      // Take top 10 closest questions and randomly pick one for variety
+      const topK = bankQuestions.slice(0, 10);
+      const shuffledTopK = this.shuffleArray(topK);
+      
+      // Find first non-duplicate from shuffled top-k
+      for (const bankQuestion of shuffledTopK) {
         const normalizedBankContent = this.normalizeContent(bankQuestion.content);
         const isBankDuplicate = askedContents.some(askedContent => 
           askedContent === normalizedBankContent || 
@@ -209,6 +245,7 @@ class PlacementService {
         
         if (!isBankDuplicate) {
           question = bankQuestion;
+          selectedType = qType;
           break;
         } else {
           askedBankQuestionIdsSet.add(bankQuestion.id);
@@ -221,53 +258,49 @@ class PlacementService {
       }
     }
     
-    // If not in bank or we want fresh AI questions, generate with AI
-    let attempts = 0;
-    const maxAttempts = 3;
-    const SIMILARITY_THRESHOLD_AI = 0.6; // Reduced from 0.8
-    
-    while (!question && attempts < maxAttempts) {
-      attempts++;
-      const aiQuestion = await this.generateAiQuestion(session, currentLevel, skillType, selectedType);
-      
-      // Check if AI generated a duplicate (same content as already asked)
-      const normalizedContent = this.normalizeContent(aiQuestion.content);
-      const isDuplicate = askedContents.some(askedContent => 
-        askedContent === normalizedContent || 
-        this.contentSimilarity(askedContent, normalizedContent) > SIMILARITY_THRESHOLD_AI
-      );
-      
-      if (!isDuplicate) {
-        question = aiQuestion;
-      } else {
-        logger.warn('PLACEMENT_AI_DUPLICATE_DETECTED', {
-          sessionId: session.id,
-          attempt: attempts,
-          content: aiQuestion.content?.substring(0, 100),
-        });
-      }
-    }
-    
-    // If still no question after max attempts, use whatever we have
+    // If still no question found
     if (!question) {
-      question = await this.generateAiQuestion(session, currentLevel, skillType, selectedType);
+      logger.error('PLACEMENT_BANK_EXHAUSTED_ALL_TYPES', {
+        sessionId: session.id,
+        cefrLevel: targetLevel,
+        skillType,
+        askedCount: askedBankQuestionIdsSet.size,
+      });
+      throw {
+        status: 500,
+        message: 'Không còn câu hỏi phù hợp trong ngân hàng câu hỏi. Vui lòng liên hệ admin để bổ sung thêm câu hỏi.',
+        code: 'BANK_EMPTY',
+      };
     }
 
     // Anti-gaming: Shuffle options so correct answer position varies
     const shuffledOptions = this.shuffleArray(question.options || []);
     
+    // Convert correctAnswer from letter (A/B/C/D) to actual text for proper evaluation after shuffle
+    let correctAnswerText = question.correctAnswer;
+    if (question.correctAnswer && question.correctAnswer.length === 1 && question.options) {
+      // It's a letter, convert to text
+      const letterIndex = question.correctAnswer.charCodeAt(0) - 'A'.charCodeAt(0);
+      if (letterIndex >= 0 && letterIndex < question.options.length) {
+        correctAnswerText = question.options[letterIndex];
+      }
+    }
+    
     // Create placement question for this session
+    // Mark as from bank (aiGenerated: false) and save bankQuestionId
     const placementQuestion = await PlacementQuestion.create({
       sessionId: session.id,
       questionIndex: session.questionCount,
-      cefrLevel: currentLevel,
+      cefrLevel: targetLevel,
       skillType,
-      questionType: question.type,
+      questionType: selectedType,
       content: question.content,
       options: shuffledOptions,
-      correctAnswer: question.correctAnswer,
+      correctAnswer: correctAnswerText, // Store text instead of letter
       explanation: question.explanation,
-      aiGenerated: question.aiGenerated || true,
+      aiGenerated: false, // From question bank
+      bankQuestionId: question.id, // Track which bank question this came from
+      difficultyScore: question.difficultyScore, // Store difficulty for adaptive scoring
       timeLimitSeconds: 60,
     });
 
@@ -281,11 +314,11 @@ class PlacementService {
     return {
       questionId: placementQuestion.id,
       questionIndex: placementQuestion.questionIndex,
-      cefrLevel: currentLevel,
+      cefrLevel: targetLevel,
       skillType,
-      questionType: question.type,
+      questionType: selectedType,
       content: question.content,
-      options: question.options,
+      options: shuffledOptions,
       segments: question.segments,
       audioText: question.audioText,
       hint: question.hint,
@@ -334,8 +367,18 @@ class PlacementService {
       };
     }
 
+    // Convert user answer from letter (A/B/C/D) to text if needed
+    let userAnswerText = answer;
+    if (answer && answer.length === 1 && question.options) {
+      // It's a letter, convert to text using shuffled options
+      const letterIndex = answer.charCodeAt(0) - 'A'.charCodeAt(0);
+      if (letterIndex >= 0 && letterIndex < question.options.length) {
+        userAnswerText = question.options[letterIndex];
+      }
+    }
+
     // Evaluate answer
-    const isCorrect = this.evaluateAnswer(answer, question.correctAnswer, question.questionType);
+    const isCorrect = this.evaluateAnswer(userAnswerText, question.correctAnswer, question.questionType);
 
     // Save response
     await PlacementResponse.create({
@@ -346,32 +389,37 @@ class PlacementService {
       timeSpentSeconds,
     });
 
-    // Update session stats and streak
-    const newStreakCorrect = isCorrect ? session.streakCorrect + 1 : 0;
-    const newStreakWrong = isCorrect ? 0 : session.streakWrong + 1;
+    // Ability-based adaptive logic
+    // Get current ability score (default to B1 = 3.0 if not set)
+    const currentAbility = session.abilityScore || STARTING_ABILITY;
     
-    let newLevel = session.currentCefrLevel;
+    // Update ability based on answer result and question difficulty
+    const newAbility = this.updateAbility(currentAbility, question.difficultyScore || 3.0, isCorrect);
     
-    // Adaptive logic: Level up/down based on streak
-    if (newStreakCorrect >= LEVEL_UP_STREAK) {
-      newLevel = this.levelUp(session.currentCefrLevel);
-    } else if (newStreakWrong >= LEVEL_DOWN_STREAK) {
-      newLevel = this.levelDown(session.currentCefrLevel);
-    }
+    // Get new level from ability score
+    const newLevel = this.getLevelFromAbility(newAbility);
+    
+    // Update streak for backward compatibility
+    const newStreakCorrect = isCorrect ? (session.streakCorrect || 0) + 1 : 0;
+    const newStreakWrong = isCorrect ? 0 : (session.streakWrong || 0) + 1;
 
     await session.update({
       correctCount: isCorrect ? session.correctCount + 1 : session.correctCount,
       streakCorrect: newStreakCorrect,
       streakWrong: newStreakWrong,
       currentCefrLevel: newLevel,
+      abilityScore: newAbility, // Store continuous ability score
       lastActivityAt: new Date(),
     });
+    
+    await session.reload(); // Refresh session data before checking stop condition
 
     logger.info('PLACEMENT_ANSWER_SUBMITTED', {
       sessionId,
       questionId,
       isCorrect,
       currentLevel: newLevel,
+      abilityScore: newAbility,
       streakCorrect: newStreakCorrect,
       streakWrong: newStreakWrong,
     });
@@ -456,37 +504,6 @@ class PlacementService {
 
     return {
       sessionId: session.id,
-      finalLevel,
-      confidenceScore,
-      totalQuestions: session.questionCount,
-      correctAnswers: session.correctCount,
-      recommendations,
-    };
-  }
-
-  /**
-   * Get session result
-   */
-  async getSessionResult(sessionId) {
-    const session = await PlacementSession.findByPk(sessionId, {
-      include: [
-        { model: PlacementQuestion, as: 'questions' },
-        { model: PlacementResponse, as: 'responses' },
-      ],
-    });
-
-    if (!session) {
-      throw { status: 404, message: 'Session not found' };
-    }
-
-    if (session.status !== 'completed') {
-      return { status: session.status, progress: this.getProgress(session) };
-    }
-
-    const skillBreakdown = this.calculateSkillBreakdown(session);
-
-    return {
-      sessionId: session.id,
       status: session.status,
       finalLevel: session.finalCefrLevel,
       confidenceScore: session.confidenceScore,
@@ -495,7 +512,6 @@ class PlacementService {
       accuracy: session.questionCount > 0 ? (session.correctCount / session.questionCount) : 0,
       skillBreakdown,
       recommendations: await this.generateRecommendations(session, session.finalCefrLevel),
-      aiRecommendations: result.aiInsights,
       completedAt: session.completedAt,
     };
   }
@@ -521,14 +537,48 @@ class PlacementService {
     return skills[questionCount % skills.length];
   }
 
-  levelUp(currentLevel) {
-    const idx = CEFR_LEVELS.indexOf(currentLevel);
-    return idx < CEFR_LEVELS.length - 1 ? CEFR_LEVELS[idx + 1] : currentLevel;
+  /**
+   * Get CEFR level from ability score (1-6 scale)
+   * Maps continuous ability to discrete CEFR level
+   */
+  getLevelFromAbility(abilityScore) {
+    if (abilityScore < 1.5) return 'A1';
+    if (abilityScore < 2.5) return 'A2';
+    if (abilityScore < 3.5) return 'B1';
+    if (abilityScore < 4.5) return 'B2';
+    if (abilityScore < 5.5) return 'C1';
+    return 'C2';
   }
 
-  levelDown(currentLevel) {
-    const idx = CEFR_LEVELS.indexOf(currentLevel);
-    return idx > 0 ? CEFR_LEVELS[idx - 1] : currentLevel;
+  /**
+   * Update ability score based on answer result
+   */
+  calculateFinalLevelFromAbility(abilityScore) {
+    return this.getLevelFromAbility(abilityScore);
+  }
+
+  /**
+   * Update ability using IRT-based formula with smoothing and clamping
+   * @param {number} theta - current ability (1-6)
+   * @param {number} b - question difficulty score (1-6)
+   * @param {boolean} correct - whether answer was correct
+   * @returns {number} new ability score (clamped 1-6)
+   */
+  updateAbility(theta, b, correct) {
+    const LEARNING_RATE = 0.8; // More responsive than 0.5
+    
+    // IRT: probability of correct answer
+    const p = 1 / (1 + Math.exp(-(theta - b)));
+    // Error term (observed - expected)
+    const error = (correct ? 1 : 0) - p;
+    // Update with higher learning rate
+    let newAbility = theta + LEARNING_RATE * error;
+    
+    // Lighter smoothing (50/50 instead of 70/30)
+    newAbility = theta * 0.5 + newAbility * 0.5;
+    
+    // Clamp to valid range 1-6
+    return Math.max(1, Math.min(6, newAbility));
   }
 
   shouldStopTest(session) {
@@ -555,20 +605,22 @@ class PlacementService {
   }
 
   calculateConfidence(session) {
-    // Simple confidence based on consistency
-    if (session.questionCount < 5) return 0.5;
+    // Simple adaptive confidence: more questions = more confident
+    // This is IRT-lite approach - no accuracy-based calculation
+    if (session.questionCount < 5) return 0.3;
     
-    const correctRate = session.correctCount / session.questionCount;
-    const consistency = 1 - Math.abs(correctRate - 0.5) * 2; // Higher when around 50%
-    
-    // More questions = more confident
-    const questionFactor = Math.min(session.questionCount / 15, 1);
-    
-    return Math.min(consistency * questionFactor + 0.5, 0.95);
+    const factor = Math.min(session.questionCount / 15, 1);
+    return Math.min(0.5 + factor * 0.5, 0.95);
   }
 
   calculateFinalLevel(session) {
-    // Weighted by performance at each level
+    // Ability-based final level calculation
+    // Use the stored ability score if available, otherwise calculate from current level
+    if (session.abilityScore && session.abilityScore > 0) {
+      return this.getLevelFromAbility(session.abilityScore);
+    }
+    
+    // Fallback to legacy method if ability score not available
     const levelPerformance = {};
     
     for (const question of session.questions || []) {
@@ -696,8 +748,12 @@ class PlacementService {
           : `Bạn đã sẵn sàng cho khóa học này! Trình độ ${userLevel} phù hợp yêu cầu ${courseLevel}.`;
       case 'challenging':
         return `Khóa học có thể hơi thử thách. Bạn nên ôn tập thêm trước khi bắt đầu.`;
-      case 'not_ready':
-        return `Khóa học quá nâng cao. Bạn cần học khóa ${this.levelUp(userLevel)} trước.`;
+      case 'not_ready': {
+        // Get next level suggestion
+        const idx = CEFR_LEVELS.indexOf(userLevel);
+        const nextLevel = idx < CEFR_LEVELS.length - 1 ? CEFR_LEVELS[idx + 1] : userLevel;
+        return `Khóa học quá nâng cao. Bạn cần học khóa ${nextLevel} trước.`;
+      }
     }
   }
 
@@ -798,47 +854,46 @@ class PlacementService {
 
   /**
    * Calculate similarity between two strings (0-1)
-   * Simple implementation using Levenshtein distance
+   * Check if one string contains the other for better duplicate detection
    */
   contentSimilarity(str1, str2) {
     if (!str1 || !str2) return 0;
     if (str1 === str2) return 1;
     
-    const len1 = str1.length;
-    const len2 = str2.length;
-    const maxLen = Math.max(len1, len2);
+    const s1 = str1.toLowerCase().trim();
+    const s2 = str2.toLowerCase().trim();
     
-    if (maxLen === 0) return 1;
+    // Check if one contains the other (better than character-by-character)
+    if (s1.includes(s2) || s2.includes(s1)) return 0.9;
     
-    // Simple similarity: 1 - (edit distance / max length)
-    // For simplicity, using a basic character match ratio
-    let matches = 0;
-    const minLen = Math.min(len1, len2);
-    
-    for (let i = 0; i < minLen; i++) {
-      if (str1[i] === str2[i]) matches++;
-    }
-    
-    return matches / maxLen;
+    // Fallback to simple word-based similarity
+    const words1 = s1.split(/\s+/);
+    const words2 = s2.split(/\s+/);
+    const commonWords = words1.filter(w => words2.includes(w));
+    return commonWords.length / Math.max(words1.length, words2.length);
   }
 
-  async getFromQuestionBank(cefrLevel, skillType, questionType = 'multiple_choice', excludeIds = [], limit = 20) {
-    // Get multiple questions from bank at once for in-memory filtering
+  async getFromQuestionBank(ability, skillType, questionType = 'multiple_choice', excludeIds = [], limit = 10) {
+    // Continuous adaptive: order by difficulty proximity, no range filter
     const whereClause = {
-      cefrLevel,
       skillType,
       questionType,
       isActive: true,
     };
     
-    // Exclude questions already asked in this session
+    const { Op } = require('sequelize');
+    
+    // Add range filter for performance - only get questions within 1.5 difficulty points
+    whereClause.difficultyScore = {
+      [Op.between]: [ability - 1.5, ability + 1.5]
+    };
     if (excludeIds.length > 0) {
       whereClause.id = { [db.Sequelize.Op.notIn]: excludeIds };
     }
     
     const questions = await PlacementQuestionBank.findAll({
       where: whereClause,
-      order: db.sequelize.random(),
+      order: db.sequelize.literal(`ABS(difficulty_score - ${ability})`),
       limit,
     });
 
@@ -851,244 +906,11 @@ class PlacementService {
         correctAnswer: q.correctAnswer,
         explanation: q.explanation,
         aiGenerated: q.aiGenerated,
+        difficultyScore: q.difficultyScore,
       }));
     }
 
     return [];
-  }
-
-  async saveToQuestionBank(question, cefrLevel, skillType) {
-    try {
-      await PlacementQuestionBank.create({
-        cefrLevel,
-        skillType,
-        questionType: question.type,
-        content: question.content,
-        options: question.options,
-        correctAnswer: question.correctAnswer,
-        explanation: question.explanation,
-        aiGenerated: true,
-        isActive: true,
-      });
-      
-      logger.info('PLACEMENT_QUESTION_SAVED_TO_BANK', { cefrLevel, skillType });
-    } catch (err) {
-      // Non-critical error
-      logger.warn('PLACEMENT_BANK_SAVE_FAILED', { error: err.message });
-    }
-  }
-
-  // ====================
-  // AI GENERATION
-  // ====================
-
-  async generateAiQuestion(session, cefrLevel, skillType, questionType = 'multiple_choice') {
-    const prompt = this.buildPrompt(cefrLevel, skillType, questionType);
-    
-    try {
-      const aiResponse = await aiGateway.generateText({
-        system: 'Bạn là chuyên gia đánh giá trình độ tiếng Anh. Tạo câu hỏi placement test chất lượng cao.',
-        prompt,
-        maxOutputTokens: 800,
-        timeoutMs: 15000,
-      });
-
-      const question = this.parseAiResponse(aiResponse.text, questionType);
-      
-      logger.info('PLACEMENT_AI_QUESTION_GENERATED', {
-        sessionId: session.id,
-        cefrLevel,
-        skillType,
-        questionType,
-      });
-
-      return {
-        ...question,
-        aiGenerated: true,
-        aiRawResponse: aiResponse.text,
-        aiPrompt: prompt,
-      };
-    } catch (err) {
-      logger.error('PLACEMENT_AI_GENERATION_FAILED', {
-        sessionId: session.id,
-        cefrLevel,
-        skillType,
-        questionType,
-        error: err.message,
-      });
-      
-      // Fallback to simple question
-      return this.getFallbackQuestion(cefrLevel, skillType);
-    }
-  }
-
-  buildPrompt(cefrLevel, skillType, questionType = 'multiple_choice') {
-    const levelDescriptions = {
-      'A1': 'người mới bắt đầu, từ vựng cơ bản, câu đơn giản',
-      'A2': 'sơ cấp, giao tiếp hàng ngày đơn giản',
-      'B1': 'trung cấp, miêu tả kinh nghiệm, ý kiến',
-      'B2': 'trung cấp cao, tương tác phức tạp, văn bản chi tiết',
-      'C1': 'cao cấp, ngôn ngữ linh hoạt, hiểu ngụ ý',
-      'C2': 'thành thạo, chính xác cao, phân biệt tinh tế',
-    };
-
-    const skillPrompts = {
-      'grammar': 'ngữ pháp (thì, cấu trúc câu, giới từ)',
-      'vocabulary': 'từ vựng (nghĩa từ, collocation, phrasal verb)',
-      'reading': 'đọc hiểu (đoạn văn ngắn + câu hỏi)',
-      'listening': 'nghe hiểu',
-    };
-
-    // Different formats based on question type
-    const typeFormats = {
-      'multiple_choice': {
-        format: `{
-  "type": "multiple_choice",
-  "content": "Câu hỏi...",
-  "options": ["A. ...", "B. ...", "C. ...", "D. ..."],
-  "correctAnswer": "A",
-  "explanation": "Giải thích..."
-}`,
-        requirements: '- 4 options cho multiple choice\n- correctAnswer là A, B, C, hoặc D',
-      },
-      'fill_blank': {
-        format: `{
-  "type": "fill_blank",
-  "content": "Câu có chỗ trống ____ để điền từ.",
-  "correctAnswer": "từ điền vào",
-  "explanation": "Giải thích...",
-  "hint": "gợi ý (nếu cần)"
-}`,
-        requirements: '- Câu có dấu ____ hoặc ______\n- correctAnswer là từ điền vào chỗ trống',
-      },
-      'listening': {
-        format: `{
-  "type": "listening",
-  "content": "Transcript hoặc mô tả audio...",
-  "audioText": "Nội dung audio script",
-  "options": ["A. ...", "B. ...", "C. ...", "D. ..."],
-  "correctAnswer": "A",
-  "explanation": "Giải thích..."
-}`,
-        requirements: '- Tạo transcript ngắn (2-3 câu đối thoại hoặc 1 đoạn ngắn)\n- 4 options trả lời\n- correctAnswer là A, B, C, hoặc D',
-      },
-      'sentence_ordering': {
-        format: `{
-  "type": "sentence_ordering",
-  "content": "Sắp xếp các phần thành câu hoàn chỉnh",
-  "segments": ["phần 1", "phần 2", "phần 3", "phần 4"],
-  "correctAnswer": "A-B-C-D",
-  "explanation": "Giải thích thứ tự đúng..."
-}`,
-        requirements: '- 4 segments để học sinh sắp xếp\n- correctAnswer là thứ tự đúng ví dụ: "B-A-C-D"',
-      },
-    };
-
-    const typeFormat = typeFormats[questionType] || typeFormats['multiple_choice'];
-
-    return `Tạo 1 câu hỏi placement test ${skillPrompts[skillType]} cho trình độ ${cefrLevel} (${levelDescriptions[cefrLevel]}).
-
-LOẠI CÂU HỎI: ${questionType}
-
-Format JSON:
-${typeFormat.format}
-
-Yêu cầu:
-- Độ khó phù hợp ${cefrLevel}
-${typeFormat.requirements}
-- Chỉ trả về JSON, không thêm text khác`;
-  }
-
-  parseAiResponse(text, questionType = 'multiple_choice') {
-    try {
-      // Extract JSON from response
-      const jsonMatch = text.match(/\{[\s\S]*\}/);
-      if (jsonMatch) {
-        const parsed = JSON.parse(jsonMatch[0]);
-        
-        // Base question structure
-        const question = {
-          type: parsed.type || questionType,
-          content: parsed.content,
-          correctAnswer: parsed.correctAnswer,
-          explanation: parsed.explanation || '',
-        };
-
-        // Add type-specific fields
-        switch (questionType) {
-          case 'multiple_choice':
-          case 'listening':
-            question.options = parsed.options || [];
-            if (questionType === 'listening') {
-              question.audioText = parsed.audioText || '';
-            }
-            break;
-          case 'fill_blank':
-            question.hint = parsed.hint || '';
-            break;
-          case 'sentence_ordering':
-            question.segments = parsed.segments || [];
-            break;
-          default:
-            question.options = parsed.options || [];
-        }
-
-        return question;
-      }
-    } catch (err) {
-      logger.warn('PLACEMENT_AI_PARSE_FAILED', { text: text?.substring(0, 100), questionType });
-    }
-    
-    return this.getFallbackQuestion('B1', 'grammar');
-  }
-
-  getFallbackQuestion(cefrLevel, skillType) {
-    const fallbacks = {
-      'A1': {
-        type: 'multiple_choice',
-        content: 'Choose the correct sentence: "I ___ a student."',
-        options: ['A. am', 'B. is', 'C. are', 'D. be'],
-        correctAnswer: 'A',
-        explanation: 'I goes with "am"',
-      },
-      'A2': {
-        type: 'multiple_choice',
-        content: 'Yesterday, I ___ to the cinema.',
-        options: ['A. go', 'B. went', 'C. gone', 'D. going'],
-        correctAnswer: 'B',
-        explanation: 'Past tense of go is "went"',
-      },
-      'B1': {
-        type: 'multiple_choice',
-        content: 'If I ___ more time, I would learn French.',
-        options: ['A. have', 'B. had', 'C. would have', 'D. will have'],
-        correctAnswer: 'B',
-        explanation: 'Second conditional uses past simple',
-      },
-      'B2': {
-        type: 'multiple_choice',
-        content: 'Despite ___ late, they managed to catch the train.',
-        options: ['A. to be', 'B. being', 'C. been', 'D. be'],
-        correctAnswer: 'B',
-        explanation: 'After despite, use gerund (being)',
-      },
-      'C1': {
-        type: 'multiple_choice',
-        content: 'The company is expected to ___ significant losses this quarter.',
-        options: ['A. post', 'B. publish', 'C. announce', 'D. declare'],
-        correctAnswer: 'A',
-        explanation: '"Post losses" is the correct business collocation',
-      },
-      'C2': {
-        type: 'multiple_choice',
-        content: 'The veracity of his claims was ___ by independent auditors.',
-        options: ['A. substantiated', 'B. supported', 'C. confirmed', 'D. backed'],
-        correctAnswer: 'A',
-        explanation: '"Substantiated" implies formal verification with evidence',
-      },
-    };
-
-    return fallbacks[cefrLevel] || fallbacks['B1'];
   }
 
   evaluateAnswer(userAnswer, correctAnswer, questionType) {
@@ -1100,11 +922,14 @@ ${typeFormat.requirements}
     switch (questionType) {
       case 'multiple_choice':
       case 'listening':
-        // For multiple choice, check letter (A, B, C, D) or full option
-        if (normalizedUser.length === 1) {
-          return normalizedUser === normalizedCorrect.charAt(0);
+        // correctAnswer is now stored as text (not letter), so compare text-to-text
+        // User might send letter (A/B/C/D) or the actual text - try both
+        if (normalizedUser === normalizedCorrect) {
+          return true;
         }
-        return normalizedUser === normalizedCorrect;
+        // If user sends a letter, we can't validate it without options array
+        // The frontend should send the actual text answer, not the letter
+        return false;
         
       case 'fill_blank':
         // For fill blank, exact match or accept variations
@@ -1172,13 +997,6 @@ ${typeFormat.requirements}
   }
 
   /**
-   * Get session by ID (for ownership verification)
-   */
-  async getSession(sessionId) {
-    return await PlacementSession.findByPk(sessionId);
-  }
-
-  /**
    * Get current in-progress session for user (for resume test)
    */
   async getCurrentInProgressSession(userId) {
@@ -1193,13 +1011,6 @@ ${typeFormat.requirements}
     });
     
     return session;
-  }
-
-  /**
-   * Cancel a session (user cancels their own test)
-   */
-  async cancelSession(sessionId) {
-    return await this.deleteSession(sessionId);
   }
 
   // ==================== RETAKE & HISTORY ====================

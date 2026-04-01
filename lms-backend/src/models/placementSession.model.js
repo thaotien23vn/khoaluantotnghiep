@@ -34,6 +34,12 @@ module.exports = (sequelize) => {
         defaultValue: "B1",
         field: "current_cefr_level",
       },
+      abilityScore: {
+        type: DataTypes.FLOAT,
+        defaultValue: 3.0, // Start at B1 level (score 3)
+        field: "ability_score",
+        comment: "Continuous ability score for adaptive algorithm (1-6 scale)",
+      },
       questionCount: {
         type: DataTypes.INTEGER,
         defaultValue: 0,
