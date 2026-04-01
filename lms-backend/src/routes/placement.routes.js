@@ -117,6 +117,15 @@ router.post(
   placementController.completeSession
 );
 
+// Cancel/delete test session (user cancels their own test)
+router.delete(
+  '/student/placement/:sessionId/cancel',
+  authMiddleware,
+  authorizeRole('student', 'admin'),
+  sessionIdValidation,
+  placementController.cancelSession
+);
+
 // Get result
 router.get(
   '/student/placement/:sessionId/result',
@@ -140,6 +149,14 @@ router.get(
   authMiddleware,
   authorizeRole('student', 'admin'),
   placementController.getUserPlacementHistory
+);
+
+// Get current in-progress session (for resume test)
+router.get(
+  '/student/placement/current',
+  authMiddleware,
+  authorizeRole('student', 'admin'),
+  placementController.getCurrentSession
 );
 
 // Admin: Get question bank statistics

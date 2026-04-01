@@ -141,7 +141,36 @@ class PlacementService {
     const selectedType = questionTypes[Math.floor(Math.random() * questionTypes.length)];
     
     // Try to get from question bank first, excluding already asked questions
-    let question = await this.getFromQuestionBank(currentLevel, skillType, selectedType, askedBankQuestionIds);
+    let question = null;
+    let bankAttempts = 0;
+    const maxBankAttempts = 5;
+    
+    while (!question && bankAttempts < maxBankAttempts) {
+      bankAttempts++;
+      const bankQuestion = await this.getFromQuestionBank(currentLevel, skillType, selectedType, askedBankQuestionIds);
+      
+      if (!bankQuestion) break; // No more questions in bank
+      
+      // Check if bank question content is duplicate
+      const normalizedBankContent = this.normalizeContent(bankQuestion.content);
+      const isBankDuplicate = askedContents.some(askedContent => 
+        askedContent === normalizedBankContent || 
+        this.contentSimilarity(askedContent, normalizedBankContent) > 0.8
+      );
+      
+      if (!isBankDuplicate) {
+        question = bankQuestion;
+      } else {
+        // Add to exclude list and try again
+        askedBankQuestionIds.push(bankQuestion.id);
+        logger.warn('PLACEMENT_BANK_DUPLICATE_DETECTED', {
+          sessionId: session.id,
+          attempt: bankAttempts,
+          bankQuestionId: bankQuestion.id,
+          content: bankQuestion.content?.substring(0, 100),
+        });
+      }
+    }
     
     // If not in bank or we want fresh AI questions, generate with AI
     let attempts = 0;
@@ -1073,6 +1102,56 @@ ${typeFormat.requirements}
       accuracy: session.questionCount > 0 ? (session.correctCount / session.questionCount) : 0,
       startedAt: session.created_at,
     };
+  }
+
+  /**
+   * Get session by ID (for ownership verification)
+   * @param {number} sessionId
+   * @returns {Object} session
+   */
+  async getSession(sessionId) {
+    return await PlacementSession.findByPk(sessionId);
+  }
+
+  /**
+   * Cancel a session (user cancels their own test)
+   * Same as deleteSession but with user permission check
+   * @param {number} sessionId
+   */
+  async cancelSession(sessionId) {
+    // Reuse deleteSession logic
+    return await this.deleteSession(sessionId);
+  }
+
+  /**
+   * Get session by ID (for ownership verification)
+   */
+  async getSession(sessionId) {
+    return await PlacementSession.findByPk(sessionId);
+  }
+
+  /**
+   * Get current in-progress session for user (for resume test)
+   */
+  async getCurrentInProgressSession(userId) {
+    if (!userId) return null;
+    
+    const session = await PlacementSession.findOne({
+      where: {
+        userId,
+        status: 'in_progress',
+      },
+      order: [['created_at', 'DESC']], // Get most recent
+    });
+    
+    return session;
+  }
+
+  /**
+   * Cancel a session (user cancels their own test)
+   */
+  async cancelSession(sessionId) {
+    return await this.deleteSession(sessionId);
   }
 
   // ==================== RETAKE & HISTORY ====================

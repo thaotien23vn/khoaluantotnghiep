@@ -118,6 +118,62 @@ class PlacementController {
   }
 
   /**
+   * DELETE /student/placement/:sessionId/cancel
+   * Cancel/delete a session (user cancels their own test)
+   */
+  async cancelSession(req, res, next) {
+    try {
+      const { sessionId } = req.params;
+      const userId = req.user?.id;
+
+      // Verify user owns this session or is admin
+      const session = await placementService.getSession(sessionId);
+      if (!session) {
+        return res.status(404).json({
+          success: false,
+          message: 'Session not found',
+        });
+      }
+
+      // Check ownership - allow if user owns session or is admin
+      const isOwner = session.userId === userId;
+      const isAdmin = req.user?.role === 'admin';
+      
+      if (!isOwner && !isAdmin) {
+        return res.status(403).json({
+          success: false,
+          message: 'Not authorized to cancel this session',
+        });
+      }
+
+      // Only allow canceling in_progress sessions
+      if (session.status !== 'in_progress') {
+        return res.status(400).json({
+          success: false,
+          message: 'Can only cancel sessions that are in progress',
+        });
+      }
+
+      const result = await placementService.cancelSession(sessionId);
+
+      res.json({
+        success: true,
+        data: {
+          sessionId: parseInt(sessionId),
+          status: 'cancelled',
+          message: 'Bài kiểm tra đã được hủy thành công',
+        },
+      });
+    } catch (err) {
+      logger.error('PLACEMENT_CANCEL_ERROR', {
+        sessionId: req.params.sessionId,
+        error: err.message,
+      });
+      next(err);
+    }
+  }
+
+  /**
    * GET /student/placement/:sessionId/result
    * Get session result
    */
@@ -222,6 +278,53 @@ class PlacementController {
       });
     } catch (err) {
       logger.error('PLACEMENT_PROGRESS_ERROR', { error: err.message });
+      next(err);
+    }
+  }
+
+  /**
+   * GET /student/placement/current
+   * Get current in-progress session for resume test
+   */
+  async getCurrentSession(req, res, next) {
+    try {
+      const userId = req.user?.id;
+      
+      if (!userId) {
+        return res.status(401).json({
+          success: false,
+          message: 'Unauthorized',
+        });
+      }
+
+      const session = await placementService.getCurrentInProgressSession(userId);
+
+      if (!session) {
+        return res.json({
+          success: true,
+          data: null,
+          message: 'No in-progress session found',
+        });
+      }
+
+      res.json({
+        success: true,
+        data: {
+          sessionId: session.id,
+          status: session.status,
+          currentQuestion: session.questionCount,
+          totalQuestions: session.isQuickCheck ? 3 : 20,
+          currentLevel: session.currentCefrLevel,
+          correctCount: session.correctCount,
+          accuracy: session.questionCount > 0 ? (session.correctCount / session.questionCount) : 0,
+          isQuickCheck: session.isQuickCheck,
+          createdAt: session.created_at,
+        },
+      });
+    } catch (err) {
+      logger.error('PLACEMENT_GET_CURRENT_ERROR', {
+        error: err.message,
+      });
       next(err);
     }
   }
