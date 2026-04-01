@@ -124,6 +124,15 @@ class PlacementService {
       return { completed: true, result };
     }
 
+    // Get IDs of questions already asked in this session (from both PlacementQuestion and bank)
+    const askedBankQuestionIds = (session.questions || [])
+      .filter(q => q.aiGenerated === false || q.bankQuestionId)
+      .map(q => q.bankQuestionId)
+      .filter(id => id); // Remove nulls
+    
+    // Get content of all questions already asked (for AI duplicate check)
+    const askedContents = (session.questions || []).map(q => this.normalizeContent(q.content));
+
     const currentLevel = session.currentCefrLevel;
     const skillType = this.selectSkillType(session.questionCount);
     
@@ -131,15 +140,38 @@ class PlacementService {
     const questionTypes = ['multiple_choice', 'fill_blank', 'listening', 'sentence_ordering'];
     const selectedType = questionTypes[Math.floor(Math.random() * questionTypes.length)];
     
-    // Try to get from question bank first (hybrid approach)
-    let question = await this.getFromQuestionBank(currentLevel, skillType, selectedType);
+    // Try to get from question bank first, excluding already asked questions
+    let question = await this.getFromQuestionBank(currentLevel, skillType, selectedType, askedBankQuestionIds);
     
     // If not in bank or we want fresh AI questions, generate with AI
+    let attempts = 0;
+    const maxAttempts = 3;
+    
+    while (!question && attempts < maxAttempts) {
+      attempts++;
+      const aiQuestion = await this.generateAiQuestion(session, currentLevel, skillType, selectedType);
+      
+      // Check if AI generated a duplicate (same content as already asked)
+      const normalizedContent = this.normalizeContent(aiQuestion.content);
+      const isDuplicate = askedContents.some(askedContent => 
+        askedContent === normalizedContent || 
+        this.contentSimilarity(askedContent, normalizedContent) > 0.8
+      );
+      
+      if (!isDuplicate) {
+        question = aiQuestion;
+      } else {
+        logger.warn('PLACEMENT_AI_DUPLICATE_DETECTED', {
+          sessionId: session.id,
+          attempt: attempts,
+          content: aiQuestion.content?.substring(0, 100),
+        });
+      }
+    }
+    
+    // If still no question after max attempts, use whatever we have
     if (!question) {
       question = await this.generateAiQuestion(session, currentLevel, skillType, selectedType);
-      
-      // Save to question bank for future reuse
-      await this.saveToQuestionBank(question, currentLevel, skillType);
     }
 
     // Anti-gaming: Shuffle options so correct answer position varies
@@ -672,15 +704,61 @@ class PlacementService {
   // HYBRID APPROACH: DB CACHE
   // ====================
 
-  async getFromQuestionBank(cefrLevel, skillType, questionType = 'multiple_choice') {
-    // Get random question from bank matching criteria
+  /**
+   * Normalize content for duplicate checking
+   * Remove extra spaces, lowercase, trim
+   */
+  normalizeContent(content) {
+    if (!content) return '';
+    return content
+      .toLowerCase()
+      .replace(/\s+/g, ' ')
+      .replace(/[^a-z0-9\s]/g, '')
+      .trim();
+  }
+
+  /**
+   * Calculate similarity between two strings (0-1)
+   * Simple implementation using Levenshtein distance
+   */
+  contentSimilarity(str1, str2) {
+    if (!str1 || !str2) return 0;
+    if (str1 === str2) return 1;
+    
+    const len1 = str1.length;
+    const len2 = str2.length;
+    const maxLen = Math.max(len1, len2);
+    
+    if (maxLen === 0) return 1;
+    
+    // Simple similarity: 1 - (edit distance / max length)
+    // For simplicity, using a basic character match ratio
+    let matches = 0;
+    const minLen = Math.min(len1, len2);
+    
+    for (let i = 0; i < minLen; i++) {
+      if (str1[i] === str2[i]) matches++;
+    }
+    
+    return matches / maxLen;
+  }
+
+  async getFromQuestionBank(cefrLevel, skillType, questionType = 'multiple_choice', excludeIds = []) {
+    // Get random question from bank matching criteria, excluding already asked questions
+    const whereClause = {
+      cefrLevel,
+      skillType,
+      questionType,
+      isActive: true,
+    };
+    
+    // Exclude questions already asked in this session
+    if (excludeIds.length > 0) {
+      whereClause.id = { [db.Sequelize.Op.notIn]: excludeIds };
+    }
+    
     const question = await PlacementQuestionBank.findOne({
-      where: {
-        cefrLevel,
-        skillType,
-        questionType,
-        isActive: true,
-      },
+      where: whereClause,
       order: db.sequelize.random(),
     });
 
@@ -689,6 +767,7 @@ class PlacementService {
       await question.increment('usageCount');
       
       return {
+        id: question.id, // Include bank ID for duplicate tracking
         type: question.questionType,
         content: question.content,
         options: question.options,
