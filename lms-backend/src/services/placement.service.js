@@ -432,6 +432,7 @@ class PlacementService {
     });
 
     // Check if test should auto-complete after this answer
+    // Pass false for userChoseToStop - only auto-complete at MAX_QUESTIONS
     const shouldComplete = this.shouldStopTest({
       ...session.toJSON(),
       correctCount: isCorrect ? session.correctCount + 1 : session.correctCount,
@@ -439,7 +440,7 @@ class PlacementService {
       streakWrong: newStreakWrong,
       currentCefrLevel: newLevel,
       abilityScore: newAbility,
-    });
+    }, false);
     if (shouldComplete) {
       logger.info('PLACEMENT_AUTO_COMPLETING', {
         sessionId,
@@ -459,6 +460,18 @@ class PlacementService {
       };
     }
 
+    // Check if student can choose to stop early (min questions + confident enough)
+    const updatedSession = {
+      ...session.toJSON(),
+      correctCount: isCorrect ? session.correctCount + 1 : session.correctCount,
+      streakCorrect: newStreakCorrect,
+      streakWrong: newStreakWrong,
+      currentCefrLevel: newLevel,
+      abilityScore: newAbility,
+    };
+    const canStopEarly = updatedSession.questionCount >= MIN_QUESTIONS && 
+                         this.calculateConfidence(updatedSession) >= CONFIDENCE_THRESHOLD;
+
     // Return immediate feedback for ongoing test
     return {
       isCorrect,
@@ -467,6 +480,10 @@ class PlacementService {
       currentLevel: newLevel,
       streakCorrect: newStreakCorrect,
       streakWrong: newStreakWrong,
+      canStopEarly,
+      questionCount: updatedSession.questionCount,
+      minQuestions: MIN_QUESTIONS,
+      maxQuestions: MAX_QUESTIONS,
     };
   }
 
@@ -605,7 +622,7 @@ class PlacementService {
     return Math.max(1, Math.min(6, newAbility));
   }
 
-  shouldStopTest(session) {
+  shouldStopTest(session, userChoseToStop = false) {
     // Quick check: always stop at exactly QUICK_CHECK_QUESTIONS (7)
     if (session.isQuickCheck) {
       if (session.questionCount >= QUICK_CHECK_QUESTIONS) return true;
@@ -613,17 +630,15 @@ class PlacementService {
     }
 
     // Stop conditions for full test:
-    // 1. Max questions reached
+    // 1. Max questions reached - ALWAYS STOP
     if (session.questionCount >= MAX_QUESTIONS) return true;
     
-    // 2. Min questions and confident enough
-    if (session.questionCount >= MIN_QUESTIONS) {
+    // 2. Early stop - ONLY if student explicitly chose to stop
+    // AND has enough questions + confidence
+    if (userChoseToStop && session.questionCount >= MIN_QUESTIONS) {
       const confidence = this.calculateConfidence(session);
       if (confidence >= CONFIDENCE_THRESHOLD) return true;
     }
-    
-    // 3. No change in level for last 5 questions (stabilized)
-    // This would require tracking level history
     
     return false;
   }
