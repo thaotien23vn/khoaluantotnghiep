@@ -1,4 +1,5 @@
 const db = require('../models/index');
+const { models } = require('../models');
 const aiGateway = require('./aiGateway.service');
 const placementAiRecommendations = require('./placementAiRecommendations.service');
 const logger = require('../utils/logger');
@@ -590,7 +591,7 @@ class PlacementService {
    * @param {number} userId 
    */
   async getSessionReview(sessionId, userId) {
-    const { PlacementSession, PlacementQuestion, PlacementResponse } = require('../models');
+    const { PlacementSession, PlacementQuestion, PlacementResponse } = models;
 
     const session = await PlacementSession.findOne({
       where: { id: sessionId, userId },
@@ -1424,54 +1425,6 @@ class PlacementService {
       message: 'Đã reset cooldown cho user. User có thể làm lại placement test ngay lập tức.',
       previousSessionId: lastSession.id,
       previousLevel: lastSession.finalCefrLevel,
-    };
-  }
-
-  /**
-   * Get session review with questions and user responses
-   * @param {number} sessionId 
-   * @param {number} userId 
-   */
-  async getSessionReview(sessionId, userId) {
-    const { PlacementSession, PlacementQuestion, PlacementResponse } = require('../models');
-
-    const session = await PlacementSession.findOne({
-      where: { id: sessionId, userId },
-      include: [
-        { model: PlacementQuestion, as: 'questions' },
-        { model: PlacementResponse, as: 'responses' }
-      ]
-    });
-
-    if (!session) {
-      throw { status: 404, message: 'Không tìm thấy session' };
-    }
-
-    // Map questions with user answers
-    const questions = (session.questions || []).map(q => {
-      const response = (session.responses || []).find(r => r.questionId === q.id);
-      return {
-        questionId: q.id,
-        type: q.type,
-        content: q.content,
-        options: q.options,
-        correctAnswer: q.correctAnswer,
-        userAnswer: response ? response.userAnswer : null,
-        isCorrect: response ? response.isCorrect : null,
-        cefrLevel: q.cefrLevel,
-        skill: q.skill,
-        explanation: q.explanation || null
-      };
-    });
-
-    return {
-      sessionId: session.id,
-      finalLevel: session.finalCefrLevel,
-      accuracy: session.accuracy,
-      confidenceScore: session.confidenceScore,
-      completedAt: session.completedAt,
-      totalQuestions: questions.length,
-      questions
     };
   }
 
