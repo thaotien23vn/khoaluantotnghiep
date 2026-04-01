@@ -324,6 +324,8 @@ class PlacementService {
       questionId: placementQuestion.id,
       questionIndex: placementQuestion.questionIndex,
       cefrLevel: targetLevel,
+      abilityScore: session.abilityScore || STARTING_ABILITY,
+      difficultyScore: question.difficultyScore,
       skillType,
       questionType: selectedType,
       content: question.content,
@@ -482,6 +484,7 @@ class PlacementService {
       correctAnswer: question.correctAnswer,
       explanation: question.explanation,
       currentLevel: newLevel,
+      abilityScore: newAbility,
       streakCorrect: newStreakCorrect,
       streakWrong: newStreakWrong,
       canStopEarly,
@@ -541,6 +544,42 @@ class PlacementService {
       accuracy: session.questionCount > 0 ? (session.correctCount / session.questionCount) : 0,
       skillBreakdown,
       recommendations: await this.generateRecommendations(session, session.finalCefrLevel),
+      completedAt: session.completedAt,
+    };
+  }
+
+  /**
+   * Get session result (for retrieving results after completion)
+   */
+  async getSessionResult(sessionId) {
+    const session = await PlacementSession.findByPk(sessionId, {
+      include: [
+        { model: PlacementQuestion, as: 'questions' },
+        { model: PlacementResponse, as: 'responses' },
+      ],
+    });
+
+    if (!session) {
+      throw { status: 404, message: 'Session not found' };
+    }
+
+    if (session.status !== 'completed') {
+      throw { status: 400, message: 'Session is not completed' };
+    }
+
+    const skillBreakdown = this.calculateSkillBreakdown(session);
+    const recommendations = await this.generateRecommendations(session, session.finalCefrLevel, skillBreakdown);
+
+    return {
+      sessionId: session.id,
+      status: session.status,
+      finalLevel: session.finalCefrLevel,
+      confidenceScore: session.confidenceScore,
+      totalQuestions: session.questionCount,
+      correctAnswers: session.correctCount,
+      accuracy: session.questionCount > 0 ? (session.correctCount / session.questionCount) : 0,
+      skillBreakdown,
+      recommendations,
       completedAt: session.completedAt,
     };
   }
