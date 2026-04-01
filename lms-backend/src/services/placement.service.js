@@ -923,6 +923,7 @@ class PlacementService {
 
   async getFromQuestionBank(ability, skillType, questionType = 'multiple_choice', excludeIds = [], limit = 10) {
     // Continuous adaptive: order by difficulty proximity, no range filter
+    logger.info('[DEBUG] getFromQuestionBank - START:', { ability, skillType, questionType, excludeIdsCount: excludeIds.length, limit });
     logger.info('[DEBUG] getFromQuestionBank - Op check:', { Op: typeof Op, hasBetween: Op ? !!Op.between : false });
     
     const whereClause = {
@@ -932,12 +933,35 @@ class PlacementService {
     };
     
     // Add range filter for performance - only get questions within 1.5 difficulty points
+    const minDifficulty = ability - 1.5;
+    const maxDifficulty = ability + 1.5;
     whereClause.difficultyScore = {
-      [Op.between]: [ability - 1.5, ability + 1.5]
+      [Op.between]: [minDifficulty, maxDifficulty]
     };
+    
+    logger.info('[DEBUG] getFromQuestionBank - whereClause:', { 
+      skillType, 
+      questionType, 
+      isActive: true, 
+      difficultyRange: `[${minDifficulty}, ${maxDifficulty}]`,
+      excludeIds: excludeIds.length > 0 ? excludeIds : 'none'
+    });
+    
     if (excludeIds.length > 0) {
       whereClause.id = { [Op.notIn]: excludeIds };
     }
+    
+    // First, count total available questions without filters
+    const totalCount = await PlacementQuestionBank.count({
+      where: { skillType, questionType, isActive: true }
+    });
+    logger.info('[DEBUG] getFromQuestionBank - total available (no difficulty filter):', { totalCount });
+    
+    // Count with difficulty filter
+    const filteredCount = await PlacementQuestionBank.count({
+      where: whereClause
+    });
+    logger.info('[DEBUG] getFromQuestionBank - filtered count (with difficulty):', { filteredCount });
     
     const questions = await PlacementQuestionBank.findAll({
       where: whereClause,
@@ -945,6 +969,8 @@ class PlacementService {
       limit,
     });
 
+    logger.info('[DEBUG] getFromQuestionBank - query result:', { foundCount: questions?.length || 0 });
+    
     if (questions && questions.length > 0) {
       return questions.map(q => ({
         id: q.id,
