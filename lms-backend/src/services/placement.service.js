@@ -273,17 +273,22 @@ class PlacementService {
       };
     }
 
-    // Anti-gaming: Shuffle options so correct answer position varies
-    const shuffledOptions = this.shuffleArray(question.options || []);
+    // Anti-gaming: Strip old prefixes, shuffle, then add new clean prefixes
+    const cleanOptions = (question.options || []).map(opt => this.stripOptionPrefix(opt));
+    const shuffledCleanOptions = this.shuffleArray(cleanOptions);
+    const formattedOptions = this.formatOptionsWithPrefixes(shuffledCleanOptions);
     
-    // Convert correctAnswer from letter (A/B/C/D) to actual text for proper evaluation after shuffle
+    // Convert correctAnswer from letter (A/B/C/D) to actual text (stripping prefix)
     let correctAnswerText = question.correctAnswer;
     if (question.correctAnswer && question.correctAnswer.length === 1 && question.options) {
-      // It's a letter, convert to text
+      // It's a letter, convert to text from original options (with prefix stripped)
       const letterIndex = question.correctAnswer.charCodeAt(0) - 'A'.charCodeAt(0);
       if (letterIndex >= 0 && letterIndex < question.options.length) {
-        correctAnswerText = question.options[letterIndex];
+        correctAnswerText = this.stripOptionPrefix(question.options[letterIndex]);
       }
+    } else if (question.correctAnswer) {
+      // Already text, just strip prefix if any
+      correctAnswerText = this.stripOptionPrefix(question.correctAnswer);
     }
     
     // Create placement question for this session
@@ -295,8 +300,8 @@ class PlacementService {
       skillType,
       questionType: selectedType,
       content: question.content,
-      options: shuffledOptions,
-      correctAnswer: correctAnswerText, // Store text instead of letter
+      options: formattedOptions, // Store with new prefixes A., B., C., D.
+      correctAnswer: correctAnswerText, // Store clean text without prefix
       explanation: question.explanation,
       aiGenerated: false, // From question bank
       bankQuestionId: question.id, // Track which bank question this came from
@@ -318,7 +323,7 @@ class PlacementService {
       skillType,
       questionType: selectedType,
       content: question.content,
-      options: shuffledOptions,
+      options: formattedOptions, // Return with clean prefixes A., B., C., D.
       segments: question.segments,
       audioText: question.audioText,
       hint: question.hint,
@@ -370,11 +375,14 @@ class PlacementService {
     // Convert user answer from letter (A/B/C/D) to text if needed
     let userAnswerText = answer;
     if (answer && answer.length === 1 && question.options) {
-      // It's a letter, convert to text using shuffled options
+      // It's a letter, convert to text using shuffled options (strip prefix for comparison)
       const letterIndex = answer.charCodeAt(0) - 'A'.charCodeAt(0);
       if (letterIndex >= 0 && letterIndex < question.options.length) {
-        userAnswerText = question.options[letterIndex];
+        userAnswerText = this.stripOptionPrefix(question.options[letterIndex]);
       }
+    } else if (answer) {
+      // Already text, strip prefix if any
+      userAnswerText = this.stripOptionPrefix(answer);
     }
 
     // Evaluate answer
@@ -840,10 +848,27 @@ class PlacementService {
   // ====================
 
   /**
-   * Normalize content for duplicate checking
-   * Remove extra spaces, lowercase, trim
+   * Strip letter prefix (A. B. C. D.) from option text
+   * Handles formats: "A. option", "A.option", "A) option"
    */
-  normalizeContent(content) {
+  stripOptionPrefix(option) {
+    if (!option) return '';
+    // Remove letter prefix patterns: "A. ", "A)", "A) ", etc.
+    return option.toString().replace(/^[A-D][.):]\s*/i, '').trim();
+  }
+
+  /**
+   * Format options with clean letter prefixes (A, B, C, D)
+   * Removes old prefixes and adds new sequential ones
+   */
+  formatOptionsWithPrefixes(options) {
+    if (!options || !Array.isArray(options)) return [];
+    return options.map((opt, idx) => {
+      const cleanText = this.stripOptionPrefix(opt);
+      const letter = String.fromCharCode(65 + idx); // A, B, C, D
+      return `${letter}. ${cleanText}`;
+    });
+  }
     if (!content) return '';
     return content
       .toLowerCase()
