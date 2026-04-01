@@ -869,13 +869,6 @@ class PlacementService {
       return `${letter}. ${cleanText}`;
     });
   }
-    if (!content) return '';
-    return content
-      .toLowerCase()
-      .replace(/\s+/g, ' ')
-      .replace(/[^a-z0-9\s]/g, '')
-      .trim();
-  }
 
   /**
    * Calculate similarity between two strings (0-1)
