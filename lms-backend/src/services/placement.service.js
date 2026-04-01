@@ -591,8 +591,6 @@ class PlacementService {
    * @param {number} userId 
    */
   async getSessionReview(sessionId, userId) {
-    const { PlacementSession, PlacementQuestion, PlacementResponse } = models;
-
     const session = await PlacementSession.findOne({
       where: { id: sessionId, userId },
       include: [
