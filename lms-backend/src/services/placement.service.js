@@ -596,8 +596,7 @@ class PlacementService {
       include: [
         { 
           model: PlacementQuestion, 
-          as: 'questions',
-          through: { attributes: [] }
+          as: 'questions'
         },
         { 
           model: PlacementResponse, 
