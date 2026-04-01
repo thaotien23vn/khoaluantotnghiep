@@ -496,13 +496,23 @@ class PlacementService {
       completedAt: new Date(),
     });
 
-    // Generate AI-powered recommendations
+    // Generate AI-powered recommendations with error handling
     const skillBreakdown = this.calculateSkillBreakdown(session);
-    const aiRecommendations = await placementAiRecommendations.generatePlacementRecommendations(
-      session,
-      skillBreakdown,
-      finalLevel
-    );
+    let aiRecommendations = null;
+    try {
+      aiRecommendations = await placementAiRecommendations.generatePlacementRecommendations(
+        session,
+        skillBreakdown,
+        finalLevel
+      );
+    } catch (aiError) {
+      logger.warn('AI_RECOMMENDATIONS_FAILED', { sessionId, error: aiError.message });
+      // Fallback: use rule-based recommendations only
+      aiRecommendations = {
+        summary: `Trình độ ${finalLevel}. Tiếp tục phát triển các kỹ năng còn yếu.`,
+        focusAreas: skillBreakdown?.filter(s => s.accuracy < 0.6).map(s => s.skill) || [],
+      };
+    }
 
     // Combine both rule-based and AI recommendations
     const recommendations = await this.generateRecommendations(session, finalLevel, skillBreakdown);
@@ -783,17 +793,17 @@ class PlacementService {
     
     // If we have weak areas, try to find courses that cover them
     if (weakAreas.length > 0) {
-      const searchTerms = weakAreas.map(area => area.toLowerCase());
+      // For JSON arrays: use json_array_elements_text
+      const searchPatterns = weakAreas.map(area => area.toLowerCase());
       
       // Find courses that mention weak areas in willLearn or tags
       const coursesWithWeakAreas = await Course.findAll({
         where: {
           ...baseWhere,
           [Op.or]: [
-            // Check willLearn array contains weak area keywords
-            { willLearn: { [Op.or]: searchTerms.map(term => ({ [Op.like]: `%${term}%` })) } },
-            // Check tags array contains weak area keywords  
-            { tags: { [Op.or]: searchTerms.map(term => ({ [Op.like]: `%${term}%` })) } },
+            // For JSON type columns
+            sequelize.literal(`EXISTS (SELECT 1 FROM json_array_elements_text("willLearn") AS elem WHERE LOWER(elem) LIKE ANY(ARRAY[${searchPatterns.map(p => `'%${p}%'`).join(',')}]))`),
+            sequelize.literal(`EXISTS (SELECT 1 FROM json_array_elements_text("tags") AS elem WHERE LOWER(elem) LIKE ANY(ARRAY[${searchPatterns.map(p => `'%${p}%'`).join(',')}]))`),
           ],
         },
         attributes: ['id', 'title', 'description', 'imageUrl', 'level', 'willLearn', 'requirements', 'tags'],
