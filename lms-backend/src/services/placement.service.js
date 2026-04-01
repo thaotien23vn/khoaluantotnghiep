@@ -4,6 +4,8 @@ const placementAiRecommendations = require('./placementAiRecommendations.service
 const logger = require('../utils/logger');
 const { Op } = require('sequelize');
 
+logger.info('[DEBUG] Sequelize Op import check:', { Op: typeof Op, OpKeys: Op ? Object.keys(Op) : 'undefined' });
+
 const {
   PlacementSession,
   PlacementQuestion,
@@ -921,6 +923,8 @@ class PlacementService {
 
   async getFromQuestionBank(ability, skillType, questionType = 'multiple_choice', excludeIds = [], limit = 10) {
     // Continuous adaptive: order by difficulty proximity, no range filter
+    logger.info('[DEBUG] getFromQuestionBank - Op check:', { Op: typeof Op, hasBetween: Op ? !!Op.between : false });
+    
     const whereClause = {
       skillType,
       questionType,
