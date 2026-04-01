@@ -2,7 +2,6 @@ const db = require('../models');
 const aiGateway = require('./aiGateway.service');
 const placementAiRecommendations = require('./placementAiRecommendations.service');
 const logger = require('../utils/logger');
-const { Op, sequelize } = require('sequelize');
 
 const {
   PlacementSession,
@@ -47,7 +46,7 @@ const MAX_QUESTIONS = 20;     // Max questions per test
 const QUICK_CHECK_QUESTIONS = 10;  // Quick check has max 10 questions
 const MIN_QUESTIONS = 8;      // Min questions before early stop
 const CONFIDENCE_THRESHOLD = 0.85; // Stop when confident enough
-const RETAKE_COOLDOWN_DAYS = 30;   // Days before can retake
+const RETAKE_COOLDOWN_DAYS = 1;   // Days before can retake
 
 const MIN_TIME_PER_QUESTION = 5; // Minimum 5 seconds per question
 
@@ -503,7 +502,7 @@ class PlacementService {
       throw { status: 404, message: 'Session not found' };
     }
 
-    // Calculate final CEFR level
+    // Calculate final CEFR level using IRT (no AI API call)
     const finalLevel = this.calculateFinalLevel(session);
     const confidenceScore = this.calculateConfidence(session);
 
@@ -514,27 +513,11 @@ class PlacementService {
       completedAt: new Date(),
     });
 
-    // Generate AI-powered recommendations with error handling
+    // Rule-based recommendations only (no AI API)
     const skillBreakdown = this.calculateSkillBreakdown(session);
-    let aiRecommendations = null;
-    try {
-      aiRecommendations = await placementAiRecommendations.generatePlacementRecommendations(
-        session,
-        skillBreakdown,
-        finalLevel
-      );
-    } catch (aiError) {
-      logger.warn('AI_RECOMMENDATIONS_FAILED', { sessionId, error: aiError.message });
-      // Fallback: use rule-based recommendations only
-      aiRecommendations = {
-        summary: `Trình độ ${finalLevel}. Tiếp tục phát triển các kỹ năng còn yếu.`,
-        focusAreas: skillBreakdown?.filter(s => s.accuracy < 0.6).map(s => s.skill) || [],
-      };
-    }
 
-    // Combine both rule-based and AI recommendations
+    // Combine both rule-based and skill-based recommendations
     const recommendations = await this.generateRecommendations(session, finalLevel, skillBreakdown);
-    recommendations.aiInsights = aiRecommendations;
 
     logger.info('PLACEMENT_SESSION_COMPLETED', {
       sessionId,
@@ -798,7 +781,7 @@ class PlacementService {
   }
 
   async getSuggestedCourses(level, weakAreas = [], skillBreakdown = null) {
-    const { Op } = require('sequelize');
+    const { Op, sequelize } = require('sequelize');
     const courseLevel = this.cefrToCourseLevel(level);
     
     // Base query: same level, published
