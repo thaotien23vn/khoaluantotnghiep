@@ -2,6 +2,7 @@ const db = require('../models');
 const aiGateway = require('./aiGateway.service');
 const placementAiRecommendations = require('./placementAiRecommendations.service');
 const logger = require('../utils/logger');
+const { Op, sequelize } = require('sequelize');
 
 const {
   PlacementSession,
@@ -781,7 +782,6 @@ class PlacementService {
   }
 
   async getSuggestedCourses(level, weakAreas = [], skillBreakdown = null) {
-    const { Op, sequelize } = require('sequelize');
     const courseLevel = this.cefrToCourseLevel(level);
     
     // Base query: same level, published
@@ -926,8 +926,6 @@ class PlacementService {
       questionType,
       isActive: true,
     };
-    
-    const { Op } = require('sequelize');
     
     // Add range filter for performance - only get questions within 1.5 difficulty points
     whereClause.difficultyScore = {
