@@ -124,14 +124,52 @@ class PlacementService {
       return { completed: true, result };
     }
 
+    // CRITICAL FIX: Check if there's a current question that hasn't been answered yet
+    // This happens when user refreshes or re-enters the test
+    const existingQuestions = session.questions || [];
+    const existingResponses = session.responses || [];
+    
+    // Find the most recent question that doesn't have a response
+    const answeredQuestionIds = new Set(existingResponses.map(r => r.questionId));
+    const unansweredQuestion = existingQuestions
+      .sort((a, b) => b.questionIndex - a.questionIndex) // Sort by newest first
+      .find(q => !answeredQuestionIds.has(q.id));
+    
+    if (unansweredQuestion) {
+      logger.info('PLACEMENT_RETURNING_EXISTING_QUESTION', {
+        sessionId,
+        questionId: unansweredQuestion.id,
+        questionIndex: unansweredQuestion.questionIndex,
+      });
+      
+      // Return the existing unanswered question WITHOUT creating new one or advancing counter
+      return {
+        questionId: unansweredQuestion.id,
+        questionIndex: unansweredQuestion.questionIndex,
+        cefrLevel: unansweredQuestion.cefrLevel,
+        skillType: unansweredQuestion.skillType,
+        questionType: unansweredQuestion.questionType,
+        content: unansweredQuestion.content,
+        options: unansweredQuestion.options,
+        segments: unansweredQuestion.segments,
+        audioText: unansweredQuestion.audioText,
+        hint: unansweredQuestion.hint,
+        timeLimitSeconds: unansweredQuestion.timeLimitSeconds || 60,
+        totalQuestions: MAX_QUESTIONS,
+        currentQuestion: session.questionCount, // Don't +1 since we're not advancing
+      };
+    }
+
     // Get IDs of questions already asked in this session (from both PlacementQuestion and bank)
-    const askedBankQuestionIds = (session.questions || [])
-      .filter(q => q.aiGenerated === false || q.bankQuestionId)
-      .map(q => q.bankQuestionId)
-      .filter(id => id); // Remove nulls
+    const askedBankQuestionIdsSet = new Set(
+      existingQuestions
+        .filter(q => q.aiGenerated === false || q.bankQuestionId)
+        .map(q => q.bankQuestionId)
+        .filter(id => id)
+    );
     
     // Get content of all questions already asked (for AI duplicate check)
-    const askedContents = (session.questions || []).map(q => this.normalizeContent(q.content));
+    const askedContents = existingQuestions.map(q => this.normalizeContent(q.content));
 
     const currentLevel = session.currentCefrLevel;
     const skillType = this.selectSkillType(session.questionCount);
@@ -140,41 +178,53 @@ class PlacementService {
     const questionTypes = ['multiple_choice', 'fill_blank', 'listening', 'sentence_ordering'];
     const selectedType = questionTypes[Math.floor(Math.random() * questionTypes.length)];
     
-    // Try to get from question bank first, excluding already asked questions
+    // Try to get from question bank first - fetch multiple at once
     let question = null;
-    let bankAttempts = 0;
-    const maxBankAttempts = 5;
+    const SIMILARITY_THRESHOLD = 0.6; // Reduced from 0.8
     
-    while (!question && bankAttempts < maxBankAttempts) {
-      bankAttempts++;
-      const bankQuestion = await this.getFromQuestionBank(currentLevel, skillType, selectedType, askedBankQuestionIds);
-      
-      if (!bankQuestion) break; // No more questions in bank
-      
-      // Check if bank question content is duplicate
-      const normalizedBankContent = this.normalizeContent(bankQuestion.content);
-      const isBankDuplicate = askedContents.some(askedContent => 
-        askedContent === normalizedBankContent || 
-        this.contentSimilarity(askedContent, normalizedBankContent) > 0.8
-      );
-      
-      if (!isBankDuplicate) {
-        question = bankQuestion;
-      } else {
-        // Add to exclude list and try again
-        askedBankQuestionIds.push(bankQuestion.id);
-        logger.warn('PLACEMENT_BANK_DUPLICATE_DETECTED', {
-          sessionId: session.id,
-          attempt: bankAttempts,
-          bankQuestionId: bankQuestion.id,
-          content: bankQuestion.content?.substring(0, 100),
-        });
+    const bankQuestions = await this.getFromQuestionBank(
+      currentLevel, 
+      skillType, 
+      selectedType, 
+      Array.from(askedBankQuestionIdsSet),
+      20 // Fetch 20 at once
+    );
+    
+    if (bankQuestions.length === 0) {
+      logger.info('PLACEMENT_BANK_EMPTY', {
+        sessionId: session.id,
+        cefrLevel: currentLevel,
+        skillType,
+        questionType: selectedType,
+        askedCount: askedBankQuestionIdsSet.size,
+      });
+    } else {
+      // Filter in memory for non-duplicate
+      for (const bankQuestion of bankQuestions) {
+        const normalizedBankContent = this.normalizeContent(bankQuestion.content);
+        const isBankDuplicate = askedContents.some(askedContent => 
+          askedContent === normalizedBankContent || 
+          this.contentSimilarity(askedContent, normalizedBankContent) > SIMILARITY_THRESHOLD
+        );
+        
+        if (!isBankDuplicate) {
+          question = bankQuestion;
+          break;
+        } else {
+          askedBankQuestionIdsSet.add(bankQuestion.id);
+          logger.warn('PLACEMENT_BANK_DUPLICATE_DETECTED', {
+            sessionId: session.id,
+            bankQuestionId: bankQuestion.id,
+            content: bankQuestion.content?.substring(0, 100),
+          });
+        }
       }
     }
     
     // If not in bank or we want fresh AI questions, generate with AI
     let attempts = 0;
     const maxAttempts = 3;
+    const SIMILARITY_THRESHOLD_AI = 0.6; // Reduced from 0.8
     
     while (!question && attempts < maxAttempts) {
       attempts++;
@@ -184,7 +234,7 @@ class PlacementService {
       const normalizedContent = this.normalizeContent(aiQuestion.content);
       const isDuplicate = askedContents.some(askedContent => 
         askedContent === normalizedContent || 
-        this.contentSimilarity(askedContent, normalizedContent) > 0.8
+        this.contentSimilarity(askedContent, normalizedContent) > SIMILARITY_THRESHOLD_AI
       );
       
       if (!isDuplicate) {
@@ -772,8 +822,8 @@ class PlacementService {
     return matches / maxLen;
   }
 
-  async getFromQuestionBank(cefrLevel, skillType, questionType = 'multiple_choice', excludeIds = []) {
-    // Get random question from bank matching criteria, excluding already asked questions
+  async getFromQuestionBank(cefrLevel, skillType, questionType = 'multiple_choice', excludeIds = [], limit = 20) {
+    // Get multiple questions from bank at once for in-memory filtering
     const whereClause = {
       cefrLevel,
       skillType,
@@ -786,27 +836,25 @@ class PlacementService {
       whereClause.id = { [db.Sequelize.Op.notIn]: excludeIds };
     }
     
-    const question = await PlacementQuestionBank.findOne({
+    const questions = await PlacementQuestionBank.findAll({
       where: whereClause,
       order: db.sequelize.random(),
+      limit,
     });
 
-    if (question) {
-      // Increment usage count
-      await question.increment('usageCount');
-      
-      return {
-        id: question.id, // Include bank ID for duplicate tracking
-        type: question.questionType,
-        content: question.content,
-        options: question.options,
-        correctAnswer: question.correctAnswer,
-        explanation: question.explanation,
-        aiGenerated: question.aiGenerated,
-      };
+    if (questions && questions.length > 0) {
+      return questions.map(q => ({
+        id: q.id,
+        type: q.questionType,
+        content: q.content,
+        options: q.options,
+        correctAnswer: q.correctAnswer,
+        explanation: q.explanation,
+        aiGenerated: q.aiGenerated,
+      }));
     }
 
-    return null;
+    return [];
   }
 
   async saveToQuestionBank(question, cefrLevel, skillType) {
