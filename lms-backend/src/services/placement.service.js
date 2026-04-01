@@ -3,6 +3,7 @@ const aiGateway = require('./aiGateway.service');
 const placementAiRecommendations = require('./placementAiRecommendations.service');
 const logger = require('../utils/logger');
 const { Op } = require('sequelize');
+const { sequelize } = db;
 
 logger.info('[DEBUG] Sequelize Op import check:', { Op: typeof Op, OpKeys: Op ? Object.keys(Op) : 'undefined' });
 
