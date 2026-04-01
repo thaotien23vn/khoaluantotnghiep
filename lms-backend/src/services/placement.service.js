@@ -858,6 +858,19 @@ class PlacementService {
   }
 
   /**
+   * Normalize content for duplicate checking
+   * Remove extra spaces, lowercase, trim
+   */
+  normalizeContent(content) {
+    if (!content) return '';
+    return content
+      .toLowerCase()
+      .replace(/\s+/g, ' ')
+      .replace(/[^a-z0-9\s]/g, '')
+      .trim();
+  }
+
+  /**
    * Format options with clean letter prefixes (A, B, C, D)
    * Removes old prefixes and adds new sequential ones
    */
