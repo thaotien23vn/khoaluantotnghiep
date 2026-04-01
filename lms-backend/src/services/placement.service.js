@@ -1,4 +1,4 @@
-const db = require('../models');
+const db = require('../models/index');
 const aiGateway = require('./aiGateway.service');
 const placementAiRecommendations = require('./placementAiRecommendations.service');
 const logger = require('../utils/logger');
@@ -936,7 +936,7 @@ class PlacementService {
       [Op.between]: [ability - 1.5, ability + 1.5]
     };
     if (excludeIds.length > 0) {
-      whereClause.id = { [db.Sequelize.Op.notIn]: excludeIds };
+      whereClause.id = { [Op.notIn]: excludeIds };
     }
     
     const questions = await PlacementQuestionBank.findAll({
