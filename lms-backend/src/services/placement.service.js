@@ -419,8 +419,7 @@ class PlacementService {
       abilityScore: newAbility, // Store continuous ability score
       lastActivityAt: new Date(),
     });
-    
-    await session.reload(); // Refresh session data before checking stop condition
+    // session.update() returns the updated instance, no need to reload
 
     logger.info('PLACEMENT_ANSWER_SUBMITTED', {
       sessionId,
@@ -433,7 +432,14 @@ class PlacementService {
     });
 
     // Check if test should auto-complete after this answer
-    const shouldComplete = this.shouldStopTest(session);
+    const shouldComplete = this.shouldStopTest({
+      ...session.toJSON(),
+      correctCount: isCorrect ? session.correctCount + 1 : session.correctCount,
+      streakCorrect: newStreakCorrect,
+      streakWrong: newStreakWrong,
+      currentCefrLevel: newLevel,
+      abilityScore: newAbility,
+    });
     if (shouldComplete) {
       logger.info('PLACEMENT_AUTO_COMPLETING', {
         sessionId,
