@@ -963,13 +963,33 @@ class PlacementService {
     });
     logger.info('[DEBUG] getFromQuestionBank - filtered count (with difficulty):', { filteredCount });
     
-    const questions = await PlacementQuestionBank.findAll({
-      where: whereClause,
-      order: db.sequelize.literal(`ABS(difficulty_score - ${ability})`),
-      limit,
-    });
+    // If no questions with difficulty filter, try without filter
+    let questions;
+    if (filteredCount === 0 && totalCount > 0) {
+      logger.info('[DEBUG] getFromQuestionBank - no results with difficulty filter, trying without filter');
+      const whereClauseNoDifficulty = {
+        skillType,
+        questionType,
+        isActive: true,
+      };
+      if (excludeIds.length > 0) {
+        whereClauseNoDifficulty.id = { [Op.notIn]: excludeIds };
+      }
+      questions = await PlacementQuestionBank.findAll({
+        where: whereClauseNoDifficulty,
+        order: db.sequelize.literal(`ABS(difficulty_score - ${ability})`),
+        limit,
+      });
+      logger.info('[DEBUG] getFromQuestionBank - fallback query result:', { foundCount: questions?.length || 0 });
+    } else {
+      questions = await PlacementQuestionBank.findAll({
+        where: whereClause,
+        order: db.sequelize.literal(`ABS(difficulty_score - ${ability})`),
+        limit,
+      });
+    }
 
-    logger.info('[DEBUG] getFromQuestionBank - query result:', { foundCount: questions?.length || 0 });
+    logger.info('[DEBUG] getFromQuestionBank - final result:', { foundCount: questions?.length || 0 });
     
     if (questions && questions.length > 0) {
       return questions.map(q => ({
