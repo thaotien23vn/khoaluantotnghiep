@@ -879,66 +879,131 @@ class PlacementService {
   async getSuggestedCourses(level, weakAreas = [], skillBreakdown = null) {
     const courseLevel = this.cefrToCourseLevel(level);
     
-    // Base query: same level, published
-    const baseWhere = {
-      level: courseLevel,
-      published: true,
+    // Define level fallback order based on CEFR levels
+    const cefrLevels = ['A1', 'A2', 'B1', 'B2', 'C1', 'C2'];
+    const userLevelIndex = cefrLevels.indexOf(level);
+    
+    // Generate fallback levels: same level first, then adjacent levels
+    const getFallbackLevels = (idx) => {
+      const levels = [];
+      // Add same level
+      if (idx >= 0) levels.push(this.cefrToCourseLevel(cefrLevels[idx]));
+      // Add one level below (easier)
+      if (idx > 0) levels.push(this.cefrToCourseLevel(cefrLevels[idx - 1]));
+      // Add one level above (harder)
+      if (idx < cefrLevels.length - 1) levels.push(this.cefrToCourseLevel(cefrLevels[idx + 1]));
+      // Add two levels below (if exists)
+      if (idx > 1) levels.push(this.cefrToCourseLevel(cefrLevels[idx - 2]));
+      // Add all remaining levels
+      for (let i = 0; i < cefrLevels.length; i++) {
+        if (!levels.includes(this.cefrToCourseLevel(cefrLevels[i]))) {
+          levels.push(this.cefrToCourseLevel(cefrLevels[i]));
+        }
+      }
+      return levels;
     };
     
-    // If we have weak areas, try to find courses that cover them
-    if (weakAreas.length > 0) {
-      // For JSON arrays: use json_array_elements_text
-      const searchPatterns = weakAreas.map(area => area.toLowerCase());
+    const fallbackLevels = getFallbackLevels(userLevelIndex);
+    logger.info('[DEBUG] getSuggestedCourses - fallback levels:', { userLevel: level, fallbackLevels });
+    
+    // Try each level in fallback order
+    for (const tryLevel of fallbackLevels) {
+      const baseWhere = {
+        level: tryLevel,
+        published: true,
+      };
       
-      // Find courses that mention weak areas in willLearn or tags
-      const coursesWithWeakAreas = await Course.findAll({
-        where: {
-          ...baseWhere,
-          [Op.or]: [
-            // For JSON type columns
-            sequelize.literal(`EXISTS (SELECT 1 FROM json_array_elements_text("willLearn") AS elem WHERE LOWER(elem) LIKE ANY(ARRAY[${searchPatterns.map(p => `'%${p}%'`).join(',')}]))`),
-            sequelize.literal(`EXISTS (SELECT 1 FROM json_array_elements_text("tags") AS elem WHERE LOWER(elem) LIKE ANY(ARRAY[${searchPatterns.map(p => `'%${p}%'`).join(',')}]))`),
-          ],
-        },
-        attributes: ['id', 'title', 'description', 'imageUrl', 'level', 'willLearn', 'requirements', 'tags'],
-        limit: 5,
-      });
+      // If we have weak areas, try to find courses that cover them
+      if (weakAreas.length > 0) {
+        const searchPatterns = weakAreas.map(area => area.toLowerCase());
+        
+        try {
+          const coursesWithWeakAreas = await Course.findAll({
+            where: {
+              ...baseWhere,
+              [Op.or]: [
+                sequelize.literal(`EXISTS (SELECT 1 FROM json_array_elements_text("willLearn") AS elem WHERE LOWER(elem) LIKE ANY(ARRAY[${searchPatterns.map(p => `'%${p}%'`).join(',')}]))`),
+                sequelize.literal(`EXISTS (SELECT 1 FROM json_array_elements_text("tags") AS elem WHERE LOWER(elem) LIKE ANY(ARRAY[${searchPatterns.map(p => `'%${p}%'`).join(',')}]))`),
+              ],
+            },
+            attributes: ['id', 'title', 'description', 'imageUrl', 'level', 'willLearn', 'requirements', 'tags'],
+            limit: 5,
+          });
+          
+          if (coursesWithWeakAreas.length > 0) {
+            return coursesWithWeakAreas.map(course => {
+              const courseContent = [
+                ...(course.willLearn || []),
+                ...(course.tags || [])
+              ].join(' ').toLowerCase();
+              
+              const matchedWeakAreas = weakAreas.filter(area => 
+                courseContent.includes(area.toLowerCase())
+              );
+              
+              return {
+                ...course.toJSON(),
+                matchScore: matchedWeakAreas.length,
+                matchedWeakAreas,
+                matchReason: `Khóa học giúp cải thiện: ${matchedWeakAreas.join(', ')}`,
+              };
+            }).sort((a, b) => b.matchScore - a.matchScore);
+          }
+        } catch (e) {
+          logger.warn('[DEBUG] getSuggestedCourses - weak area search error:', { level: tryLevel, error: e.message });
+        }
+      }
       
-      // If found courses covering weak areas, return them with match score
-      if (coursesWithWeakAreas.length > 0) {
-        return coursesWithWeakAreas.map(course => {
-          const courseContent = [
-            ...(course.willLearn || []),
-            ...(course.tags || [])
-          ].join(' ').toLowerCase();
-          
-          const matchedWeakAreas = weakAreas.filter(area => 
-            courseContent.includes(area.toLowerCase())
-          );
-          
-          return {
+      // Fallback: return all courses at this level
+      try {
+        const courses = await Course.findAll({
+          where: baseWhere,
+          attributes: ['id', 'title', 'description', 'imageUrl', 'level', 'willLearn', 'requirements', 'tags'],
+          limit: 5,
+        });
+        
+        if (courses.length > 0) {
+          logger.info('[DEBUG] getSuggestedCourses - found courses at level:', { level: tryLevel, count: courses.length });
+          return courses.map(course => ({
             ...course.toJSON(),
-            matchScore: matchedWeakAreas.length,
-            matchedWeakAreas,
-            matchReason: `Khóa học giúp cải thiện: ${matchedWeakAreas.join(', ')}`,
-          };
-        }).sort((a, b) => b.matchScore - a.matchScore);
+            matchScore: tryLevel === courseLevel ? 10 : 5, // Higher score for exact match
+            matchedWeakAreas: [],
+            matchReason: tryLevel === courseLevel 
+              ? 'Khóa học phù hợp trình độ của bạn'
+              : `Khóa học ${this.courseLevelToCefr(tryLevel)} - gần với trình độ ${level} của bạn`,
+          }));
+        }
+      } catch (e) {
+        logger.warn('[DEBUG] getSuggestedCourses - course search error:', { level: tryLevel, error: e.message });
       }
     }
     
-    // Fallback: return all courses at this level
-    const courses = await Course.findAll({
-      where: baseWhere,
+    // Ultimate fallback: return any published courses
+    logger.warn('[DEBUG] getSuggestedCourses - no courses at any level, returning all published');
+    const allCourses = await Course.findAll({
+      where: { published: true },
       attributes: ['id', 'title', 'description', 'imageUrl', 'level', 'willLearn', 'requirements', 'tags'],
       limit: 5,
     });
     
-    return courses.map(course => ({
+    return allCourses.map(course => ({
       ...course.toJSON(),
       matchScore: 0,
       matchedWeakAreas: [],
-      matchReason: 'Khóa học phù hợp trình độ của bạn',
+      matchReason: 'Khóa học phổ biến',
     }));
+  }
+
+  courseLevelToCefr(courseLevel) {
+    const mapping = {
+      'beginner': 'A1',
+      'elementary': 'A2',
+      'intermediate': 'B1',
+      'upper-intermediate': 'B2',
+      'advanced': 'C1',
+      'proficiency': 'C2',
+    };
+    return mapping[courseLevel] || courseLevel;
   }
 
   cefrToCourseLevel(cefr) {
