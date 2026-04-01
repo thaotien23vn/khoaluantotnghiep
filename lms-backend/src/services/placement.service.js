@@ -2,6 +2,7 @@ const db = require('../models');
 const aiGateway = require('./aiGateway.service');
 const placementAiRecommendations = require('./placementAiRecommendations.service');
 const logger = require('../utils/logger');
+const { Op, sequelize } = require('sequelize');
 
 const {
   PlacementSession,
