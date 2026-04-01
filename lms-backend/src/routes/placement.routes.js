@@ -135,6 +135,15 @@ router.get(
   placementController.getResult
 );
 
+// Get detailed session review
+router.get(
+  '/student/placement/:sessionId/review',
+  authMiddleware,
+  authorizeRole('student', 'admin'),
+  sessionIdValidation,
+  placementController.getSessionReview
+);
+
 // Check retake eligibility
 router.get(
   '/student/placement/retake-eligibility',

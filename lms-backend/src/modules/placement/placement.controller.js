@@ -197,6 +197,31 @@ class PlacementController {
   }
 
   /**
+   * GET /student/placement/:sessionId/review
+   * Get detailed session review with questions and user responses
+   */
+  async getSessionReview(req, res, next) {
+    try {
+      const sessionId = parseInt(req.params.sessionId);
+      const userId = req.user.id;
+
+      const review = await placementService.getSessionReview(sessionId, userId);
+
+      res.json({
+        success: true,
+        data: review,
+      });
+    } catch (err) {
+      logger.error('PLACEMENT_GET_REVIEW_ERROR', {
+        sessionId: req.params.sessionId,
+        userId: req.user.id,
+        error: err.message,
+      });
+      next(err);
+    }
+  }
+
+  /**
    * POST /student/placement/quick-check
    * Quick 2-3 question check before full test
    */
