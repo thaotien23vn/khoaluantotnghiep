@@ -8,6 +8,7 @@ const {
   processRefundValidation,
   createVNPayPaymentValidation,
   stripeVerifyValidation,
+  stripeStatusValidation,
 } = require('../middlewares/payment.validation');
 
 const router = express.Router();
@@ -62,6 +63,9 @@ router.get('/stripe/cancel', paymentController.handleStripeCancel);
 
 // Stripe manual verify (frontend calls this after redirect from Stripe)
 router.post('/stripe/verify', stripeVerifyValidation, paymentController.verifyStripePayment);
+
+// Get payment status by session ID (for frontend to check after Stripe redirect)
+router.get('/stripe/status', stripeStatusValidation, paymentController.getPaymentBySession);
 
 // Create Stripe Payment Intent
 router.post('/stripe/create', paymentController.createStripePayment);

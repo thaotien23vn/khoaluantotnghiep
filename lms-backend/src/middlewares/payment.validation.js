@@ -95,6 +95,15 @@ const stripeVerifyValidation = [
   handleValidationErrors,
 ];
 
+const stripeStatusValidation = [
+  query('session_id')
+    .notEmpty()
+    .withMessage('Session ID là bắt buộc')
+    .trim()
+    .isLength({ min: 10, max: 255 }),
+  handleValidationErrors,
+];
+
 module.exports = {
   createPaymentValidation,
   processPaymentValidation,

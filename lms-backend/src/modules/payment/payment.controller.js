@@ -405,6 +405,62 @@ class PaymentController {
   }
 
   /**
+   * Get payment details by Stripe session ID
+   */
+  async getPaymentBySession(req, res) {
+    try {
+      const { session_id } = req.query;
+      
+      if (!session_id) {
+        return res.status(400).json({
+          success: false,
+          message: 'Thiếu session_id',
+        });
+      }
+
+      // Find payment by providerTxn (Stripe session ID)
+      const { Payment, Course, User } = require('../../database/models');
+      const payment = await Payment.findOne({
+        where: { providerTxn: session_id },
+        include: [
+          { model: Course, as: 'course', attributes: ['id', 'title'] },
+          { model: User, as: 'user', attributes: ['id', 'fullName', 'email'] },
+        ],
+      });
+
+      if (!payment) {
+        return res.status(404).json({
+          success: false,
+          message: 'Không tìm thấy giao dịch',
+        });
+      }
+
+      res.json({
+        success: true,
+        data: {
+          id: payment.id,
+          courseId: payment.courseId,
+          courseTitle: payment.course?.title || 'Khóa học',
+          amount: payment.amount,
+          currency: payment.currency,
+          status: payment.status,
+          provider: payment.provider,
+          providerTxn: payment.providerTxn,
+          createdAt: payment.createdAt,
+          completedAt: payment.completedAt,
+        },
+      });
+    } catch (error) {
+      console.error('Get payment by session error:', error);
+      res.status(500).json({
+        success: false,
+        message: 'Lỗi lấy thông tin giao dịch',
+        error: error.message,
+      });
+    }
+  }
+
+  /**
    * Handle Stripe Checkout Session cancel
    */
   async handleStripeCancel(req, res) {
