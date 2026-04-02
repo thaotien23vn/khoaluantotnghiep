@@ -78,11 +78,21 @@ const createVNPayPaymentValidation = [
   handleValidationErrors,
 ];
 
+const stripeVerifyValidation = [
+  body('sessionId')
+    .notEmpty()
+    .withMessage('Session ID là bắt buộc')
+    .trim()
+    .isLength({ min: 10, max: 255 }),
+  handleValidationErrors,
+];
+
 module.exports = {
   createPaymentValidation,
   processPaymentValidation,
   getPaymentDetailValidation,
   processRefundValidation,
   createVNPayPaymentValidation,
+  stripeVerifyValidation,
   handleValidationErrors,
 };
