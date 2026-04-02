@@ -1,7 +1,7 @@
 const { validationResult } = require('express-validator');
 const paymentService = require('./payment.service');
 const stripeService = require('../../services/stripe.service');
-
+ const { Payment, Course, User } = require('../../models');
 /**
  * Handle validation errors
  */
@@ -419,7 +419,7 @@ class PaymentController {
       }
 
       // Find payment by providerTxn (Stripe session ID)
-      const { Payment, Course, User } = require('../../database/models');
+     
       const payment = await Payment.findOne({
         where: { providerTxn: session_id },
         include: [
