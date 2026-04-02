@@ -59,6 +59,14 @@ const getPaymentDetailValidation = [
   handleValidationErrors,
 ];
 
+const getPaymentHistoryValidation = [
+  param('courseId')
+    .optional()
+    .isInt({ min: 1 })
+    .withMessage('Course ID phải là số nguyên dương'),
+  handleValidationErrors,
+];
+
 const processRefundValidation = [
   param('paymentId')
     .isInt({ min: 1 })
@@ -90,6 +98,7 @@ const stripeVerifyValidation = [
 module.exports = {
   createPaymentValidation,
   processPaymentValidation,
+  getPaymentHistoryValidation,
   getPaymentDetailValidation,
   processRefundValidation,
   createVNPayPaymentValidation,
