@@ -1,6 +1,6 @@
 const placementService = require('../../services/placement.service');
 const logger = require('../../utils/logger');
-
+const { PlacementSession } = require('../../models');
 class PlacementController {
   /**
    * POST /student/placement/start
@@ -229,6 +229,29 @@ class PlacementController {
     try {
       const { targetCourseId } = req.body;
       const userId = req.user?.id || null;
+
+      // Check if user has already completed a full placement test
+      if (userId) {
+        
+        const lastFullTest = await PlacementSession.findOne({
+          where: {
+            userId,
+            status: 'completed',
+            isQuickCheck: false, // Only check for full tests
+          },
+          order: [['completedAt', 'DESC']],
+        });
+
+        if (lastFullTest) {
+          return res.status(403).json({
+            success: false,
+            code: 'FULL_TEST_ALREADY_COMPLETED',
+            message: 'Bạn đã hoàn thành bài placement test đầy đủ. Vui lòng xem kết quả trong lịch sử.',
+            lastTestDate: lastFullTest.completedAt,
+            finalLevel: lastFullTest.finalCefrLevel,
+          });
+        }
+      }
 
       // Create a quick check session with 7 questions max
       const session = await placementService.startSession({

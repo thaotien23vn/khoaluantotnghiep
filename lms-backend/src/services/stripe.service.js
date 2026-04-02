@@ -359,10 +359,10 @@ class StripeService {
       price_data: {
         currency: 'usd',
         product_data: {
-          name: item.courseTitle,
+          name: item.course?.title || 'Khóa học',
           description: item.notes || 'Khóa học trực tuyến',
         },
-        unit_amount: Math.round(Number(item.price) * 100),
+        unit_amount: Math.round(Number(item.course?.price || 0) * 100),
       },
       quantity: 1,
     }));
