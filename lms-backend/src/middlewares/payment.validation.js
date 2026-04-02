@@ -112,5 +112,6 @@ module.exports = {
   processRefundValidation,
   createVNPayPaymentValidation,
   stripeVerifyValidation,
+  stripeStatusValidation,
   handleValidationErrors,
 };
