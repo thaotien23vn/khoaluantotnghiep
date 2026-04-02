@@ -1,7 +1,8 @@
 const { validationResult } = require('express-validator');
 const paymentService = require('./payment.service');
 const stripeService = require('../../services/stripe.service');
- const { Payment, Course, User } = require('../../models');
+const db = require('../../models');
+const { Payment, Course, User } = db.models;
 /**
  * Handle validation errors
  */
