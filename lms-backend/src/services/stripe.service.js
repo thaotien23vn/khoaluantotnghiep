@@ -387,7 +387,7 @@ class StripeService {
       const payment = await Payment.create({
         userId,
         courseId: item.courseId,
-        amount: item.price,
+        amount: item.course?.price || 0,
         currency: 'USD',
         provider: 'stripe',
         providerTxn: session.id,
