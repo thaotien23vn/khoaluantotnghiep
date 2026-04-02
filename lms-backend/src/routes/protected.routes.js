@@ -39,7 +39,7 @@ const {
   processPaymentValidation,
   getPaymentHistoryValidation,
   getPaymentDetailValidation,
-} = require('../modules/payment/payment.validation');
+} = require('../middlewares/payment.validation');
 
 const {
   createUserValidation,
