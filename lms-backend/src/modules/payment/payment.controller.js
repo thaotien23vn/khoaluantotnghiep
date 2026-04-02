@@ -351,6 +351,60 @@ class PaymentController {
   }
 
   /**
+   * Verify Stripe payment by session ID (for frontend manual verification)
+   */
+  async verifyStripePayment(req, res) {
+    try {
+      const validationError = handleValidationErrors(req, res);
+      if (validationError) return;
+
+      const { sessionId } = req.body;
+      console.log('Manual Stripe verify - sessionId:', sessionId);
+
+      // Retrieve session from Stripe
+      const stripe = require('stripe')(process.env.STRIPE_SECRET_KEY);
+      const session = await stripe.checkout.sessions.retrieve(sessionId);
+      console.log('Stripe session retrieved:', {
+        id: session.id,
+        payment_status: session.payment_status,
+        metadata: session.metadata
+      });
+
+      if (session.payment_status === 'paid') {
+        console.log('Payment is paid, calling handleCheckoutCompleted...');
+        // Process completed payment
+        const result = await stripeService.handleCheckoutCompleted(session);
+        console.log('handleCheckoutCompleted result:', result);
+
+        res.json({
+          success: true,
+          message: 'Thanh toán đã được xác nhận',
+          data: {
+            sessionId,
+            status: 'completed',
+            courseId: session.metadata?.courseId,
+            amount: session.amount_total / 100,
+          },
+        });
+      } else {
+        console.log('Payment not paid, status:', session.payment_status);
+        res.status(400).json({
+          success: false,
+          message: 'Thanh toán chưa hoàn tất',
+          paymentStatus: session.payment_status,
+        });
+      }
+    } catch (error) {
+      console.error('Stripe verify error:', error);
+      res.status(500).json({
+        success: false,
+        message: 'Lỗi xác minh thanh toán',
+        error: error.message,
+      });
+    }
+  }
+
+  /**
    * Handle Stripe Checkout Session cancel
    */
   async handleStripeCancel(req, res) {

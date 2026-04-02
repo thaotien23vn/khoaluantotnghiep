@@ -72,6 +72,16 @@ const processRefundValidation = [
     .withMessage('Lý do hoàn tiền phải từ 10 đến 500 ký tự'),
 ];
 
+// Stripe verify validation
+const stripeVerifyValidation = [
+  body('sessionId')
+    .notEmpty()
+    .withMessage('Session ID là bắt buộc')
+    .trim()
+    .isLength({ min: 10, max: 255 }),
+  handleValidationErrors,
+];
+
 module.exports = {
   createPaymentValidation,
   processPaymentValidation,
@@ -79,4 +89,5 @@ module.exports = {
   getPaymentDetailValidation,
   createVNPayPaymentValidation,
   processRefundValidation,
+  stripeVerifyValidation,
 };

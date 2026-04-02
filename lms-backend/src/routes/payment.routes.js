@@ -7,6 +7,7 @@ const {
   getPaymentDetailValidation,
   processRefundValidation,
   createVNPayPaymentValidation,
+  stripeVerifyValidation,
 } = require('../middlewares/payment.validation');
 
 const router = express.Router();
@@ -58,6 +59,9 @@ router.post('/stripe/checkout/cart', paymentController.createStripeCartCheckout)
 // Stripe Checkout success/cancel (no auth required - callback from Stripe)
 router.get('/stripe/success', paymentController.handleStripeSuccess);
 router.get('/stripe/cancel', paymentController.handleStripeCancel);
+
+// Stripe manual verify (frontend calls this after redirect from Stripe)
+router.post('/stripe/verify', stripeVerifyValidation, paymentController.verifyStripePayment);
 
 // Create Stripe Payment Intent
 router.post('/stripe/create', paymentController.createStripePayment);
