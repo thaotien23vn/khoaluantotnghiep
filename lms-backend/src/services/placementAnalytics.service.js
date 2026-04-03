@@ -79,7 +79,7 @@ class PlacementAnalyticsService {
   async getCommonWrongAnswers(limit = 10, startDate, endDate) {
     const where = {};
     if (startDate && endDate) {
-      where.createdAt = {
+      where.answeredAt = {
         [Op.between]: [new Date(startDate), new Date(endDate)],
       };
     }
@@ -118,7 +118,7 @@ class PlacementAnalyticsService {
   async getSkillPerformance(startDate, endDate) {
     const where = {};
     if (startDate && endDate) {
-      where.createdAt = {
+      where.answeredAt = {
         [Op.between]: [new Date(startDate), new Date(endDate)],
       };
     }
@@ -245,12 +245,14 @@ class PlacementAnalyticsService {
       skillPerformance,
       questionBankStats,
       commonWrongAnswers,
+      trends,
     ] = await Promise.all([
       this.getOverallStats(startDate, endDate),
       this.getLevelDistribution(startDate, endDate),
       this.getSkillPerformance(startDate, endDate),
       this.getQuestionBankStats(),
       this.getCommonWrongAnswers(5, startDate, endDate),
+      this.getTrends(30),
     ]);
 
     return {
@@ -259,6 +261,7 @@ class PlacementAnalyticsService {
       skillPerformance,
       questionBank: questionBankStats,
       topDifficultQuestions: commonWrongAnswers,
+      trends,
     };
   }
 }
