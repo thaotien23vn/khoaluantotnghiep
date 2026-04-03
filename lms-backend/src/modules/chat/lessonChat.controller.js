@@ -9,9 +9,12 @@ function emitChatMessage(chatId, event, message) {
   try {
     const io = getIO();
     const roomName = `lesson_${chatId}`;
+    console.log(`[Socket] Emitting ${event} to room ${roomName}`, message?.id || message);
     io.to(roomName).emit(event, message);
+    console.log(`[Socket] Emitted successfully`);
   } catch (err) {
-    logger.error('SOCKET_EMIT_ERROR', { error: err.message, chatId, event });
+    logger.error('SOCKET_EMIT_ERROR', { error: err.message, chatId, event, stack: err.stack });
+    console.error('[Socket] Emit failed:', err.message);
   }
 }
 
