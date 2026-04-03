@@ -62,7 +62,7 @@ class AiSupportController {
   async sendMessage(req, res, next) {
     try {
       const userId = req.user.id;
-      const { content, conversationId, context, attachments } = req.body;
+      const { content, conversationId, context, attachments, forceCreate } = req.body;
 
       if (!content || !content.trim()) {
         return res.status(400).json({
@@ -75,6 +75,7 @@ class AiSupportController {
         conversationId,
         context,
         attachments,
+        forceCreate,
       });
 
       res.json({

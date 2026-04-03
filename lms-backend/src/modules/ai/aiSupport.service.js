@@ -28,37 +28,43 @@ class AiSupportService {
    */
   async getOrCreateConversation(userId, options = {}) {
     try {
-      const { context = {} } = options;
+      const { context = {}, forceCreate = false } = options;
       
-      // Try to find existing active conversation
-      let conversation = await AiConversation.findOne({
-        where: {
-          userId,
-          role: 'support',
-          courseId: null, // Global support, not tied to specific course
-        },
-        order: [['createdAt', 'DESC']],
+      // If forceCreate, always create new conversation
+      if (!forceCreate) {
+        // Try to find existing active conversation
+        let conversation = await AiConversation.findOne({
+          where: {
+            userId,
+            role: 'support',
+            courseId: null, // Global support, not tied to specific course
+          },
+          order: [['createdAt', 'DESC']],
+        });
+
+        // Create new if not exists or too old (> 7 days)
+        const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
+        if (conversation && conversation.createdAt >= sevenDaysAgo) {
+          return { conversation };
+        }
+      }
+
+      // Create new conversation
+      const conversation = await AiConversation.create({
+        userId,
+        role: 'support',
+        courseId: null,
+        lectureId: null,
+        title: 'AI Hỗ trợ 24/7',
       });
 
-      // Create new if not exists or too old (> 7 days)
-      const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
-      if (!conversation || conversation.createdAt < sevenDaysAgo) {
-        conversation = await AiConversation.create({
-          userId,
-          role: 'support',
-          courseId: null,
-          lectureId: null,
-          title: 'AI Hỗ trợ 24/7',
-        });
-
-        // Add welcome message
-        const welcomeMsg = await this.buildWelcomeMessage(userId, context);
-        await AiMessage.create({
-          conversationId: conversation.id,
-          sender: 'ai',
-          content: welcomeMsg,
-        });
-      }
+      // Add welcome message
+      const welcomeMsg = await this.buildWelcomeMessage(userId, context);
+      await AiMessage.create({
+        conversationId: conversation.id,
+        sender: 'ai',
+        content: welcomeMsg,
+      });
 
       return { conversation };
     } catch (error) {
@@ -169,10 +175,10 @@ class AiSupportService {
    */
   async sendMessage(userId, content, options = {}) {
     try {
-      const { context = {}, attachments = [] } = options;
+      const { context = {}, attachments = [], forceCreate = false } = options;
 
-      // Get or create conversation
-      const { conversation } = await this.getOrCreateConversation(userId, options);
+      // Get or create conversation (forceCreate = true to start fresh chat)
+      const { conversation } = await this.getOrCreateConversation(userId, { context, forceCreate });
 
       // Save user message
       const userMessage = await AiMessage.create({
