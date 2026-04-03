@@ -184,6 +184,63 @@ class LessonService {
   }
 
   /**
+   * Get lesson detail with ownership check (for teacher viewing their own course)
+   */
+  async getLessonDetail(lessonId, userId, role) {
+    const lecture = await Lecture.findByPk(lessonId, {
+      include: [
+        {
+          model: Chapter,
+          as: 'chapter',
+          attributes: ['id', 'title', 'courseId'],
+          include: [
+            {
+              model: Course,
+              as: 'course',
+              attributes: ['id', 'title', 'createdBy'],
+            },
+          ],
+        },
+      ],
+    });
+
+    if (!lecture) {
+      throw { status: 404, message: 'Không tìm thấy bài giảng' };
+    }
+
+    const course = lecture.chapter?.course;
+
+    if (!course) {
+      throw { status: 404, message: 'Không tìm thấy khóa học của bài giảng này' };
+    }
+
+    // Teacher can only access their own courses, admin can access all
+    if (role === 'teacher' && course.createdBy !== userId) {
+      throw { status: 403, message: 'Bạn không có quyền xem bài giảng này. Bài giảng thuộc khóa học của giáo viên khác.' };
+    }
+
+    return {
+      id: lecture.id,
+      title: lecture.title,
+      type: lecture.type,
+      content: lecture.content,
+      contentUrl: lecture.contentUrl,
+      duration: lecture.duration,
+      order: lecture.order,
+      isPreview: lecture.isPreview,
+      attachments: parseAttachments(lecture.attachments),
+      chapter: {
+        id: lecture.chapter.id,
+        title: lecture.chapter.title,
+      },
+      course: {
+        id: course.id,
+        title: course.title,
+      },
+    };
+  }
+
+  /**
    * Delete a lesson
    */
   async deleteLesson(lessonId, userId, role) {

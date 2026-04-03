@@ -114,8 +114,15 @@ const deleteLessonValidation = [
     .withMessage('Lesson ID phải là số nguyên dương'),
 ];
 
+const getLessonDetailValidation = [
+  param('id')
+    .isInt({ min: 1 })
+    .withMessage('Lesson ID phải là số nguyên dương'),
+];
+
 module.exports = {
   createLessonValidation,
   updateLessonValidation,
   deleteLessonValidation,
+  getLessonDetailValidation,
 };

@@ -3,6 +3,73 @@ const db = require('../../models');
 
 const { ScheduleEvent, Course, Enrollment } = db.models;
 
+/**
+ * Get teacher's schedule for courses they own
+ */
+async function getTeacherSchedule(teacherId, query) {
+  const { month, year, page = 1, limit = 50 } = query;
+
+  // Get all courses owned by this teacher
+  const teacherCourses = await Course.findAll({
+    where: { createdBy: teacherId },
+    attributes: ['id', 'title'],
+  });
+
+  const courseIds = teacherCourses.map((c) => c.id);
+
+  if (courseIds.length === 0) {
+    return { schedule: [], meta: { total: 0, limit, offset: 0 } };
+  }
+
+  const offset = (Math.max(parseInt(page, 10) || 1, 1) - 1) * Math.min(Math.max(parseInt(limit, 10) || 50, 1), 100);
+
+  const where = { courseId: { [Op.in]: courseIds } };
+
+  // Filter by month/year if provided
+  if (month && year) {
+    const startOfMonth = new Date(parseInt(year), parseInt(month) - 1, 1);
+    const endOfMonth = new Date(parseInt(year), parseInt(month), 0, 23, 59, 59);
+    where.startAt = { [Op.between]: [startOfMonth, endOfMonth] };
+  } else if (month) {
+    const currentYear = new Date().getFullYear();
+    const startOfMonth = new Date(currentYear, parseInt(month) - 1, 1);
+    const endOfMonth = new Date(currentYear, parseInt(month), 0, 23, 59, 59);
+    where.startAt = { [Op.between]: [startOfMonth, endOfMonth] };
+  }
+
+  const total = await ScheduleEvent.count({ where });
+  const events = await ScheduleEvent.findAll({
+    where,
+    include: [{ model: Course, as: 'course', attributes: ['id', 'title'] }],
+    order: [['startAt', 'ASC']],
+    limit: Math.min(Math.max(parseInt(limit, 10) || 50, 1), 100),
+    offset,
+  });
+
+  const schedule = events.map((event) => {
+    const startParts = toDateParts(event.startAt);
+    const endParts = toDateParts(event.endAt);
+    return {
+      id: String(event.id),
+      courseId: String(event.courseId),
+      courseTitle: event.course?.title || '',
+      title: event.title,
+      type: event.type,
+      status: event.status,
+      description: event.description || undefined,
+      zoomLink: event.zoomLink || undefined,
+      location: event.location || undefined,
+      startAt: event.startAt,
+      endAt: event.endAt,
+      date: startParts.date,
+      startTime: startParts.time,
+      endTime: endParts.time,
+    };
+  });
+
+  return { schedule, meta: { total, limit, offset } };
+}
+
 // Valid event types and statuses
 const VALID_EVENT_TYPES = ['lesson', 'assignment', 'exam', 'event'];
 const VALID_EVENT_STATUSES = ['upcoming', 'ongoing', 'completed', 'cancelled'];

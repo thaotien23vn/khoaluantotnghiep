@@ -32,6 +32,7 @@ const {
   createLessonValidation,
   updateLessonValidation,
   deleteLessonValidation,
+  getLessonDetailValidation,
 } = require('../modules/lesson/lesson.validation');
 
 const {
@@ -455,12 +456,25 @@ router.delete(
 );
 
 /**
- * @route   POST /api/teacher/courses/:courseId/chapters
+ * @route   GET /api/teacher/schedule
+ * @desc    Get teacher's teaching schedule
+ * @access  Private (Teacher & Admin)
+ */
+router.get(
+  '/schedule',
+  authMiddleware,
+  authorizeRole('teacher', 'admin'),
+  getMyScheduleValidation,
+  scheduleController.getTeacherSchedule
+);
+
+/**
+ * @route   POST /api/teacher/chapters
  * @desc    Create a chapter in a course
  * @access  Private (Teacher & Admin)
  */
 router.post(
-  '/courses/:courseId/chapters',
+  '/chapters',
   authMiddleware,
   authorizeRole('teacher', 'admin'),
   createChapterValidation,
@@ -534,6 +548,19 @@ router.delete(
   authorizeRole('teacher', 'admin'),
   deleteLessonValidation,
   lessonController.deleteLesson
+);
+
+/**
+ * @route   GET /api/teacher/lectures/:id
+ * @desc    Get lecture detail for teacher (own courses) or admin (all courses)
+ * @access  Private (Teacher & Admin)
+ */
+router.get(
+  '/lectures/:id',
+  authMiddleware,
+  authorizeRole('teacher', 'admin'),
+  getLessonDetailValidation,
+  lessonController.getLessonDetail
 );
 
 /**

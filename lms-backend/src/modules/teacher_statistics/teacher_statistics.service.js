@@ -76,6 +76,7 @@ class TeacherStatisticsService {
       include: [
         {
           model: User,
+          as: 'user',
           attributes: ['id', 'name', 'email'],
         },
       ],
@@ -107,13 +108,14 @@ class TeacherStatisticsService {
     const userScores = {};
     attempts.forEach((a) => {
       if (!userScores[a.userId]) {
-        userScores[a.userId] = { user: a.User, totalScore: 0, count: 0 };
+        userScores[a.userId] = { user: a.user, totalScore: 0, count: 0 };
       }
       userScores[a.userId].totalScore += Number(a.percentageScore || 0);
       userScores[a.userId].count++;
     });
 
     const ranking = Object.values(userScores)
+      .filter((u) => u.user) // Filter out null users
       .map((u) => ({
         ...u.user.toJSON(),
         averageScore: (u.totalScore / u.count).toFixed(1),

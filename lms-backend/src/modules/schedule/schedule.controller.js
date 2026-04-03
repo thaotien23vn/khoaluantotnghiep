@@ -38,6 +38,24 @@ const handleServiceError = (error, res) => {
  * Schedule Controller - HTTP request handling
  */
 class ScheduleController {
+  async getTeacherSchedule(req, res) {
+    try {
+      const validationError = handleValidationErrors(req, res);
+      if (validationError) return;
+
+      const { id: teacherId } = req.user;
+      const result = await scheduleService.getTeacherSchedule(teacherId, req.query);
+
+      res.json({
+        success: true,
+        message: 'Lịch giảng dạy của bạn',
+        data: result,
+      });
+    } catch (error) {
+      handleServiceError(error, res);
+    }
+  }
+
   async getMySchedule(req, res) {
     try {
       const validationError = handleValidationErrors(req, res);

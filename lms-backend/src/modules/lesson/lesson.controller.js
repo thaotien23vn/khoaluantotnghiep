@@ -82,6 +82,24 @@ class LessonController {
   }
 
   /**
+   * Get lesson detail with ownership check (for teacher/admin)
+   */
+  async getLessonDetail(req, res) {
+    try {
+      const { id } = req.params;
+      const { id: userId, role } = req.user;
+      const result = await lessonService.getLessonDetail(id, userId, role);
+      res.json({
+        success: true,
+        message: 'Lấy thông tin bài giảng thành công',
+        data: result,
+      });
+    } catch (error) {
+      handleServiceError(error, res);
+    }
+  }
+
+  /**
    * Delete a lesson
    */
   async deleteLesson(req, res) {
