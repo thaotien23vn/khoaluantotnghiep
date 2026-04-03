@@ -197,9 +197,9 @@ class AiSupportService {
         tokenUsage: aiResponse.tokenUsage,
       });
 
-      // Update conversation title if it's new
-      if (conversation.title === 'AI Hỗ trợ 24/7' && content.length > 10) {
-        const shortTitle = content.slice(0, 30) + (content.length > 30 ? '...' : '');
+      // Update conversation title with first user message
+      if (conversation.title === 'AI Hỗ trợ 24/7' && content.length > 0) {
+        const shortTitle = content.slice(0, 50) + (content.length > 50 ? '...' : '');
         await conversation.update({ title: shortTitle });
       }
 
