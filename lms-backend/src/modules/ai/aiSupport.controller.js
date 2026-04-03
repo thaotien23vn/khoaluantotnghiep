@@ -8,11 +8,12 @@ class AiSupportController {
   async getOrCreateChat(req, res, next) {
     try {
       const userId = req.user.id;
-      const { sessionId, context } = req.body;
+      const { sessionId, context, forceCreate } = req.body;
 
       const result = await aiSupportService.getOrCreateConversation(userId, {
         sessionId,
         context,
+        forceCreate,
       });
 
       res.json({
