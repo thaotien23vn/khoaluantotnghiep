@@ -420,7 +420,7 @@ class PaymentController {
       }
 
       // Find payment by providerTxn (Stripe session ID)
-     
+      console.log('Looking for payment with providerTxn:', session_id);
       const payment = await Payment.findOne({
         where: { providerTxn: session_id },
         include: [
@@ -429,7 +429,17 @@ class PaymentController {
         ],
       });
 
+      console.log('Payment found:', payment ? 'yes' : 'no');
+
       if (!payment) {
+        // Try to find any payment with similar providerTxn
+        const allPayments = await Payment.findAll({
+          where: { provider: 'stripe' },
+          limit: 5,
+          order: [['createdAt', 'DESC']],
+        });
+        console.log('Recent Stripe payments:', allPayments.map(p => ({ id: p.id, providerTxn: p.providerTxn })));
+        
         return res.status(404).json({
           success: false,
           message: 'Không tìm thấy giao dịch',
