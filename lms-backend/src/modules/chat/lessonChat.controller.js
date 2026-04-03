@@ -85,13 +85,34 @@ class LessonChatController {
 
       console.log(`[Chat API] Message saved, emitting socket to room lesson_${chatId}`);
 
+      // Format message with sender object for socket
+      const user = req.user;
+      const messageWithSender = {
+        ...result.message,
+        sender: {
+          id: String(userId),
+          name: user?.name || user?.fullName || 'User',
+          avatar: user?.avatar,
+          role: senderType,
+        }
+      };
+
       // Emit user message via socket
-      emitChatMessage(chatId, 'new_message', result.message);
+      emitChatMessage(chatId, 'new_message', messageWithSender);
 
       // Emit AI response if available
       if (result.aiResponse) {
         console.log(`[Chat API] Emitting AI response`);
-        emitChatMessage(chatId, 'new_message', result.aiResponse);
+        const aiMessageWithSender = {
+          ...result.aiResponse,
+          sender: {
+            id: '0',
+            name: 'AI Assistant',
+            avatar: null,
+            role: 'ai',
+          }
+        };
+        emitChatMessage(chatId, 'new_message', aiMessageWithSender);
       }
 
       res.json({
