@@ -1513,7 +1513,7 @@ class PlacementService {
           attributes: ['id', 'name', 'email'],
         },
       ],
-      order: [['createdAt', 'DESC']],
+      order: [['startedAt', 'DESC']],
       limit: parseInt(limit),
       offset: parseInt(offset),
     });
@@ -1531,7 +1531,7 @@ class PlacementService {
         accuracy: session.questionCount > 0 ? (session.correctCount / session.questionCount) : 0,
         isQuickCheck: session.isQuickCheck,
         isRetake: session.isRetake,
-        createdAt: session.createdAt,
+        startedAt: session.startedAt,
         completedAt: session.completedAt,
       })),
       pagination: {
