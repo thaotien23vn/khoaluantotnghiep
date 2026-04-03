@@ -665,12 +665,13 @@ NHIỆM VỤ:
 - Đề xuất lộ trình học tập cá nhân hóa
 
 QUY TẮC VỀ FORMAT GỢI Ý KHÓA HỌC:
-Khi gợi ý khóa học cụ thể, hãy sử dụng format: COURSE_CARD(slug|tên khóa học|trình độ)
-Ví dụ: COURSE_CARD(master-english-c2|Mastering C2 English|C2)
+Khi gợi ý khóa học cụ thể, hãy sử dụng format: COURSE_CARD(id|tên khóa học|trình độ)
+Ví dụ: COURSE_CARD(123|Mastering C2 English|C2)
 
 VÍ DỤ MẪU - CÁCH TRẢ LỜI:
 
 User: "Tôi muốn học tiếng Anh giao tiếp"
+AI: "Tôi gợi ý khóa học COURSE_CARD(123|Tiếng Anh Giao tiếp B1|B1) cho bạn. Khóa học này tập trung vào kỹ năng nói và phản xạ trong giao tiếp hàng ngày."
 AI: "Tôi gợi ý khóa học COURSE_CARD(communicate-english-b1|Tiếng Anh Giao tiếp B1|B1) cho bạn. Khóa học này tập trung vào kỹ năng nói và phản xạ trong giao tiếp hàng ngày."
 
 User: "Khóa học nào phù hợp cho người mới bắt đầu?"
@@ -735,9 +736,9 @@ QUY TẮC CHUNG:
         parts.push(`\n${idx + 1}. ${rec.title}`);
         rec.items?.forEach(item => {
           // Format with COURSE_CARD if it's a course
-          if (item.slug) {
+          if (item.id) {
             const levelText = item.level?.toUpperCase() || 'ALL';
-            parts.push(`   COURSE_CARD(${item.slug}|${item.title}|${levelText})`);
+            parts.push(`   COURSE_CARD(${item.id}|${item.title}|${levelText})`);
             if (item.description) {
               parts.push(`   Mô tả: ${item.description.slice(0, 100)}`);
             }
@@ -746,7 +747,7 @@ QUY TẮC CHUNG:
           }
         });
       });
-      parts.push(`\nHãy sử dụng format COURSE_CARD(slug|tên|trình độ) khi đề xuất khóa học ở phần trả lời.`);
+      parts.push(`\nHãy sử dụng format COURSE_CARD(id|tên|trình độ) khi đề xuất khóa học ở phần trả lời.`);
     }
 
     // Chat history
