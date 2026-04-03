@@ -425,7 +425,7 @@ class PaymentController {
         where: { providerTxn: session_id },
         include: [
           { model: Course, as: 'course', attributes: ['id', 'title'] },
-          { model: User, as: 'user', attributes: ['id', 'fullName', 'email'] },
+          { model: User, as: 'user', attributes: ['id', 'name', 'email'] },
         ],
       });
 
