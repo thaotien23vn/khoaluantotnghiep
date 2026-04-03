@@ -571,7 +571,7 @@ class AiSupportService {
             published: true,
             level: this.mapCefrToCourseLevel(level),
           },
-          attributes: ['id', 'slug', 'title', 'description', 'level', 'imageUrl', 'students'],
+          attributes: ['id', 'title', 'description', 'level', 'imageUrl', 'students'],
           limit: 3,
         });
 
@@ -581,7 +581,6 @@ class AiSupportService {
             title: 'Khóa học phù hợp với trình độ của bạn',
             items: suggestedCourses.map(c => ({
               id: c.id,
-              slug: c.slug,
               title: c.title,
               description: c.description,
               level: c.level,
