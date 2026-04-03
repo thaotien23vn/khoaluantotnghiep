@@ -470,6 +470,30 @@ class PlacementController {
   }
 
   /**
+   * Admin: Get all placement sessions with pagination
+   */
+  async adminGetAllSessions(req, res, next) {
+    try {
+      const { page = 1, limit = 20, status, userId } = req.query;
+      
+      const result = await placementService.getAllSessionsForAdmin({
+        page: parseInt(page),
+        limit: parseInt(limit),
+        status,
+        userId: userId ? parseInt(userId) : undefined,
+      });
+      
+      res.json({
+        success: true,
+        data: result,
+      });
+    } catch (err) {
+      logger.error('ADMIN_GET_ALL_SESSIONS_ERROR', { error: err.message });
+      next(err);
+    }
+  }
+
+  /**
    * Admin: Delete a placement session
    */
   async adminDeleteSession(req, res, next) {

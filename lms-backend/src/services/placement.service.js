@@ -1491,6 +1491,58 @@ class PlacementService {
   }
 
   /**
+   * Admin: Get all placement sessions with pagination
+   * @param {Object} options - { page, limit, status, userId }
+   * @returns {Object} sessions with pagination
+   */
+  async getAllSessionsForAdmin(options = {}) {
+    const { page = 1, limit = 20, status, userId } = options;
+    const offset = (page - 1) * limit;
+
+    const where = {};
+    if (status) where.status = status;
+    if (userId) where.userId = userId;
+
+    const { count, rows: sessions } = await PlacementSession.findAndCountAll({
+      where,
+      include: [
+        {
+          model: User,
+          as: 'user',
+          attributes: ['id', 'name', 'email'],
+        },
+      ],
+      order: [['createdAt', 'DESC']],
+      limit: parseInt(limit),
+      offset: parseInt(offset),
+    });
+
+    return {
+      sessions: sessions.map(session => ({
+        id: session.id,
+        userId: session.userId,
+        userName: session.user?.name,
+        userEmail: session.user?.email,
+        status: session.status,
+        finalCefrLevel: session.finalCefrLevel,
+        questionCount: session.questionCount,
+        correctCount: session.correctCount,
+        accuracy: session.questionCount > 0 ? (session.correctCount / session.questionCount) : 0,
+        isQuickCheck: session.isQuickCheck,
+        isRetake: session.isRetake,
+        createdAt: session.createdAt,
+        completedAt: session.completedAt,
+      })),
+      pagination: {
+        total: count,
+        page: parseInt(page),
+        limit: parseInt(limit),
+        totalPages: Math.ceil(count / limit),
+      },
+    };
+  }
+
+  /**
    * Admin: Delete a placement session
    * @param {number} sessionId 
    */

@@ -231,6 +231,14 @@ router.post(
 // ADMIN MANAGEMENT ROUTES
 // ====================
 
+// Admin: Get all placement sessions
+router.get(
+  '/admin/placement/sessions',
+  authMiddleware,
+  authorizeRole('admin'),
+  placementController.adminGetAllSessions
+);
+
 // Admin: Get user placement history
 router.get(
   '/admin/placement/user/:userId/history',
