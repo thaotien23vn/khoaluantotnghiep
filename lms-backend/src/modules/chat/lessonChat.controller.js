@@ -1,5 +1,19 @@
 const lessonChatService = require('./lessonChat.service');
 const logger = require('../../utils/logger');
+const { getIO } = require('../../socket');
+
+/**
+ * Emit message to chat room via socket
+ */
+function emitChatMessage(chatId, event, message) {
+  try {
+    const io = getIO();
+    const roomName = `lesson_${chatId}`;
+    io.to(roomName).emit(event, message);
+  } catch (err) {
+    logger.error('SOCKET_EMIT_ERROR', { error: err.message, chatId, event });
+  }
+}
 
 /**
  * Lesson Chat Controller
@@ -63,6 +77,14 @@ class LessonChatController {
         parentId,
         senderType,
       });
+
+      // Emit user message via socket
+      emitChatMessage(chatId, 'new_message', result.message);
+
+      // Emit AI response if available
+      if (result.aiResponse) {
+        emitChatMessage(chatId, 'new_message', result.aiResponse);
+      }
 
       res.json({
         success: true,
