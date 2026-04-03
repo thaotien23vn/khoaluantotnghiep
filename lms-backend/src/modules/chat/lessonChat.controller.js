@@ -76,16 +76,21 @@ class LessonChatController {
       const senderType = req.user?.role === 'admin' ? 'admin' : 
                         req.user?.role === 'teacher' ? 'teacher' : 'student';
 
+      console.log(`[Chat API] Sending message to chatId: ${chatId}, userId: ${userId}`);
+
       const result = await lessonChatService.sendMessage(chatId, userId, content, {
         parentId,
         senderType,
       });
+
+      console.log(`[Chat API] Message saved, emitting socket to room lesson_${chatId}`);
 
       // Emit user message via socket
       emitChatMessage(chatId, 'new_message', result.message);
 
       // Emit AI response if available
       if (result.aiResponse) {
+        console.log(`[Chat API] Emitting AI response`);
         emitChatMessage(chatId, 'new_message', result.aiResponse);
       }
 
