@@ -85,10 +85,11 @@ class LessonChatController {
 
       console.log(`[Chat API] Message saved, emitting socket to room lesson_${chatId}`);
 
-      // Format message with sender object for socket
+      // Format message with sender object for socket - convert to plain object
       const user = req.user;
+      const messageData = result.message.toJSON ? result.message.toJSON() : result.message;
       const messageWithSender = {
-        ...result.message,
+        ...messageData,
         sender: {
           id: String(userId),
           name: user?.name || user?.fullName || 'User',
@@ -103,8 +104,9 @@ class LessonChatController {
       // Emit AI response if available
       if (result.aiResponse) {
         console.log(`[Chat API] Emitting AI response`);
+        const aiData = result.aiResponse.toJSON ? result.aiResponse.toJSON() : result.aiResponse;
         const aiMessageWithSender = {
-          ...result.aiResponse,
+          ...aiData,
           sender: {
             id: '0',
             name: 'AI Assistant',
