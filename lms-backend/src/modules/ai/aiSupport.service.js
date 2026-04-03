@@ -275,7 +275,7 @@ class AiSupportService {
       const response = await aiGateway.generateText({
         prompt,
         temperature: 0.7,
-        maxTokens: 2500,  // Tăng từ 1500 để tránh cắt câu trả lời
+        maxOutputTokens: 2500,  // Đổi từ maxTokens sang maxOutputTokens
       });
 
       // 6. Post-process response
