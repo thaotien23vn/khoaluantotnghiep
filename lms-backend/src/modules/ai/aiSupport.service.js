@@ -269,7 +269,7 @@ class AiSupportService {
       const response = await aiGateway.generateText({
         prompt,
         temperature: 0.7,
-        maxTokens: 1500,
+        maxTokens: 2500,  // Tăng từ 1500 để tránh cắt câu trả lời
       });
 
       // 6. Post-process response
@@ -565,7 +565,7 @@ class AiSupportService {
             published: true,
             level: this.mapCefrToCourseLevel(level),
           },
-          attributes: ['id', 'title', 'description', 'level', 'imageUrl', 'students'],
+          attributes: ['id', 'slug', 'title', 'description', 'level', 'imageUrl', 'students'],
           limit: 3,
         });
 
@@ -575,6 +575,7 @@ class AiSupportService {
             title: 'Khóa học phù hợp với trình độ của bạn',
             items: suggestedCourses.map(c => ({
               id: c.id,
+              slug: c.slug,
               title: c.title,
               description: c.description,
               level: c.level,
@@ -657,11 +658,23 @@ NHIỆM VỤ:
 - Hỗ trợ kỹ thuật và giải đáp thắc mắc
 - Đề xuất lộ trình học tập cá nhân hóa
 
-QUY TẮC:
+QUY TẮC VỀ FORMAT GỢI Ý KHÓA HỌC:
+Khi gợi ý khóa học cụ thể, hãy sử dụng format: COURSE_CARD(slug|tên khóa học|trình độ)
+Ví dụ: COURSE_CARD(master-english-c2|Mastering C2 English|C2)
+
+VÍ DỤ MẪU - CÁCH TRẢ LỜI:
+
+User: "Tôi muốn học tiếng Anh giao tiếp"
+AI: "Tôi gợi ý khóa học COURSE_CARD(communicate-english-b1|Tiếng Anh Giao tiếp B1|B1) cho bạn. Khóa học này tập trung vào kỹ năng nói và phản xạ trong giao tiếp hàng ngày."
+
+User: "Khóa học nào phù hợp cho người mới bắt đầu?"
+AI: "Với người mới bắt đầu, tôi đề xuất COURSE_CARD(english-basic-a1|Tiếng Anh Cơ bản A1|A1). Đây là khóa học xây dựng nền tảng vững chắc từ đầu."
+
+QUY TẮC CHUNG:
 1. Trả lời bằng tiếng Việt, thân thiện và chuyên nghiệp
 2. Dựa trên ngữ cảnh (context) được cung cấp để trả lời
 3. Nếu không chắc chắn, nói rõ "Tôi không chắc về vấn đề này"
-4. Có thể đề xuất khóa học nếu phù hợp
+4. Có thể đề xuất khóa học nếu phù hợp (dùng format COURSE_CARD)
 5. Format câu trả lời rõ ràng với bullet points khi cần`);
 
     // User context
@@ -711,13 +724,23 @@ QUY TẮC:
 
     // Recommendations
     if (recommendations?.length) {
-      parts.push(`\n=== GỢI Ý CÓ THỂ ĐỀ XUẤT ===`);
+      parts.push(`\n=== CÁC KHÓA HỌC CÓ THỂ ĐỀ XUẤT ===`);
       recommendations.forEach((rec, idx) => {
         parts.push(`\n${idx + 1}. ${rec.title}`);
         rec.items?.forEach(item => {
-          parts.push(`   - ${item.title}${item.description ? ': ' + item.description.slice(0, 100) : ''}`);
+          // Format with COURSE_CARD if it's a course
+          if (item.slug) {
+            const levelText = item.level?.toUpperCase() || 'ALL';
+            parts.push(`   COURSE_CARD(${item.slug}|${item.title}|${levelText})`);
+            if (item.description) {
+              parts.push(`   Mô tả: ${item.description.slice(0, 100)}`);
+            }
+          } else {
+            parts.push(`   - ${item.title}${item.description ? ': ' + item.description.slice(0, 100) : ''}`);
+          }
         });
       });
+      parts.push(`\nHãy sử dụng format COURSE_CARD(slug|tên|trình độ) khi đề xuất khóa học ở phần trả lời.`);
     }
 
     // Chat history
