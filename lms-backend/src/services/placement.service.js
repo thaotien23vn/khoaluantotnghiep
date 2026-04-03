@@ -14,6 +14,7 @@ const {
   PlacementResponse,
   Course,
   PlacementQuestionBank,
+  User,
 } = db.models;
 
 // CEFR levels in order
