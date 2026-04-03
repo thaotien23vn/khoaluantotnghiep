@@ -89,13 +89,13 @@ class PlacementAnalyticsService {
       include: [{
         model: PlacementQuestion,
         as: 'question',
-        attributes: ['content', 'correctAnswer', 'explanation', 'cefrLevel', 'skillType'],
+        attributes: ['content', 'correct_answer', 'explanation', 'cefr_level', 'skill_type'],
       }],
       attributes: [
         'questionId',
         [Sequelize.fn('COUNT', Sequelize.col('PlacementResponse.id')), 'wrongCount'],
       ],
-      group: ['questionId', 'question.id', 'question.content', 'question.correctAnswer', 'question.explanation', 'question.cefrLevel', 'question.skillType'],
+      group: ['questionId', 'question.id', 'question.content', 'question.correct_answer', 'question.explanation', 'question.cefr_level', 'question.skill_type'],
       order: [[Sequelize.fn('COUNT', Sequelize.col('PlacementResponse.id')), 'DESC']],
       limit,
       raw: true,
@@ -104,10 +104,10 @@ class PlacementAnalyticsService {
     return wrongAnswers.map((item) => ({
       questionId: item.questionId,
       content: item['question.content'],
-      correctAnswer: item['question.correctAnswer'],
+      correctAnswer: item['question.correct_answer'],
       explanation: item['question.explanation'],
-      cefrLevel: item['question.cefrLevel'],
-      skillType: item['question.skillType'],
+      cefrLevel: item['question.cefr_level'],
+      skillType: item['question.skill_type'],
       wrongCount: parseInt(item.wrongCount, 10),
     }));
   }
@@ -128,14 +128,14 @@ class PlacementAnalyticsService {
       include: [{
         model: PlacementQuestion,
         as: 'question',
-        attributes: ['skillType'],
+        attributes: ['skill_type'],
       }],
       attributes: [
-        [Sequelize.col('question.skillType'), 'skillType'],
+        [Sequelize.col('question.skill_type'), 'skillType'],
         [Sequelize.fn('COUNT', Sequelize.col('PlacementResponse.id')), 'total'],
         [Sequelize.fn('SUM', Sequelize.literal('CASE WHEN "PlacementResponse"."is_correct" = true THEN 1 ELSE 0 END')), 'correct'],
       ],
-      group: ['question.skillType'],
+      group: ['question.skill_type'],
       raw: true,
     });
 
