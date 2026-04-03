@@ -250,9 +250,19 @@ class CourseService {
   /**
    * Get course detail with content
    */
-  async getCourseDetail(courseId) {
+  async getCourseDetail(courseIdOrSlug) {
+    // Check if it's a numeric ID or slug
+    const isNumeric = /^\d+$/.test(String(courseIdOrSlug));
+    const where = { published: true };
+    
+    if (isNumeric) {
+      where.id = courseIdOrSlug;
+    } else {
+      where.slug = courseIdOrSlug;
+    }
+
     const course = await Course.findOne({
-      where: { id: courseId, published: true },
+      where,
       include: [
         {
           model: User,
