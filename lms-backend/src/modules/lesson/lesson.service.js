@@ -2,7 +2,7 @@ const db = require('../../models');
 const courseAggregatesService = require('../../services/courseAggregates.service');
 const mediaService = require('../../services/media.service');
 
-const { Lecture, Chapter, Course } = db.models;
+const { Lecture, Chapter, Course, LessonChat } = db.models;
 
 /**
  * Parse attachments safely
@@ -244,37 +244,48 @@ class LessonService {
    * Delete a lesson
    */
   async deleteLesson(lessonId, userId, role) {
-    const lecture = await Lecture.findByPk(lessonId);
-
-    if (!lecture) {
-      throw { status: 404, message: 'Không tìm thấy bài giảng' };
-    }
-
-    const chapter = await Chapter.findByPk(lecture.chapterId);
-
-    if (!chapter) {
-      throw { status: 404, message: 'Không tìm thấy chương của bài giảng này' };
-    }
-
-    const course = await Course.findByPk(chapter.courseId);
-
-    if (!course) {
-      throw { status: 404, message: 'Không tìm thấy khóa học của chương này' };
-    }
-
-    if (role === 'teacher' && course.createdBy !== userId) {
-      throw { status: 403, message: 'Bạn không có quyền xóa bài giảng này' };
-    }
-
-    await lecture.destroy();
-
+    const transaction = await db.sequelize.transaction();
     try {
-      await courseAggregatesService.recomputeCourseTotalLessons(course.id);
-    } catch (aggErr) {
-      console.error('Recompute course totalLessons (silent) error:', aggErr);
-    }
+      const lecture = await Lecture.findByPk(lessonId, { transaction });
 
-    return { message: 'Xóa bài giảng thành công' };
+      if (!lecture) {
+        throw { status: 404, message: 'Không tìm thấy bài giảng' };
+      }
+
+      const chapter = await Chapter.findByPk(lecture.chapterId, { transaction });
+
+      if (!chapter) {
+        throw { status: 404, message: 'Không tìm thấy chương của bài giảng này' };
+      }
+
+      const course = await Course.findByPk(chapter.courseId, { transaction });
+
+      if (!course) {
+        throw { status: 404, message: 'Không tìm thấy khóa học của chương này' };
+      }
+
+      if (role === 'teacher' && course.createdBy !== userId) {
+        throw { status: 403, message: 'Bạn không có quyền xóa bài giảng này' };
+      }
+
+      // Xóa lesson chat trước (tránh lỗi khóa ngoại)
+      await LessonChat.destroy({ where: { lessonId: lecture.id }, transaction });
+
+      await lecture.destroy({ transaction });
+
+      await transaction.commit();
+
+      try {
+        await courseAggregatesService.recomputeCourseTotalLessons(course.id);
+      } catch (aggErr) {
+        console.error('Recompute course totalLessons (silent) error:', aggErr);
+      }
+
+      return { message: 'Xóa bài giảng thành công' };
+    } catch (error) {
+      await transaction.rollback();
+      throw error;
+    }
   }
 }
 
