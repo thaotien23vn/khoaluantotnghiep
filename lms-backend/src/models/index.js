@@ -177,7 +177,7 @@ Chapter.belongsTo(Course, { foreignKey: 'courseId' });
 Chapter.hasMany(Lecture, { foreignKey: 'chapterId', as: 'lectures' });
 Lecture.belongsTo(Chapter, { foreignKey: 'chapterId', as: 'chapter' });
 Chapter.hasMany(Quiz, { foreignKey: 'chapterId', as: 'quizzes' });
-Quiz.belongsTo(Chapter, { foreignKey: 'chapterId', as: 'chapter' });
+Quiz.belongsTo(Chapter, { foreignKey: 'chapterId', as: 'quizChapter' });
 
 User.hasMany(AiConversation, { foreignKey: 'userId', as: 'aiConversations' });
 AiConversation.belongsTo(User, { foreignKey: 'userId', as: 'user' });
