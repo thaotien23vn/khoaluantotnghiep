@@ -618,13 +618,32 @@ class AiService {
     // Generate questions using RAG
     const generatedQuestions = await this.generateRAGQuizQuestions(courseId, options);
 
-    // Create quiz as draft - use first lecture if multiple, or specific lecture
-    const lectureId = options.lectureIds?.[0] || null;
+    // Determine lectureId and chapterId based on scope
+    let lectureId = null;
+    let chapterId = null;
+    
+    if (options.scope === 'chapter') {
+      // Scope: chapter - use provided chapterId
+      chapterId = options.chapterId || null;
+    } else if (options.scope === 'lecture' || options.scope === 'multi') {
+      // Scope: lecture or multi - use first lecture's chapter
+      lectureId = options.lectureIds?.[0] || null;
+      if (lectureId) {
+        const lecture = await Lecture.findByPk(lectureId, {
+          include: [{ model: Chapter, as: 'chapter', attributes: ['id'], required: true }],
+        });
+        if (lecture) {
+          chapterId = lecture.chapter?.id || null;
+        }
+      }
+    }
+    // For scope 'course', both lectureId and chapterId remain null (course-level quiz)
     
     // Create quiz in database
     const quiz = await db.models.Quiz.create({
       courseId,
       lectureId,
+      chapterId,
       title: quizData.title || `Quiz: ${course.title}`,
       description: quizData.description || `Quiz được tạo tự động bằng AI`,
       timeLimit: quizData.timeLimit || 30,

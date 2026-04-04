@@ -65,6 +65,11 @@ module.exports = (sequelize) => {
       allowNull: true,
       field: 'lecture_id',
     },
+    chapterId: {
+      type: DataTypes.INTEGER.UNSIGNED,
+      allowNull: true,
+      field: 'chapter_id',
+    },
   }, {
     tableName: 'quizzes',
     timestamps: true,
@@ -96,6 +101,11 @@ module.exports = (sequelize) => {
     Quiz.belongsTo(models.Lecture, {
       foreignKey: 'lectureId',
       as: 'lecture',
+    });
+
+    Quiz.belongsTo(models.Chapter, {
+      foreignKey: 'chapterId',
+      as: 'chapter',
     });
   };
 

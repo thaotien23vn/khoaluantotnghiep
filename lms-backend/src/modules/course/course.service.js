@@ -2,7 +2,7 @@ const { Op } = require('sequelize');
 const db = require('../../models');
 const courseAggregatesService = require('../../services/courseAggregates.service');
 
-const { Course, User, Category, Enrollment, Chapter, Lecture } = db.models;
+const { Course, User, Category, Enrollment, Chapter, Lecture, Quiz } = db.models;
 
 // Helper: build URL-friendly slug from title
 const generateSlugFromTitle = (title) => {
@@ -568,10 +568,19 @@ class CourseService {
 
     const chapters = await Chapter.findAll({
       where: { courseId: course.id },
-      include: [{ model: Lecture, as: 'lectures' }],
+      include: [
+        { model: Lecture, as: 'lectures' },
+        { 
+          model: Quiz, 
+          as: 'quizzes',
+          where: { status: 'published' },
+          required: false,
+        },
+      ],
       order: [
         ['order', 'ASC'],
         ['lectures', 'order', 'ASC'],
+        ['quizzes', 'createdAt', 'ASC'],
       ],
     });
 
