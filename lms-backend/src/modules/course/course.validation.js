@@ -42,7 +42,7 @@ const createCourseValidation = [
   body('level')
     .optional()
     .trim()
-    .isIn(['Mọi cấp độ', 'Cơ bản', 'Trung cấp', 'Nâng cao'])
+    .isIn(['beginner', 'elementary', 'intermediate', 'upper-intermediate', 'advanced', 'proficiency', 'all-levels'])
     .withMessage('Cấp độ không hợp lệ'),
   
   body('duration')
@@ -132,7 +132,7 @@ const updateCourseValidation = [
   body('level')
     .optional()
     .trim()
-    .isIn(['Mọi cấp độ', 'Cơ bản', 'Trung cấp', 'Nâng cao'])
+    .isIn(['beginner', 'elementary', 'intermediate', 'upper-intermediate', 'advanced', 'proficiency', 'all-levels'])
     .withMessage('Cấp độ không hợp lệ'),
   
   body('duration')
@@ -163,7 +163,7 @@ const listCoursesValidation = [
   query('level')
     .optional()
     .trim()
-    .isIn(['Mọi cấp độ', 'Cơ bản', 'Trung cấp', 'Nâng cao'])
+    .isIn(['beginner', 'elementary', 'intermediate', 'upper-intermediate', 'advanced', 'proficiency', 'all-levels'])
     .withMessage('Cấp độ không hợp lệ'),
   
   query('minPrice')

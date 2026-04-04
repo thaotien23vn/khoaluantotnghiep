@@ -175,7 +175,61 @@ async function retrieveTopChunks({ courseId, lectureId, query, topK = 5, options
   return scored;
 }
 
+/**
+ * Retrieve top chunks from multiple lectures for quiz generation
+ * Supports scope: 'lecture' | 'chapter' | 'course' | 'multi'
+ */
+async function retrieveTopChunksForQuiz({ courseId, scope, lectureIds, chapterId, query, topK = 10, options = {} }) {
+  const { Op } = require('sequelize');
+  
+  const where = {
+    courseId: Number(courseId),
+  };
+
+  // Build where clause based on scope
+  if (scope === 'lecture' && lectureIds?.length === 1) {
+    where.lectureId = Number(lectureIds[0]);
+  } else if (scope === 'multi' && lectureIds?.length > 0) {
+    where.lectureId = { [Op.in]: lectureIds.map(Number) };
+  } else if (scope === 'chapter' && chapterId) {
+    where.chapterId = Number(chapterId);
+  }
+  // scope === 'course' → no lecture/chapter filter, get all chunks in course
+
+  const rows = await AiChunk.findAll({
+    where,
+    attributes: ['id', 'text', 'embeddingJson', 'lectureId', 'chapterId', 'chunkIndex'],
+    transaction: options.transaction,
+  });
+
+  if (!rows.length) return [];
+
+  // Generate query embedding for similarity search
+  const searchQuery = query || 'quiz test exam important concepts knowledge key points';
+  const { embedding: queryEmbedding } = await aiGateway.embedText({ text: searchQuery });
+
+  // Score and rank chunks
+  const scored = rows
+    .map((r) => {
+      const score = cosineSimilarity(queryEmbedding, r.embeddingJson);
+      return {
+        id: r.id,
+        text: r.text,
+        lectureId: r.lectureId,
+        chapterId: r.chapterId,
+        chunkIndex: r.chunkIndex,
+        score,
+      };
+    })
+    .filter((x) => Number.isFinite(x.score))
+    .sort((a, b) => b.score - a.score)
+    .slice(0, Math.max(1, Math.min(50, Number(topK) || 10)));
+
+  return scored;
+}
+
 module.exports = {
   ingestLecture,
   retrieveTopChunks,
+  retrieveTopChunksForQuiz,
 };

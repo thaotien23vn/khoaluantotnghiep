@@ -1,6 +1,7 @@
 const db = require('../models');
 const { Op } = require('sequelize');
 const aiGateway = require('./aiGateway.service');
+const aiRagService = require('./aiRag.service');
 const logger = require('../utils/logger');
 const { safeAiCall } = require('../utils/aiSafeCaller');
 const { mapQuizDifficultyToCefr } = require('../utils/difficultyMapper');
@@ -387,6 +388,196 @@ Trả về danh sách các câu hỏi trong format JSON array.`;
         status: error.status || 500,
         message: error.message || 'Không thể tạo quiz questions',
         code: error.code || 'QUIZ_GENERATION_FAILED',
+      };
+    }
+  }
+
+  /**
+   * Generate quiz questions using RAG (Retrieval-Augmented Generation)
+   * Supports multiple scopes: course, chapter, lecture, multi-lecture
+   */
+  async generateRAGQuizQuestions(courseId, options = {}) {
+    try {
+      const {
+        scope = 'lecture', // 'course' | 'chapter' | 'lecture' | 'multi'
+        lectureIds = [],
+        chapterId = null,
+        questionCount = 5,
+        questionTypes = ['multiple_choice', 'true_false', 'short_answer'],
+        difficulty = 'mixed',
+      } = options;
+
+      // Hardcode topK - không nhận từ FE
+      const topK = 10;
+
+      // Validate inputs
+      if (!courseId) {
+        throw { status: 400, message: 'courseId là bắt buộc', code: 'MISSING_COURSE_ID' };
+      }
+
+      // Retrieve top K chunks using RAG
+      const chunks = await aiRagService.retrieveTopChunksForQuiz({
+        courseId,
+        scope,
+        lectureIds,
+        chapterId,
+        query: 'quiz test exam important concepts knowledge key points',
+        topK,
+      });
+
+      if (!chunks || chunks.length === 0) {
+        throw { status: 404, message: 'Không tìm thấy content cho phạm vi đã chọn. Vui lòng ingest lecture trước.', code: 'NO_CONTENT_FOUND' };
+      }
+
+      // Aggregate chunks into context
+      const context = chunks.map((c, idx) => {
+        return `--- Chunk ${idx + 1} (Lecture ${c.lectureId}) ---\n${c.text}`;
+      }).join('\n\n');
+
+      // Get course info for context
+      const course = await db.models.Course.findByPk(courseId, {
+        attributes: ['title', 'description'],
+      });
+
+      const systemPrompt = `Bạn là một chuyên gia giáo dục trong việc tạo câu hỏi kiểm tra chất lượng cao. Tạo câu hỏi dựa trên nội dung được cung cấp.
+
+Yêu cầu:
+- Câu hỏi phải rõ ràng và không ambiguous
+- Đáp án phải chính xác
+- Phù hợp với mục tiêu learning objectives
+- Test cả comprehension và application`;
+
+      const prompt = `Tạo ${questionCount} câu hỏi quiz từ nội dung sau:
+
+KHÓA HỌC: ${course?.title || 'N/A'}
+PHẠM VI: ${scope}
+SỐ CHUNKS: ${chunks.length}
+
+NỘI DUNG:
+${context}
+
+Yêu cầu:
+- Số lượng câu hỏi: ${questionCount}
+- Loại câu hỏi: ${questionTypes.join(', ')}
+- Độ khó: ${difficulty}
+
+Format mỗi câu hỏi như sau:
+{
+  "type": "multiple_choice|true_false|short_answer",
+  "question": "Nội dung câu hỏi",
+  "options": ["A. Option 1", "B. Option 2", "C. Option 3", "D. Option 4"],
+  "correctAnswer": "A hoặc true/false hoặc text answer",
+  "explanation": "Giải thích tại sao đáp án đúng",
+  "difficulty": "easy|medium|hard",
+  "topic": "Chủ đề liên quan"
+}
+
+Trả về danh sách các câu hỏi trong format JSON array.`;
+
+      let aiResponse;
+      let retries = 0;
+      const maxRetries = 3;
+      
+      while (retries < maxRetries) {
+        try {
+          aiResponse = await aiGateway.generateText({
+            system: systemPrompt,
+            prompt,
+            maxOutputTokens: 8192,
+            timeoutMs: 180000,
+          });
+          break;
+        } catch (aiError) {
+          const isRateLimit = aiError.statusCode === 429 || 
+                             aiError.code === 'ALL_KEYS_RATE_LIMITED' || 
+                             aiError.code === 'GLOBAL_RATE_LIMITED';
+                             
+          if (isRateLimit) {
+            throw {
+              status: 429,
+              message: 'Hệ thống AI đang bận (Rate Limit). Vui lòng thử lại sau ít phút.',
+              code: 'AI_RATE_LIMIT',
+            };
+          }
+
+          const isRetryable = aiError.message?.includes('503') ||
+                             aiError.message?.includes('timeout') ||
+                             aiError.statusCode === 503;
+                             
+          if (isRetryable && retries < maxRetries - 1) {
+            retries++;
+            const delayMs = 30000 * Math.pow(2, retries - 1);
+            logger.warn('RAG_QUIZ_GENERATE_RETRY', { retry: retries, delaySeconds: delayMs / 1000, error: aiError.message });
+            await new Promise((resolve) => setTimeout(resolve, delayMs));
+          } else {
+            throw aiError;
+          }
+        }
+      }
+
+      let questions;
+      try {
+        let jsonText = aiResponse.text;
+        const codeBlockMatch = jsonText.match(/```(?:json)?\s*([\s\S]*?)\s*```/);
+        if (codeBlockMatch) {
+          jsonText = codeBlockMatch[1];
+        }
+        const arrayMatch = jsonText.match(/\[[\s\S]*?\](?=\s*$|\s*\n)/) || jsonText.match(/\[[\s\S]*\]/);
+        if (arrayMatch) {
+          jsonText = arrayMatch[0];
+        }
+        const startIdx = jsonText.indexOf('[');
+        let endIdx = jsonText.lastIndexOf(']');
+        if (startIdx !== -1) {
+          if (endIdx === -1 || endIdx < startIdx) {
+            jsonText = jsonText.substring(startIdx) + '\n}]';
+            logger.warn('JSON_TRUNCATED_ATTEMPTING_FIX_RAG', { courseId });
+          } else {
+            jsonText = jsonText.substring(startIdx, endIdx + 1);
+          }
+        }
+        questions = JSON.parse(jsonText);
+        if (!Array.isArray(questions)) {
+          throw new Error('Parsed result is not an array');
+        }
+      } catch (parseError) {
+        logger.error('RAG_QUIZ_QUESTIONS_PARSE_FAILED', {
+          courseId,
+          response: aiResponse.text?.substring(0, 500),
+          error: parseError.message,
+        });
+        throw {
+          status: 500,
+          message: 'Không thể parse quiz questions',
+          code: 'QUIZ_QUESTIONS_PARSE_FAILED',
+        };
+      }
+
+      const validatedQuestions = await this.validateQuizQuestions(questions, lectureIds[0] || null);
+
+      return {
+        questions: validatedQuestions,
+        metadata: {
+          questionCount: validatedQuestions.length,
+          questionTypes,
+          difficulty,
+          scope,
+          chunksUsed: chunks.length,
+          generatedAt: new Date(),
+        },
+      };
+    } catch (error) {
+      logger.error('RAG_QUIZ_GENERATION_FAILED', {
+        courseId,
+        options,
+        error: error.message,
+        stack: error.stack,
+        name: error.name,
+      });
+      throw {
+        status: error.status || 500,
+        message: error.message || 'Không thể tạo RAG quiz questions',
+        code: error.code || 'RAG_QUIZ_GENERATION_FAILED',
       };
     }
   }

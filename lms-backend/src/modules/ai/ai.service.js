@@ -569,6 +569,98 @@ class AiService {
   }
 
   /**
+   * Generate RAG-based quiz questions for teacher
+   * Supports multiple scopes: course, chapter, lecture, multi-lecture
+   */
+  async generateTeacherRAGQuiz(reqUser, courseId, options = {}) {
+    const setting = await this.getAiSetting();
+    if (!setting?.enabled) {
+      throw { status: 503, message: 'AI đang tạm tắt' };
+    }
+
+    const policy = await this.getRolePolicy(reqUser.role);
+    if (!policy?.enabled) {
+      throw { status: 403, message: 'Role không được phép sử dụng AI' };
+    }
+
+    // Verify teacher owns the course
+    const course = await Course.findByPk(courseId);
+    const allowed = await this.ensureTeacherOwnsCourseOrAdmin(reqUser, course);
+    if (!allowed) {
+      throw { status: 403, message: 'Bạn không có quyền tạo quiz cho khóa học này' };
+    }
+
+    return this.generateRAGQuizQuestions(courseId, options);
+  }
+
+  /**
+   * Generate and save RAG-based quiz as draft
+   */
+  async generateAndSaveTeacherRAGQuiz(reqUser, courseId, quizData, options = {}) {
+    const setting = await this.getAiSetting();
+    if (!setting?.enabled) {
+      throw { status: 503, message: 'AI đang tạm tắt' };
+    }
+
+    const policy = await this.getRolePolicy(reqUser.role);
+    if (!policy?.enabled) {
+      throw { status: 403, message: 'Role không được phép sử dụng AI' };
+    }
+
+    // Verify teacher owns the course
+    const course = await Course.findByPk(courseId);
+    const allowed = await this.ensureTeacherOwnsCourseOrAdmin(reqUser, course);
+    if (!allowed) {
+      throw { status: 403, message: 'Bạn không có quyền tạo quiz cho khóa học này' };
+    }
+
+    // Generate questions using RAG
+    const generatedQuestions = await this.generateRAGQuizQuestions(courseId, options);
+
+    // Create quiz as draft - use first lecture if multiple, or specific lecture
+    const lectureId = options.lectureIds?.[0] || null;
+    
+    // Create quiz in database
+    const quiz = await db.models.Quiz.create({
+      courseId,
+      lectureId,
+      title: quizData.title || `Quiz: ${course.title}`,
+      description: quizData.description || `Quiz được tạo tự động bằng AI`,
+      timeLimit: quizData.timeLimit || 30,
+      passingScore: quizData.passingScore || 60,
+      maxScore: quizData.maxScore || 100,
+      status: 'draft',
+      showResults: true,
+      createdBy: reqUser.id,
+    });
+
+    // Create questions
+    const questionRecords = [];
+    for (const q of generatedQuestions.questions) {
+      const question = await db.models.Question.create({
+        quizId: quiz.id,
+        type: q.type,
+        content: q.question,
+        options: q.options || null,
+        correctAnswer: q.correctAnswer,
+        explanation: q.explanation || null,
+        points: 1,
+        order: q.order,
+      });
+      questionRecords.push(question);
+    }
+
+    return {
+      quiz,
+      questions: questionRecords,
+      metadata: {
+        ...generatedQuestions.metadata,
+        generatedAt: new Date(),
+      },
+    };
+  }
+
+  /**
    * Generate and save quiz as draft
    */
   async generateAndSaveTeacherQuiz(reqUser, lectureId, quizData, options = {}) {
