@@ -60,6 +60,7 @@ class AiService {
   // Content
   generateLectureContent = aiContent.generateLectureContent;
   generateQuizQuestions = (...args) => aiContent.generateQuizQuestions(...args);
+  generateRAGQuizQuestions = (...args) => aiContent.generateRAGQuizQuestions(...args);
   generateAndSaveQuiz = (...args) => aiContent.generateAndSaveQuiz(...args);
   publishQuiz = (...args) => aiContent.publishQuiz(...args);
   generatePracticeExercises = (...args) => aiContent.generatePracticeExercises(...args);
