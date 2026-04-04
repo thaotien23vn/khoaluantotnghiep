@@ -265,6 +265,26 @@ class AiController {
     }
   }
 
+  async generateTeacherRAGQuiz(req, res) {
+    try {
+      const { courseId, options } = req.body;
+      const result = await aiService.generateTeacherRAGQuiz(req.user, Number(courseId), options || {});
+      res.status(201).json({ success: true, message: 'RAG Quiz questions generated', data: result });
+    } catch (error) {
+      handleServiceError(error, res);
+    }
+  }
+
+  async generateAndSaveTeacherRAGQuiz(req, res) {
+    try {
+      const { courseId, quizData, options } = req.body;
+      const result = await aiService.generateAndSaveTeacherRAGQuiz(req.user, Number(courseId), quizData || {}, options || {});
+      res.status(201).json({ success: true, message: 'RAG Quiz generated and saved', data: result });
+    } catch (error) {
+      handleServiceError(error, res);
+    }
+  }
+
   async publishTeacherQuiz(req, res) {
     try {
       const quizId = Number(req.params.quizId);

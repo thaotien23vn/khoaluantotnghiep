@@ -234,6 +234,22 @@ router.post(
   aiController.generateAndSaveTeacherQuiz
 );
 
+// RAG Quiz Generation
+router.post(
+  '/teacher/ai/generate-rag-quiz',
+  authMiddleware,
+  authorizeRole('teacher', 'admin'),
+  aiController.generateTeacherRAGQuiz
+);
+
+// Generate and Save RAG Quiz
+router.post(
+  '/teacher/ai/generate-and-save-rag-quiz',
+  authMiddleware,
+  authorizeRole('teacher', 'admin'),
+  aiController.generateAndSaveTeacherRAGQuiz
+);
+
 // Publish Draft Quiz
 router.post(
   '/teacher/ai/quizzes/:quizId/publish',
