@@ -630,12 +630,12 @@ router.get(
 );
 
 /**
- * @route   GET /api/student/schedule
+ * @route   GET /api/student/learning-schedule
  * @desc    Get student's learning schedule
  * @access  Private (Student)
  */
 router.get(
-  '/schedule',
+  '/learning-schedule',
   authMiddleware,
   authorizeRole('student'),
   getMyScheduleValidation,
@@ -643,12 +643,12 @@ router.get(
 );
 
 /**
- * @route   GET /api/student/schedule/next
+ * @route   GET /api/student/learning-schedule/next
  * @desc    Get student's next upcoming schedule event
  * @access  Private (Student)
  */
 router.get(
-  '/schedule/next',
+  '/learning-schedule/next',
   authMiddleware,
   authorizeRole('student'),
   scheduleController.getNextScheduleEvent
