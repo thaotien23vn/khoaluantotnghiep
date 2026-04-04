@@ -2,7 +2,7 @@ const db = require('../../models');
 const courseAggregatesService = require('../../services/courseAggregates.service');
 const mediaService = require('../../services/media.service');
 
-const { Lecture, Chapter, Course, LessonChat } = db.models;
+const { Lecture, Chapter, Course, LessonChat, ChatEscalation } = db.models;
 
 /**
  * Parse attachments safely
@@ -268,8 +268,21 @@ class LessonService {
         throw { status: 403, message: 'Bạn không có quyền xóa bài giảng này' };
       }
 
-      // Xóa lesson chat trước (tránh lỗi khóa ngoại)
-      await LessonChat.destroy({ where: { lessonId: lecture.id }, transaction });
+      // Xóa lesson chat và các bảng phụ thuộc (theo thứ tự)
+      const lessonChat = await LessonChat.findOne({
+        where: { lessonId: lecture.id },
+        transaction,
+      });
+
+      if (lessonChat) {
+        // Xóa chat_escalations trước
+        await ChatEscalation.destroy({
+          where: { chatId: lessonChat.id },
+          transaction,
+        });
+        // Xóa lesson chat
+        await lessonChat.destroy({ transaction });
+      }
 
       await lecture.destroy({ transaction });
 
