@@ -580,7 +580,7 @@ class CourseService {
       order: [
         ['order', 'ASC'],
         ['lectures', 'order', 'ASC'],
-        ['quizzes', 'createdAt', 'ASC'],
+        ['quizzes', 'created_at', 'ASC'],
       ],
     });
 
