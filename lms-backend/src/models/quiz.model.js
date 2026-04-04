@@ -105,7 +105,7 @@ module.exports = (sequelize) => {
 
     Quiz.belongsTo(models.Chapter, {
       foreignKey: 'chapterId',
-      as: 'chapter',
+      as: 'quizChapter',
     });
   };
 
