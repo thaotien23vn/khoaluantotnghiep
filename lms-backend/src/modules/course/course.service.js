@@ -61,13 +61,12 @@ const formatCourseForListing = (course) => ({
 // Format course detail with curriculum
 const formatCourseDetail = (course) => {
   const curriculum = course.Chapters
-    ? course.Chapters.map((chapter) => ({
-        id: chapter.id.toString(),
-        title: chapter.title,
-        lessons: chapter.lectures
+    ? course.Chapters.map((chapter) => {
+        const lectures = chapter.lectures
           ? chapter.lectures.map((lecture) => ({
               id: lecture.id.toString(),
               title: lecture.title,
+              type: lecture.type || 'video',
               duration: lecture.duration
                 ? `${Math.ceil(lecture.duration / 60)} phút`
                 : '0 phút',
@@ -85,8 +84,25 @@ const formatCourseDetail = (course) => {
                 }
               })(),
             }))
-          : [],
-      }))
+          : [];
+        
+        const quizzes = chapter.quizzes
+          ? chapter.quizzes.map((quiz) => ({
+              id: `quiz-${quiz.id}`,
+              title: quiz.title,
+              type: 'quiz',
+              duration: `${quiz.timeLimit || 30} phút`,
+              isPreview: false,
+              quizId: quiz.id.toString(),
+            }))
+          : [];
+        
+        return {
+          id: chapter.id.toString(),
+          title: chapter.title,
+          lessons: [...lectures, ...quizzes],
+        };
+      })
     : [];
 
   return {
@@ -271,7 +287,15 @@ class CourseService {
         {
           model: Chapter,
           as: 'Chapters',
-          include: [{ model: Lecture, as: 'lectures' }],
+          include: [
+            { model: Lecture, as: 'lectures' },
+            {
+              model: Quiz,
+              as: 'quizzes',
+              where: { status: 'published' },
+              required: false,
+            },
+          ],
         },
       ],
       order: [
@@ -573,7 +597,6 @@ class CourseService {
         { 
           model: Quiz, 
           as: 'quizzes',
-          where: { status: 'published' },
           required: false,
         },
       ],
