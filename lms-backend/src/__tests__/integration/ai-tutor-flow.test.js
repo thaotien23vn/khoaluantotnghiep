@@ -45,9 +45,9 @@ describe('AI Tutor Flow Integration Test', () => {
       .send({ published: true });
 
     const chapterRes = await request(app)
-      .post(`/api/teacher/courses/${testCourse.id}/chapters`)
+      .post(`/api/teacher/chapters`)
       .set('Authorization', `Bearer ${teacherToken}`)
-      .send({ title: 'AI Chapter', order: 1 });
+      .send({ courseId: testCourse.id, title: 'AI Chapter', order: 1 });
     const testChapter = chapterRes.body.data.chapter;
 
     const lectureRes = await request(app)
@@ -119,9 +119,9 @@ describe('AI Tutor Flow Integration Test', () => {
 
     // Create chapter and lecture for the new course
     const chapterRes = await request(app)
-      .post(`/api/teacher/courses/${newCourse.id}/chapters`)
+      .post(`/api/teacher/chapters`)
       .set('Authorization', `Bearer ${teacherToken}`)
-      .send({ title: 'Chapter 1', order: 1 });
+      .send({ courseId: newCourse.id, title: 'Chapter 1', order: 1 });
     const chapter = chapterRes.body.data.chapter;
 
     const lectureRes = await request(app)

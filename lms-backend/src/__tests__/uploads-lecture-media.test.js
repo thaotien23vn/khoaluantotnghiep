@@ -21,9 +21,9 @@ describe('Uploads - lecture media', () => {
     const token = await loginTeacher();
 
     const createChapterRes = await request(app)
-      .post(`/api/teacher/courses/${seeded.course.id}/chapters`)
+      .post(`/api/teacher/chapters`)
       .set('Authorization', `Bearer ${token}`)
-      .send({ title: `${TEST_PREFIX}Chapter for upload`, order: 1 });
+      .send({ courseId: seeded.course.id, title: `${TEST_PREFIX}Chapter for upload`, order: 1 });
 
     expect(createChapterRes.statusCode).toBe(201);
     expect(createChapterRes.body).toHaveProperty('success', true);

@@ -14,12 +14,12 @@ async function loginStudent() {
 }
 
 describe('Student schedule', () => {
-  it('GET /api/student/schedule should include seeded schedule event', async () => {
+  it('GET /api/student/learning-schedule should include seeded schedule event', async () => {
     const seeded = await seedCore();
     const token = await loginStudent();
 
     const res = await request(app)
-      .get('/api/student/schedule?limit=50')
+      .get('/api/student/learning-schedule?limit=50')
       .set('Authorization', `Bearer ${token}`);
 
     expect(res.statusCode).toBe(200);
@@ -32,12 +32,12 @@ describe('Student schedule', () => {
     expect(found).toBeTruthy();
   });
 
-  it('GET /api/student/schedule/next should return next event or null', async () => {
+  it('GET /api/student/learning-schedule/next should return next event or null', async () => {
     await seedCore();
     const token = await loginStudent();
 
     const res = await request(app)
-      .get('/api/student/schedule/next')
+      .get('/api/student/learning-schedule/next')
       .set('Authorization', `Bearer ${token}`);
 
     expect(res.statusCode).toBe(200);

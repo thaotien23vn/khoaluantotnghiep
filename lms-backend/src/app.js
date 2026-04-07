@@ -15,6 +15,7 @@ const teacherStatisticsRoutes = require("./routes/teacher_statistics.routes");
 const placementRoutes = require("./routes/placement.routes");
 const chatRoutes = require("./routes/chat.routes");
 const protectedRoutes = require("./routes/protected.routes");
+const progressRoutes = require("./routes/progress.routes");
 const validateInput = require("./middlewares/validateInput");
 const { apiLimiter } = require("./middlewares/rateLimiter");
 const { randomUUID } = require("crypto");
@@ -174,9 +175,25 @@ app.use("/api/student/payments", paymentRoutes);
 app.use("/api/cart", cartRoutes);
 
 // Protected routes (require authentication and authorization)
+app.use("/api/progress", progressRoutes);
 app.use("/api/admin", protectedRoutes);
 app.use("/api/teacher", protectedRoutes);
 app.use("/api/student", protectedRoutes);
+
+console.log('[Routes] Mounted /api/progress routes');
+
+// Debug: list all registered routes
+console.log('[Routes] Protected routes mounted at /api/student');
+
+// Test route for progress tracking
+app.put('/api/test/lectures/:lectureId/progress', (req, res) => {
+  console.log('[Test] PUT /api/test/lectures/:lectureId/progress hit');
+  res.json({ success: true, message: 'Test PUT route works' });
+});
+app.post('/api/test/lectures/:lectureId/progress', (req, res) => {
+  console.log('[Test] POST /api/test/lectures/:lectureId/progress hit');
+  res.json({ success: true, message: 'Test POST route works' });
+});
 
 // 404 handler
 app.use((req, res) => {

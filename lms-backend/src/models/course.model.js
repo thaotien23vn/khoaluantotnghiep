@@ -32,6 +32,14 @@ module.exports = (sequelize) => {
       type: DataTypes.STRING,
       allowNull: true,
     },
+    categoryId: {
+      type: DataTypes.INTEGER,
+      allowNull: true,
+      references: {
+        model: 'categories',
+        key: 'id',
+      },
+    },
     price: {
       type: DataTypes.DECIMAL(10,2),
       defaultValue: 0.0,

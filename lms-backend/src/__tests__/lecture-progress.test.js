@@ -56,9 +56,10 @@ describe('Lecture Progress API', () => {
     
     // Create chapter
     const chapterRes = await request(app)
-      .post(`/api/teacher/courses/${courseId}/chapters`)
+      .post(`/api/teacher/chapters`)
       .set('Authorization', `Bearer ${teacherToken}`)
       .send({
+        courseId,
         title: 'Progress Test Chapter',
         order: 1,
       });

@@ -5,7 +5,7 @@ const { param, body } = require('express-validator');
  */
 
 const createChapterValidation = [
-  param('courseId')
+  body('courseId')
     .isInt({ min: 1 })
     .withMessage('Course ID phải là số nguyên dương'),
   

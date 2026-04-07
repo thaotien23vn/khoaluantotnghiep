@@ -20,9 +20,9 @@ describe('Teacher content CRUD (chapters/lectures)', () => {
     expect(courseId).toBeTruthy();
 
     const createChapterRes = await request(app)
-      .post(`/api/teacher/courses/${courseId}/chapters`)
+      .post(`/api/teacher/chapters`)
       .set('Authorization', `Bearer ${token}`)
-      .send({ title: `it_seed_chapter_${uniq}`, order: 1 });
+      .send({ courseId, title: `it_seed_chapter_${uniq}`, order: 1 });
 
     expect(createChapterRes.statusCode).toBe(201);
     const chapterId = createChapterRes.body?.data?.chapter?.id;

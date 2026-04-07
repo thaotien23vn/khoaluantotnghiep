@@ -54,9 +54,9 @@ describe('Chat Permission Features', () => {
     
     // Create chapter and lecture
     const chapterRes = await request(app)
-      .post(`/api/teacher/courses/${testCourse.id}/chapters`)
+      .post(`/api/teacher/chapters`)
       .set('Authorization', `Bearer ${teacherToken}`)
-      .send({ title: 'Chat Test Chapter', order: 1 });
+      .send({ courseId: testCourse.id, title: 'Chat Test Chapter', order: 1 });
     
     expect(chapterRes.statusCode).toBe(201);
     testChapter = chapterRes.body.data?.chapter || chapterRes.body.data;

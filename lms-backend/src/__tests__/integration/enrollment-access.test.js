@@ -33,9 +33,9 @@ describe('Enrollment and Course Access Integration Test', () => {
 
     // 2. Teacher adds a chapter
     const chapterRes = await request(app)
-      .post(`/api/teacher/courses/${testCourse.id}/chapters`)
+      .post(`/api/teacher/chapters`)
       .set('Authorization', `Bearer ${teacherToken}`)
-      .send({ title: 'Chapter 1', order: 1 });
+      .send({ courseId: testCourse.id, title: 'Chapter 1', order: 1 });
     testChapter = chapterRes.body.data.chapter;
 
     // 3. Teacher adds a lecture

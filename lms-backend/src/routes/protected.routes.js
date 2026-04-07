@@ -75,6 +75,8 @@ const {
 
 const router = express.Router();
 
+console.log('[Routes] protected.routes.js loaded, defining routes...');
+
 /**
  * @route   GET /api/admin/dashboard
  * @desc    Admin-only endpoint
@@ -681,6 +683,21 @@ router.put(
   updateLectureProgressValidation,
   progressController.updateLectureProgress
 );
+
+/**
+ * @route   POST /api/student/lectures/:lectureId/progress
+ * @desc    Update lecture progress (for sendBeacon on page close)
+ * @access  Private (Student)
+ */
+router.post(
+  '/lectures/:lectureId/progress',
+  authMiddleware,
+  authorizeRole('student'),
+  updateLectureProgressValidation,
+  progressController.updateLectureProgress
+);
+
+console.log('[Routes] Student progress routes defined');
 
 /**
  * @route   GET /api/student/courses/:courseId/progress

@@ -92,9 +92,9 @@ describe('AI Teacher Features', () => {
     
     // Create chapter
     const chapterRes = await request(app)
-      .post(`/api/teacher/courses/${testCourse.id}/chapters`)
+      .post(`/api/teacher/chapters`)
       .set('Authorization', `Bearer ${teacherToken}`)
-      .send({ title: 'Test Chapter', order: 1 });
+      .send({ courseId: testCourse.id, title: 'Test Chapter', order: 1 });
     
     expect(chapterRes.statusCode).toBe(201);
     testChapter = chapterRes.body.data?.chapter || chapterRes.body.data;
