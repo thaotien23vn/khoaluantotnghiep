@@ -161,11 +161,31 @@ class PlacementService {
     const existingQuestions = session.questions || [];
     const existingResponses = session.responses || [];
     
+    logger.info('PLACEMENT_GET_NEXT_QUESTION_DEBUG', {
+      sessionId,
+      questionCount: session.questionCount,
+      existingQuestionsCount: existingQuestions.length,
+      existingResponsesCount: existingResponses.length,
+      questions: existingQuestions.map(q => ({ id: q.id, questionIndex: q.questionIndex })),
+      responses: existingResponses.map(r => ({ questionId: r.questionId, isCorrect: r.isCorrect })),
+    });
+    
     // Find the most recent question that doesn't have a response
     const answeredQuestionIds = new Set(existingResponses.map(r => r.questionId));
-    const unansweredQuestion = existingQuestions
-      .sort((a, b) => b.questionIndex - a.questionIndex) // Sort by newest first
-      .find(q => !answeredQuestionIds.has(q.id));
+    logger.info('PLACEMENT_ANSWERED_QUESTION_IDS', { sessionId, answeredQuestionIds: Array.from(answeredQuestionIds) });
+    
+    const sortedQuestions = existingQuestions.sort((a, b) => b.questionIndex - a.questionIndex);
+    logger.info('PLACEMENT_SORTED_QUESTIONS', { 
+      sessionId, 
+      sorted: sortedQuestions.map(q => ({ id: q.id, questionIndex: q.questionIndex })) 
+    });
+    
+    const unansweredQuestion = sortedQuestions.find(q => !answeredQuestionIds.has(q.id));
+    
+    logger.info('PLACEMENT_UNANSWERED_QUESTION_FOUND', { 
+      sessionId, 
+      unansweredQuestion: unansweredQuestion ? { id: unansweredQuestion.id, questionIndex: unansweredQuestion.questionIndex } : null 
+    });
     
     if (unansweredQuestion) {
       logger.info('PLACEMENT_RETURNING_EXISTING_QUESTION', {
@@ -337,7 +357,7 @@ class PlacementService {
       hint: question.hint,
       timeLimitSeconds: 60,
       totalQuestions: MAX_QUESTIONS,
-      currentQuestion: session.questionCount + 1,
+      currentQuestion: placementQuestion.questionIndex + 1, // Fix: use questionIndex + 1 instead of session.questionCount + 1
     };
   }
 

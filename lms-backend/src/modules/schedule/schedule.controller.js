@@ -62,6 +62,7 @@ class ScheduleController {
       if (validationError) return;
 
       const { id: userId } = req.user;
+      console.log('[DEBUG] getMySchedule called, userId:', userId, 'query:', req.query);
       const result = await scheduleService.getMySchedule(userId, req.query);
 
       res.json({
@@ -70,6 +71,7 @@ class ScheduleController {
         data: result,
       });
     } catch (error) {
+      console.error('[DEBUG] getMySchedule error:', error);
       handleServiceError(error, res);
     }
   }
@@ -155,6 +157,62 @@ class ScheduleController {
         success: true,
         message: 'Tạo lịch học thành công',
         data: result,
+      });
+    } catch (error) {
+      handleServiceError(error, res);
+    }
+  }
+
+  // Student schedule notes
+  async createStudentNote(req, res) {
+    try {
+      const validationError = handleValidationErrors(req, res);
+      if (validationError) return;
+
+      const { id: userId } = req.user;
+      const result = await scheduleService.createStudentNote(userId, req.body);
+
+      res.status(201).json({
+        success: true,
+        message: 'Tạo ghi chú thành công',
+        data: result,
+      });
+    } catch (error) {
+      handleServiceError(error, res);
+    }
+  }
+
+  async updateStudentNote(req, res) {
+    try {
+      const validationError = handleValidationErrors(req, res);
+      if (validationError) return;
+
+      const { noteId } = req.params;
+      const { id: userId } = req.user;
+      const result = await scheduleService.updateStudentNote(noteId, userId, req.body);
+
+      res.json({
+        success: true,
+        message: 'Cập nhật ghi chú thành công',
+        data: result,
+      });
+    } catch (error) {
+      handleServiceError(error, res);
+    }
+  }
+
+  async deleteStudentNote(req, res) {
+    try {
+      const validationError = handleValidationErrors(req, res);
+      if (validationError) return;
+
+      const { noteId } = req.params;
+      const { id: userId } = req.user;
+      const result = await scheduleService.deleteStudentNote(noteId, userId);
+
+      res.json({
+        success: true,
+        message: result.message,
       });
     } catch (error) {
       handleServiceError(error, res);

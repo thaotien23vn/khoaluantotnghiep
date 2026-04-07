@@ -16,6 +16,7 @@ const placementRoutes = require("./routes/placement.routes");
 const chatRoutes = require("./routes/chat.routes");
 const protectedRoutes = require("./routes/protected.routes");
 const progressRoutes = require("./routes/progress.routes");
+const scheduleRoutes = require("./routes/schedule.routes");
 const validateInput = require("./middlewares/validateInput");
 const { apiLimiter } = require("./middlewares/rateLimiter");
 const { randomUUID } = require("crypto");
@@ -164,6 +165,9 @@ app.use("/api", aiRoutes);
 
 // Placement test routes
 app.use("/api", placementRoutes);
+
+// Schedule routes
+app.use("/api", scheduleRoutes);
 
 // Chat routes
 app.use("/api", chatRoutes);

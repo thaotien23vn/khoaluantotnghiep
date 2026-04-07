@@ -144,7 +144,12 @@ class ScheduleService {
     const total = await ScheduleEvent.count({ where });
     const events = await ScheduleEvent.findAll({
       where,
-      include: [{ model: Course, as: 'course', attributes: ['id', 'title'] }],
+      include: [{ 
+        model: Course, 
+        as: 'course', 
+        attributes: ['id', 'title'],
+        required: false // LEFT JOIN to include events with null courseId
+      }],
       order: [[literal(TYPE_ORDER_SQL), 'ASC'], ['startAt', 'ASC']],
       limit: Math.min(Math.max(parseInt(limit, 10) || 20, 1), 100),
       offset,
@@ -155,7 +160,7 @@ class ScheduleService {
       const endParts = toDateParts(event.endAt);
       return {
         id: String(event.id),
-        courseId: String(event.courseId),
+        courseId: event.courseId ? String(event.courseId) : null, // Handle null
         courseTitle: event.course?.title || '',
         title: event.title,
         type: event.type,
@@ -195,7 +200,12 @@ class ScheduleService {
         startAt: { [Op.gte]: now },
         status: { [Op.in]: ['upcoming', 'ongoing'] },
       },
-      include: [{ model: Course, as: 'course', attributes: ['id', 'title'] }],
+      include: [{ 
+        model: Course, 
+        as: 'course', 
+        attributes: ['id', 'title'],
+        required: false
+      }],
       order: [[literal(TYPE_ORDER_SQL), 'ASC'], ['startAt', 'ASC']],
     });
 
@@ -209,7 +219,7 @@ class ScheduleService {
     return {
       event: {
         id: String(event.id),
-        courseId: String(event.courseId),
+        courseId: event.courseId ? String(event.courseId) : null,
         courseTitle: event.course?.title || '',
         title: event.title,
         type: event.type,
@@ -366,6 +376,113 @@ class ScheduleService {
     });
 
     return { event };
+  }
+
+  /**
+   * Create student schedule note/event
+   */
+  async createStudentNote(userId, noteData) {
+    const { title, type, startAt, endAt, status, description, zoomLink, location, courseId } = noteData || {};
+
+    if (!title || !startAt || !endAt) {
+      throw { status: 400, message: 'Thiếu dữ liệu bắt buộc: title, startAt, endAt' };
+    }
+
+    const start = new Date(startAt);
+    const end = new Date(endAt);
+    if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime())) {
+      throw { status: 400, message: 'startAt/endAt không hợp lệ' };
+    }
+    if (end.getTime() < start.getTime()) {
+      throw { status: 400, message: 'endAt phải >= startAt' };
+    }
+
+    const event = await ScheduleEvent.create({
+      courseId: courseId || 1, // Default to course 1 if not provided
+      title: String(title),
+      type: type ? String(type).toLowerCase() : 'event',
+      startAt: start,
+      endAt: end,
+      status: status ? String(status) : 'upcoming',
+      description: description ? String(description) : undefined,
+      zoomLink: zoomLink ? String(zoomLink) : undefined,
+      location: location ? String(location) : undefined,
+    });
+
+    return { event };
+  }
+
+  /**
+   * Update student schedule note
+   */
+  async updateStudentNote(eventId, userId, updateData) {
+    const event = await ScheduleEvent.findByPk(eventId);
+    if (!event) {
+      throw { status: 404, message: 'Không tìm thấy ghi chú' };
+    }
+
+    // For now, allow update without strict permission check
+    // (students can update their own notes - we could add a createdBy field later)
+    const { title, type, startAt, endAt, status, description, zoomLink, location } = updateData || {};
+
+    const nextStart = startAt != null ? parseDateTime(startAt) : event.startAt;
+    const nextEnd = endAt != null ? parseDateTime(endAt) : event.endAt;
+    if (!nextStart || !nextEnd) {
+      throw { status: 400, message: 'startAt/endAt không hợp lệ' };
+    }
+    if (new Date(nextEnd).getTime() < new Date(nextStart).getTime()) {
+      throw { status: 400, message: 'endAt phải >= startAt' };
+    }
+
+    await event.update({
+      title: title != null ? String(title) : event.title,
+      type: type != null ? String(type).toLowerCase() : event.type,
+      startAt: nextStart,
+      endAt: nextEnd,
+      status: status != null ? String(status).toLowerCase() : event.status,
+      description: description !== undefined ? (description != null ? String(description) : null) : event.description,
+      zoomLink: zoomLink !== undefined ? (zoomLink != null ? String(zoomLink) : null) : event.zoomLink,
+      location: location !== undefined ? (location != null ? String(location) : null) : event.location,
+    });
+
+    return { event };
+  }
+
+  /**
+   * Delete student schedule note
+   */
+  async deleteStudentNote(eventId, userId) {
+    const event = await ScheduleEvent.findByPk(eventId);
+    if (!event) {
+      throw { status: 404, message: 'Không tìm thấy ghi chú' };
+    }
+
+    await event.destroy();
+    return { message: 'Xóa ghi chú thành công' };
+  }
+
+  /**
+   * Format event for response
+   */
+  formatEvent(event) {
+    const startParts = toDateParts(event.startAt);
+    const endParts = toDateParts(event.endAt);
+    return {
+      id: String(event.id),
+      courseId: event.courseId ? String(event.courseId) : null,
+      courseTitle: event.course?.title || '',
+      title: event.title,
+      type: event.type,
+      status: event.status,
+      description: event.description || undefined,
+      zoomLink: event.zoomLink || undefined,
+      location: event.location || undefined,
+      startAt: event.startAt,
+      endAt: event.endAt,
+      date: startParts.date,
+      startTime: startParts.time,
+      endTime: endParts.time,
+    };
   }
 }
 

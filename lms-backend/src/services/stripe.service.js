@@ -307,8 +307,8 @@ class StripeService {
         },
       ],
       mode: 'payment',
-      success_url: successUrl || 'https://cicd-test1.onrender.com/api/student/payments/stripe/success?session_id={CHECKOUT_SESSION_ID}',
-      cancel_url: cancelUrl || 'https://cicd-test1.onrender.com/api/student/payments/stripe/cancel',
+      success_url: successUrl || 'http://localhost:5173/payment/success?session_id={CHECKOUT_SESSION_ID}',
+      cancel_url: cancelUrl || 'http://localhost:5173/payment/cancel',
       metadata: {
         userId: String(userId),
         courseId: String(courseId),
