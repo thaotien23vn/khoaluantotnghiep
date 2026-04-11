@@ -434,17 +434,19 @@ class PaymentService {
   }
 
   /**
-   * Get payment history for user
+   * Get payment history for user — FIXED: with pagination and status filter
    */
   async getPaymentHistory(userId, query = {}) {
-    const { courseId } = query;
+    const { courseId, status, page = 1, limit = 10 } = query;
+    const pageNum = Math.max(parseInt(page, 10) || 1, 1);
+    const limitNum = Math.min(Math.max(parseInt(limit, 10) || 10, 1), 50);
+    const offset = (pageNum - 1) * limitNum;
 
     const where = { userId };
-    if (courseId) {
-      where.courseId = courseId;
-    }
+    if (courseId) where.courseId = courseId;
+    if (status) where.status = status;
 
-    const payments = await Payment.findAll({
+    const { count, rows: payments } = await Payment.findAndCountAll({
       where,
       include: [
         {
@@ -454,9 +456,19 @@ class PaymentService {
         },
       ],
       order: [['created_at', 'DESC']],
+      limit: limitNum,
+      offset,
     });
 
-    return { payments };
+    return {
+      payments,
+      pagination: {
+        total: count,
+        page: pageNum,
+        limit: limitNum,
+        totalPages: Math.ceil(count / limitNum),
+      },
+    };
   }
 
   /**
@@ -540,10 +552,16 @@ class PaymentService {
       };
       await payment.save();
 
-      // Unenroll user
+      // FIXED: Destroy enrollment so student loses course access after refund
       if (enrollment) {
-        enrollment.status = 'refunded';
-        await enrollment.save();
+        await enrollment.destroy();
+      }
+
+      // Update course student count
+      try {
+        await courseAggregatesService.recomputeCourseStudents(payment.courseId);
+      } catch (aggErr) {
+        console.error('Recompute course students after refund (silent):', aggErr);
       }
     }
 

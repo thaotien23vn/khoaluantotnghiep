@@ -55,6 +55,52 @@ class AdminController {
   }
 
   /**
+   * Get revenue by day for last 7 days
+   */
+  async getRevenueByDay(req, res) {
+    try {
+      const result = await adminService.getRevenueByDay();
+      res.json({
+        success: true,
+        data: result,
+      });
+    } catch (error) {
+      handleServiceError(error, res);
+    }
+  }
+
+  /**
+   * Get top courses by enrollment
+   */
+  async getTopCourses(req, res) {
+    try {
+      const limit = req.query.limit || 5;
+      const result = await adminService.getTopCourses(limit);
+      res.json({
+        success: true,
+        data: result,
+      });
+    } catch (error) {
+      handleServiceError(error, res);
+    }
+  }
+
+  /**
+   * Get payment status counts
+   */
+  async getPaymentStatusCounts(req, res) {
+    try {
+      const result = await adminService.getPaymentStatusCounts();
+      res.json({
+        success: true,
+        data: result,
+      });
+    } catch (error) {
+      handleServiceError(error, res);
+    }
+  }
+
+  /**
    * Get all users
    */
   async getUsers(req, res) {

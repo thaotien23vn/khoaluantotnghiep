@@ -23,7 +23,7 @@ async function getTeacherSchedule(teacherId, query) {
 
   const offset = (Math.max(parseInt(page, 10) || 1, 1) - 1) * Math.min(Math.max(parseInt(limit, 10) || 50, 1), 100);
 
-  const where = { courseId: { [Op.in]: courseIds } };
+  const where = { courseId: { [Op.in]: courseIds }, isPersonalNote: false };
 
   // Filter by month/year if provided
   if (month && year) {
@@ -46,32 +46,12 @@ async function getTeacherSchedule(teacherId, query) {
     offset,
   });
 
-  const schedule = events.map((event) => {
-    const startParts = toDateParts(event.startAt);
-    const endParts = toDateParts(event.endAt);
-    return {
-      id: String(event.id),
-      courseId: String(event.courseId),
-      courseTitle: event.course?.title || '',
-      title: event.title,
-      type: event.type,
-      status: event.status,
-      description: event.description || undefined,
-      zoomLink: event.zoomLink || undefined,
-      location: event.location || undefined,
-      startAt: event.startAt,
-      endAt: event.endAt,
-      date: startParts.date,
-      startTime: startParts.time,
-      endTime: endParts.time,
-    };
-  });
-
+  const schedule = events.map(formatEventRow);
   return { schedule, meta: { total, limit, offset } };
 }
 
 // Valid event types and statuses
-const VALID_EVENT_TYPES = ['lesson', 'assignment', 'exam', 'event'];
+const VALID_EVENT_TYPES = ['lesson', 'assignment', 'exam', 'event', 'live'];
 const VALID_EVENT_STATUSES = ['upcoming', 'ongoing', 'completed', 'cancelled'];
 
 // SQL for ordering by type priority
@@ -102,26 +82,46 @@ const parseDateTime = (value) => {
   return Number.isNaN(d.getTime()) ? null : d;
 };
 
-/**
- * Check if event type is valid
- */
 const isValidEventType = (type) => VALID_EVENT_TYPES.includes(String(type).toLowerCase());
+const isValidEventStatus = (status) => VALID_EVENT_STATUSES.includes(String(status).toLowerCase());
 
 /**
- * Check if event status is valid
+ * Format a single event row for API response
  */
-const isValidEventStatus = (status) => VALID_EVENT_STATUSES.includes(String(status).toLowerCase());
+function formatEventRow(event) {
+  const startParts = toDateParts(event.startAt);
+  const endParts = toDateParts(event.endAt);
+  return {
+    id: String(event.id),
+    courseId: event.courseId ? String(event.courseId) : null,
+    courseTitle: event.course?.title || '',
+    title: event.title,
+    type: event.type,
+    status: event.status,
+    isPersonalNote: event.isPersonalNote || false,
+    description: event.description || undefined,
+    zoomLink: event.zoomLink || undefined,
+    location: event.location || undefined,
+    startAt: event.startAt,
+    endAt: event.endAt,
+    date: startParts.date,
+    startTime: startParts.time,
+    endTime: endParts.time,
+  };
+}
 
 /**
  * Schedule Service - Business logic for schedule operations
  */
 class ScheduleService {
   /**
-   * Get student's schedule
+   * Get student's schedule — combines course events (enrolled courses) + personal notes
    */
   async getMySchedule(userId, query) {
-    const { courseId: courseIdFilter, type, status, page = 1, limit = 20 } = query;
-    const offset = (Math.max(parseInt(page, 10) || 1, 1) - 1) * Math.min(Math.max(parseInt(limit, 10) || 20, 1), 100);
+    const { courseId: courseIdFilter, type, status, month, year, page = 1, limit = 20 } = query;
+    const pageNum = Math.max(parseInt(page, 10) || 1, 1);
+    const limitNum = Math.min(Math.max(parseInt(limit, 10) || 20, 1), 100);
+    const offset = (pageNum - 1) * limitNum;
 
     const enrollments = await Enrollment.findAll({
       where: { userId },
@@ -129,58 +129,95 @@ class ScheduleService {
     });
     const courseIds = enrollments.map((e) => Number(e.courseId)).filter((id) => Number.isFinite(id));
 
-    if (courseIds.length === 0) {
-      return { schedule: [], meta: { total: 0, limit, offset } };
-    }
-
+    // Validate that filtered courseId belongs to student
     if (courseIdFilter != null && !courseIds.includes(parseInt(courseIdFilter))) {
       throw { status: 403, message: 'Bạn không có quyền xem lịch học của khóa học này' };
     }
 
-    const where = { courseId: courseIdFilter != null ? parseInt(courseIdFilter) : { [Op.in]: courseIds } };
-    if (type) where.type = type;
-    if (status) where.status = status;
-
-    const total = await ScheduleEvent.count({ where });
-    const events = await ScheduleEvent.findAll({
-      where,
-      include: [{ 
-        model: Course, 
-        as: 'course', 
-        attributes: ['id', 'title'],
-        required: false // LEFT JOIN to include events with null courseId
-      }],
-      order: [[literal(TYPE_ORDER_SQL), 'ASC'], ['startAt', 'ASC']],
-      limit: Math.min(Math.max(parseInt(limit, 10) || 20, 1), 100),
-      offset,
-    });
-
-    const schedule = events.map((event) => {
-      const startParts = toDateParts(event.startAt);
-      const endParts = toDateParts(event.endAt);
-      return {
-        id: String(event.id),
-        courseId: event.courseId ? String(event.courseId) : null, // Handle null
-        courseTitle: event.course?.title || '',
-        title: event.title,
-        type: event.type,
-        status: event.status,
-        description: event.description || undefined,
-        zoomLink: event.zoomLink || undefined,
-        location: event.location || undefined,
-        startAt: event.startAt,
-        endAt: event.endAt,
-        date: startParts.date,
-        startTime: startParts.time,
-        endTime: endParts.time,
+    // Build month/year date range filter
+    let dateRange = null;
+    if (month && year) {
+      dateRange = {
+        [Op.between]: [
+          new Date(parseInt(year), parseInt(month) - 1, 1),
+          new Date(parseInt(year), parseInt(month), 0, 23, 59, 59),
+        ],
       };
+    } else if (month) {
+      const currentYear = new Date().getFullYear();
+      dateRange = {
+        [Op.between]: [
+          new Date(currentYear, parseInt(month) - 1, 1),
+          new Date(currentYear, parseInt(month), 0, 23, 59, 59),
+        ],
+      };
+    }
+
+    // Build conditions — course events visible to student
+    const courseEventWhere = {
+      isPersonalNote: false,
+      courseId: courseIdFilter != null
+        ? parseInt(courseIdFilter)
+        : courseIds.length > 0 ? { [Op.in]: courseIds } : { [Op.in]: [-1] },
+    };
+    if (type) courseEventWhere.type = type;
+    if (status) courseEventWhere.status = status;
+    if (dateRange) courseEventWhere.startAt = dateRange;
+
+    // Personal notes condition
+    const personalNoteWhere = {
+      isPersonalNote: true,
+      createdBy: userId,
+    };
+    if (type) personalNoteWhere.type = type;
+    if (status) personalNoteWhere.status = status;
+    if (dateRange) personalNoteWhere.startAt = dateRange;
+
+    // If filtering by specific courseId, skip personal notes (they have no courseId)
+    const includePersonalNotes = courseIdFilter == null;
+
+    // Count both sets
+    const courseEventCount = courseIds.length > 0 || courseIdFilter != null
+      ? await ScheduleEvent.count({ where: courseEventWhere })
+      : 0;
+    const personalNoteCount = includePersonalNotes
+      ? await ScheduleEvent.count({ where: personalNoteWhere })
+      : 0;
+    const total = courseEventCount + personalNoteCount;
+
+    // Fetch combined events
+    const courseEvents = courseIds.length > 0 || courseIdFilter != null
+      ? await ScheduleEvent.findAll({
+          where: courseEventWhere,
+          include: [{ model: Course, as: 'course', attributes: ['id', 'title'], required: false }],
+          order: [['startAt', 'ASC']],
+        })
+      : [];
+
+    const personalNotes = includePersonalNotes
+      ? await ScheduleEvent.findAll({
+          where: personalNoteWhere,
+          order: [['startAt', 'ASC']],
+        })
+      : [];
+
+    // Merge and sort by startAt then type priority
+    const TYPE_PRIORITY = { exam: 0, assignment: 1, lesson: 2 };
+    const allEvents = [...courseEvents, ...personalNotes].sort((a, b) => {
+      const timeDiff = new Date(a.startAt) - new Date(b.startAt);
+      if (timeDiff !== 0) return timeDiff;
+      return (TYPE_PRIORITY[a.type] ?? 3) - (TYPE_PRIORITY[b.type] ?? 3);
     });
 
-    return { schedule, meta: { total, limit, offset } };
+    // Apply pagination on merged result
+    const paginatedEvents = allEvents.slice(offset, offset + limitNum);
+    const schedule = paginatedEvents.map(formatEventRow);
+
+    return { schedule, meta: { total, page: pageNum, limit: limitNum } };
   }
 
   /**
-   * Get next upcoming schedule event
+   * Get next upcoming schedule event for student
    */
   async getNextScheduleEvent(userId) {
     const enrollments = await Enrollment.findAll({
@@ -189,66 +226,55 @@ class ScheduleService {
     });
     const courseIds = enrollments.map((e) => Number(e.courseId)).filter((id) => Number.isFinite(id));
 
-    if (courseIds.length === 0) {
-      return { event: null };
-    }
-
     const now = new Date();
-    const event = await ScheduleEvent.findOne({
-      where: {
-        courseId: { [Op.in]: courseIds },
-        startAt: { [Op.gte]: now },
-        status: { [Op.in]: ['upcoming', 'ongoing'] },
-      },
-      include: [{ 
-        model: Course, 
-        as: 'course', 
-        attributes: ['id', 'title'],
-        required: false
-      }],
-      order: [[literal(TYPE_ORDER_SQL), 'ASC'], ['startAt', 'ASC']],
-    });
 
-    if (!event) {
-      return { event: null };
+    // Find next course event
+    let event = null;
+    if (courseIds.length > 0) {
+      event = await ScheduleEvent.findOne({
+        where: {
+          courseId: { [Op.in]: courseIds },
+          isPersonalNote: false,
+          startAt: { [Op.gte]: now },
+          status: { [Op.in]: ['upcoming', 'ongoing'] },
+        },
+        include: [{ model: Course, as: 'course', attributes: ['id', 'title'], required: false }],
+        order: [[literal(TYPE_ORDER_SQL), 'ASC'], ['startAt', 'ASC']],
+      });
     }
 
-    const startParts = toDateParts(event.startAt);
-    const endParts = toDateParts(event.endAt);
+    // If no course event, check personal notes
+    if (!event) {
+      event = await ScheduleEvent.findOne({
+        where: {
+          isPersonalNote: true,
+          createdBy: userId,
+          startAt: { [Op.gte]: now },
+          status: { [Op.in]: ['upcoming', 'ongoing'] },
+        },
+        order: [['startAt', 'ASC']],
+      });
+    }
 
-    return {
-      event: {
-        id: String(event.id),
-        courseId: event.courseId ? String(event.courseId) : null,
-        courseTitle: event.course?.title || '',
-        title: event.title,
-        type: event.type,
-        status: event.status,
-        description: event.description || undefined,
-        zoomLink: event.zoomLink || undefined,
-        location: event.location || undefined,
-        startAt: event.startAt,
-        endAt: event.endAt,
-        date: startParts.date,
-        startTime: startParts.time,
-        endTime: endParts.time,
-      },
-    };
+    if (!event) return { event: null };
+
+    return { event: formatEventRow(event) };
   }
 
   /**
-   * Update schedule event
+   * Update schedule event (teacher/admin only — course events)
    */
   async updateScheduleEvent(eventId, userId, userRole, updateData) {
     const event = await ScheduleEvent.findByPk(eventId);
-    if (!event) {
-      throw { status: 404, message: 'Không tìm thấy lịch học' };
+    if (!event) throw { status: 404, message: 'Không tìm thấy lịch học' };
+
+    // Prevent teacher from editing personal notes of students
+    if (event.isPersonalNote) {
+      throw { status: 403, message: 'Không thể chỉnh sửa ghi chú cá nhân qua API này' };
     }
 
     const course = await Course.findByPk(event.courseId);
-    if (!course) {
-      throw { status: 404, message: 'Không tìm thấy khóa học' };
-    }
+    if (!course) throw { status: 404, message: 'Không tìm thấy khóa học' };
 
     if (userRole !== 'admin' && course.createdBy && Number(course.createdBy) !== Number(userId)) {
       throw { status: 403, message: 'Bạn không có quyền truy cập khóa học này' };
@@ -256,21 +282,13 @@ class ScheduleService {
 
     const { title, type, startAt, endAt, status, description, zoomLink, location } = updateData || {};
 
-    if (type != null && !isValidEventType(type)) {
-      throw { status: 400, message: 'type không hợp lệ' };
-    }
-    if (status != null && !isValidEventStatus(status)) {
-      throw { status: 400, message: 'status không hợp lệ' };
-    }
+    if (type != null && !isValidEventType(type)) throw { status: 400, message: 'type không hợp lệ' };
+    if (status != null && !isValidEventStatus(status)) throw { status: 400, message: 'status không hợp lệ' };
 
     const nextStart = startAt != null ? parseDateTime(startAt) : event.startAt;
     const nextEnd = endAt != null ? parseDateTime(endAt) : event.endAt;
-    if (!nextStart || !nextEnd) {
-      throw { status: 400, message: 'startAt/endAt không hợp lệ' };
-    }
-    if (new Date(nextEnd).getTime() < new Date(nextStart).getTime()) {
-      throw { status: 400, message: 'endAt phải >= startAt' };
-    }
+    if (!nextStart || !nextEnd) throw { status: 400, message: 'startAt/endAt không hợp lệ' };
+    if (new Date(nextEnd) < new Date(nextStart)) throw { status: 400, message: 'endAt phải >= startAt' };
 
     await event.update({
       title: title != null ? String(title) : event.title,
@@ -287,18 +305,18 @@ class ScheduleService {
   }
 
   /**
-   * Delete schedule event
+   * Delete schedule event (teacher/admin only)
    */
   async deleteScheduleEvent(eventId, userId, userRole) {
     const event = await ScheduleEvent.findByPk(eventId);
-    if (!event) {
-      throw { status: 404, message: 'Không tìm thấy lịch học' };
+    if (!event) throw { status: 404, message: 'Không tìm thấy lịch học' };
+
+    if (event.isPersonalNote) {
+      throw { status: 403, message: 'Không thể xóa ghi chú cá nhân qua API này' };
     }
 
     const course = await Course.findByPk(event.courseId);
-    if (!course) {
-      throw { status: 404, message: 'Không tìm thấy khóa học' };
-    }
+    if (!course) throw { status: 404, message: 'Không tìm thấy khóa học' };
 
     if (userRole !== 'admin' && course.createdBy && Number(course.createdBy) !== Number(userId)) {
       throw { status: 403, message: 'Bạn không có quyền truy cập khóa học này' };
@@ -309,20 +327,18 @@ class ScheduleService {
   }
 
   /**
-   * List schedule events for a course
+   * List schedule events for a course (teacher/admin view)
    */
   async listCourseScheduleEvents(courseId, userId, userRole) {
     const course = await Course.findByPk(courseId);
-    if (!course) {
-      throw { status: 404, message: 'Không tìm thấy khóa học' };
-    }
+    if (!course) throw { status: 404, message: 'Không tìm thấy khóa học' };
 
     if (userRole !== 'admin' && course.createdBy && Number(course.createdBy) !== Number(userId)) {
       throw { status: 403, message: 'Bạn không có quyền truy cập khóa học này' };
     }
 
     const events = await ScheduleEvent.findAll({
-      where: { courseId },
+      where: { courseId, isPersonalNote: false },
       order: [['startAt', 'ASC']],
     });
 
@@ -330,13 +346,11 @@ class ScheduleService {
   }
 
   /**
-   * Create schedule event for a course
+   * Create schedule event for a course (teacher/admin)
    */
   async createCourseScheduleEvent(courseId, userId, userRole, eventData) {
     const course = await Course.findByPk(courseId);
-    if (!course) {
-      throw { status: 404, message: 'Không tìm thấy khóa học' };
-    }
+    if (!course) throw { status: 404, message: 'Không tìm thấy khóa học' };
 
     if (userRole !== 'admin' && course.createdBy && Number(course.createdBy) !== Number(userId)) {
       throw { status: 403, message: 'Bạn không có quyền truy cập khóa học này' };
@@ -347,45 +361,44 @@ class ScheduleService {
     if (!title || !type || !startAt || !endAt) {
       throw { status: 400, message: 'Thiếu dữ liệu bắt buộc: title, type, startAt, endAt' };
     }
-    if (!isValidEventType(type)) {
-      throw { status: 400, message: 'type không hợp lệ' };
-    }
-    if (status != null && !isValidEventStatus(status)) {
-      throw { status: 400, message: 'status không hợp lệ' };
-    }
+    if (!isValidEventType(type)) throw { status: 400, message: 'type không hợp lệ' };
+    if (status != null && !isValidEventStatus(status)) throw { status: 400, message: 'status không hợp lệ' };
 
     const start = new Date(startAt);
     const end = new Date(endAt);
     if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime())) {
       throw { status: 400, message: 'startAt/endAt không hợp lệ' };
     }
-    if (end.getTime() < start.getTime()) {
-      throw { status: 400, message: 'endAt phải >= startAt' };
-    }
+    if (end < start) throw { status: 400, message: 'endAt phải >= startAt' };
 
     const event = await ScheduleEvent.create({
       courseId,
+      createdBy: userId,
+      isPersonalNote: false,
       title: String(title),
       type: String(type).toLowerCase(),
       startAt: start,
       endAt: end,
-      status: status ? String(status) : undefined,
-      description: description ? String(description) : undefined,
-      zoomLink: zoomLink ? String(zoomLink) : undefined,
-      location: location ? String(location) : undefined,
+      status: status ? String(status) : 'upcoming',
+      description: description ? String(description) : null,
+      zoomLink: zoomLink ? String(zoomLink) : null,
+      location: location ? String(location) : null,
     });
 
     return { event };
   }
 
   /**
-   * Create student schedule note/event
+   * Create student personal schedule note — FIXED: no courseId hardcode, use createdBy + isPersonalNote
    */
   async createStudentNote(userId, noteData) {
-    const { title, type, startAt, endAt, status, description, zoomLink, location, courseId } = noteData || {};
+    const { title, type, startAt, endAt, status, description, zoomLink, location } = noteData || {};
 
     if (!title || !startAt || !endAt) {
       throw { status: 400, message: 'Thiếu dữ liệu bắt buộc: title, startAt, endAt' };
+    }
+    if (type && !isValidEventType(type)) {
+      throw { status: 400, message: `type không hợp lệ. Chấp nhận: ${VALID_EVENT_TYPES.join(', ')}` };
     }
 
     const start = new Date(startAt);
@@ -393,46 +406,50 @@ class ScheduleService {
     if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime())) {
       throw { status: 400, message: 'startAt/endAt không hợp lệ' };
     }
-    if (end.getTime() < start.getTime()) {
-      throw { status: 400, message: 'endAt phải >= startAt' };
-    }
+    if (end < start) throw { status: 400, message: 'endAt phải >= startAt' };
 
     const event = await ScheduleEvent.create({
-      courseId: courseId || 1, // Default to course 1 if not provided
+      courseId: null,           // Personal notes have no courseId
+      createdBy: userId,        // Track ownership
+      isPersonalNote: true,     // Mark as personal note — not a course event
       title: String(title),
       type: type ? String(type).toLowerCase() : 'event',
       startAt: start,
       endAt: end,
       status: status ? String(status) : 'upcoming',
-      description: description ? String(description) : undefined,
-      zoomLink: zoomLink ? String(zoomLink) : undefined,
-      location: location ? String(location) : undefined,
+      description: description ? String(description) : null,
+      zoomLink: zoomLink ? String(zoomLink) : null,
+      location: location ? String(location) : null,
     });
 
-    return { event };
+    return { event: formatEventRow(event) };
   }
 
   /**
-   * Update student schedule note
+   * Update student personal note — FIXED: ownership check via createdBy
    */
   async updateStudentNote(eventId, userId, updateData) {
     const event = await ScheduleEvent.findByPk(eventId);
-    if (!event) {
-      throw { status: 404, message: 'Không tìm thấy ghi chú' };
+    if (!event) throw { status: 404, message: 'Không tìm thấy ghi chú' };
+
+    // Ownership check — student can only edit their own notes
+    if (!event.isPersonalNote) {
+      throw { status: 403, message: 'Không thể chỉnh sửa lịch học của khóa học' };
+    }
+    if (Number(event.createdBy) !== Number(userId)) {
+      throw { status: 403, message: 'Bạn không có quyền chỉnh sửa ghi chú này' };
     }
 
-    // For now, allow update without strict permission check
-    // (students can update their own notes - we could add a createdBy field later)
     const { title, type, startAt, endAt, status, description, zoomLink, location } = updateData || {};
+
+    if (type != null && !isValidEventType(type)) {
+      throw { status: 400, message: `type không hợp lệ. Chấp nhận: ${VALID_EVENT_TYPES.join(', ')}` };
+    }
 
     const nextStart = startAt != null ? parseDateTime(startAt) : event.startAt;
     const nextEnd = endAt != null ? parseDateTime(endAt) : event.endAt;
-    if (!nextStart || !nextEnd) {
-      throw { status: 400, message: 'startAt/endAt không hợp lệ' };
-    }
-    if (new Date(nextEnd).getTime() < new Date(nextStart).getTime()) {
-      throw { status: 400, message: 'endAt phải >= startAt' };
-    }
+    if (!nextStart || !nextEnd) throw { status: 400, message: 'startAt/endAt không hợp lệ' };
+    if (new Date(nextEnd) < new Date(nextStart)) throw { status: 400, message: 'endAt phải >= startAt' };
 
     await event.update({
       title: title != null ? String(title) : event.title,
@@ -445,16 +462,21 @@ class ScheduleService {
       location: location !== undefined ? (location != null ? String(location) : null) : event.location,
     });
 
-    return { event };
+    return { event: formatEventRow(event) };
   }
 
   /**
-   * Delete student schedule note
+   * Delete student personal note — FIXED: ownership check via createdBy
    */
   async deleteStudentNote(eventId, userId) {
     const event = await ScheduleEvent.findByPk(eventId);
-    if (!event) {
-      throw { status: 404, message: 'Không tìm thấy ghi chú' };
+    if (!event) throw { status: 404, message: 'Không tìm thấy ghi chú' };
+
+    if (!event.isPersonalNote) {
+      throw { status: 403, message: 'Không thể xóa lịch học của khóa học' };
+    }
+    if (Number(event.createdBy) !== Number(userId)) {
+      throw { status: 403, message: 'Bạn không có quyền xóa ghi chú này' };
     }
 
     await event.destroy();
@@ -462,28 +484,12 @@ class ScheduleService {
   }
 
   /**
-   * Format event for response
+   * Format event for response (alias kept for compatibility)
    */
   formatEvent(event) {
-    const startParts = toDateParts(event.startAt);
-    const endParts = toDateParts(event.endAt);
-    return {
-      id: String(event.id),
-      courseId: event.courseId ? String(event.courseId) : null,
-      courseTitle: event.course?.title || '',
-      title: event.title,
-      type: event.type,
-      status: event.status,
-      description: event.description || undefined,
-      zoomLink: event.zoomLink || undefined,
-      location: event.location || undefined,
-      startAt: event.startAt,
-      endAt: event.endAt,
-      date: startParts.date,
-      startTime: startParts.time,
-      endTime: endParts.time,
-    };
+    return formatEventRow(event);
   }
 }
 
 module.exports = new ScheduleService();
+module.exports.getTeacherSchedule = getTeacherSchedule;

@@ -30,6 +30,13 @@ module.exports = (sequelize) => {
       defaultValue: 60,
       field: 'passing_score',
     },
+    maxAttempts: {
+      type: DataTypes.INTEGER,
+      allowNull: true,
+      defaultValue: null,
+      field: 'max_attempts',
+      comment: 'null = unlimited attempts',
+    },
     courseId: {
       type: DataTypes.INTEGER.UNSIGNED,
       allowNull: false,

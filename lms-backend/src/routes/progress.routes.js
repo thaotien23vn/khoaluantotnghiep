@@ -5,6 +5,8 @@ const progressController = require('../modules/progress/progress.controller');
 const {
   updateLectureProgressValidation,
   getStudentCourseProgressValidation,
+  getLastAccessedLectureValidation,
+  getCertificateEligibilityValidation,
 } = require('../modules/progress/progress.validation');
 
 const router = express.Router();
@@ -48,6 +50,45 @@ router.get(
   authorizeRole('student'),
   getStudentCourseProgressValidation,
   progressController.getStudentCourseProgress
+);
+
+/**
+ * @route   GET /api/progress/courses/:courseId/continue
+ * @desc    Get last accessed lecture for a course (Continue Learning)
+ * @access  Private (Student)
+ */
+router.get(
+  '/courses/:courseId/continue',
+  authMiddleware,
+  authorizeRole('student'),
+  getLastAccessedLectureValidation,
+  progressController.getLastAccessedLecture
+);
+
+/**
+ * @route   GET /api/progress/courses/:courseId/certificate
+ * @desc    Get certificate eligibility (100% completion check)
+ * @access  Private (Student)
+ */
+router.get(
+  '/courses/:courseId/certificate',
+  authMiddleware,
+  authorizeRole('student'),
+  getCertificateEligibilityValidation,
+  progressController.getCertificateEligibility
+);
+
+
+/**
+ * @route   GET /api/progress/dashboard
+ * @desc    Get student dashboard summary (enrollments, progress, quizzes, streak)
+ * @access  Private (Student)
+ */
+router.get(
+  '/dashboard',
+  authMiddleware,
+  authorizeRole('student'),
+  progressController.getStudentDashboard
 );
 
 module.exports = router;

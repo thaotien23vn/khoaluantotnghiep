@@ -9,7 +9,7 @@ module.exports = (sequelize) => {
     },
     courseId: {
       type: DataTypes.INTEGER.UNSIGNED,
-      allowNull: false,
+      allowNull: true,
       field: 'course_id',
     },
     title: {
@@ -49,6 +49,17 @@ module.exports = (sequelize) => {
     location: {
       type: DataTypes.STRING,
       allowNull: true,
+    },
+    createdBy: {
+      type: DataTypes.INTEGER.UNSIGNED,
+      allowNull: true,
+      field: 'created_by',
+    },
+    isPersonalNote: {
+      type: DataTypes.BOOLEAN,
+      allowNull: false,
+      defaultValue: false,
+      field: 'is_personal_note',
     },
   }, {
     tableName: 'schedule_events',

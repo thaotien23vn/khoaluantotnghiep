@@ -90,6 +90,42 @@ router.get(
 );
 
 /**
+ * @route   GET /api/admin/revenue-by-day
+ * @desc    Get revenue by day for last 7 days
+ * @access  Private (Admin only)
+ */
+router.get(
+  '/revenue-by-day',
+  authMiddleware,
+  authorizeRole('admin'),
+  adminController.getRevenueByDay
+);
+
+/**
+ * @route   GET /api/admin/top-courses
+ * @desc    Get top courses by enrollment
+ * @access  Private (Admin only)
+ */
+router.get(
+  '/top-courses',
+  authMiddleware,
+  authorizeRole('admin'),
+  adminController.getTopCourses
+);
+
+/**
+ * @route   GET /api/admin/payment-status-counts
+ * @desc    Get payment status counts
+ * @access  Private (Admin only)
+ */
+router.get(
+  '/payment-status-counts',
+  authMiddleware,
+  authorizeRole('admin'),
+  adminController.getPaymentStatusCounts
+);
+
+/**
  * @route   GET /api/admin/users
  * @desc    Get all users (Admin only)
  * @access  Private (Admin only)
@@ -315,6 +351,8 @@ const {
   getStudentCourseProgressValidation,
   getTeacherStudentProgressValidation,
   getCourseStudentsProgressValidation,
+  getLastAccessedLectureValidation,
+  getCertificateEligibilityValidation,
 } = require('../modules/progress/progress.validation');
 
 /**
@@ -700,16 +738,41 @@ router.post(
 console.log('[Routes] Student progress routes defined');
 
 /**
- * @route   GET /api/student/courses/:courseId/progress
- * @desc    Get student's detailed progress for a course
+ * @route   GET /api/student/dashboard
+ * @desc    Get student dashboard summary (enrollments, progress, quizzes, next event, streak)
  * @access  Private (Student)
  */
 router.get(
-  '/student-courses/:courseId/progress',
+  '/dashboard',
   authMiddleware,
   authorizeRole('student'),
-  getStudentCourseProgressValidation,
-  progressController.getStudentCourseProgress
+  progressController.getStudentDashboard
+);
+
+/**
+ * @route   GET /api/student/courses/:courseId/continue
+ * @desc    Get last accessed lecture for a course (Continue Learning)
+ * @access  Private (Student)
+ */
+router.get(
+  '/courses/:courseId/continue',
+  authMiddleware,
+  authorizeRole('student'),
+  getLastAccessedLectureValidation,
+  progressController.getLastAccessedLecture
+);
+
+/**
+ * @route   GET /api/student/courses/:courseId/certificate
+ * @desc    Get certificate eligibility for a course (100% completion required)
+ * @access  Private (Student)
+ */
+router.get(
+  '/courses/:courseId/certificate',
+  authMiddleware,
+  authorizeRole('student'),
+  getCertificateEligibilityValidation,
+  progressController.getCertificateEligibility
 );
 
 // ---------- Payment (Student & Admin) ----------
@@ -766,24 +829,26 @@ router.get(
   paymentController.getPaymentDetail
 );
 
-/**
- * @route   POST /api/student/submit-assignment
- * @desc    Student submits assignment
- * @access  Private (Student & Admin)
- */
-router.post(
-  '/submit-assignment',
+// ==========================================
+// TRACKING ANALYTICS STUB (Temporary)
+// ==========================================
+router.get(
+  '/tracking/analytics',
   authMiddleware,
-  authorizeRole('student', 'admin'),
+  authorizeRole('admin'),
   (req, res) => {
     res.json({
-      success: true,
-      message: 'Bài tập đã được nộp thành công',
-      data: {
-        submissionId: 123,
-        status: 'submitted',
-        submittedAt: new Date(),
+      stats: {
+        totalViews: 0,
+        uniqueUsers: 0,
       },
+      activities: {
+        items: [],
+        total: 0,
+        page: parseInt(req.query.page) || 1,
+        totalPages: 1,
+      },
+      pageStats: [],
     });
   }
 );

@@ -119,6 +119,126 @@ class AdminService {
   }
 
   /**
+   * Get revenue by day for last 7 days
+   */
+  async getRevenueByDay() {
+    try {
+      const sevenDaysAgo = new Date();
+      sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 6);
+      sevenDaysAgo.setHours(0, 0, 0, 0);
+      const startDateStr = sevenDaysAgo.toISOString().slice(0, 10);
+
+      const query = `
+        SELECT 
+          DATE(created_at) as date,
+          COALESCE(SUM(amount), 0) as revenue,
+          COUNT(*) as count
+        FROM payments
+        WHERE status = 'completed' 
+          AND created_at >= '${startDateStr}'
+        GROUP BY DATE(created_at)
+        ORDER BY DATE(created_at) ASC
+      `;
+
+      const revenueRaw = await db.sequelize.query(query, {
+        type: db.sequelize.QueryTypes.SELECT,
+      });
+
+      const byDate = new Map(
+        (revenueRaw || []).map((r) => [
+          String(r.date),
+          {
+            date: String(r.date),
+            revenue: Number(r.revenue || 0),
+            count: Number(r.count || 0),
+          },
+        ])
+      );
+
+      const last7Days = [];
+      for (let i = 0; i < 7; i++) {
+        const d = new Date(sevenDaysAgo);
+        d.setDate(d.getDate() + i);
+        const key = d.toISOString().slice(0, 10);
+        const dayData = byDate.get(key) || { date: key, revenue: 0, count: 0 };
+        last7Days.push({
+          date: key,
+          dayOfWeek: ['CN', 'T2', 'T3', 'T4', 'T5', 'T6', 'T7'][d.getDay()],
+          revenue: dayData.revenue,
+          count: dayData.count,
+        });
+      }
+
+      return { revenueByDay: last7Days };
+    } catch (error) {
+      console.error('[AdminService.getRevenueByDay] Error:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Get top courses by enrollment count
+   */
+  async getTopCourses(limit = 5) {
+    try {
+      const query = `
+        SELECT 
+          c.id,
+          c.title,
+          c."imageUrl" as thumbnail,
+          COUNT(e.id) as enrollmentCount
+        FROM courses c
+        LEFT JOIN enrollments e ON c.id = e.course_id
+        GROUP BY c.id, c.title, c."imageUrl"
+        ORDER BY enrollmentCount DESC
+        LIMIT ${Number(limit)}
+      `;
+      
+      const topCourses = await db.sequelize.query(query, {
+        type: db.sequelize.QueryTypes.SELECT,
+      });
+
+      return {
+        topCourses: (topCourses || []).map((c) => ({
+          id: c.id,
+          title: c.title,
+          thumbnail: c.thumbnail,
+          enrollmentCount: Number(c.enrollmentCount || 0),
+        })),
+      };
+    } catch (error) {
+      console.error('[AdminService.getTopCourses] Error:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Get payment status counts
+   */
+  async getPaymentStatusCounts() {
+    try {
+      const [completed, pending, failed, cancelled] = await Promise.all([
+        Payment.count({ where: { status: 'completed' } }),
+        Payment.count({ where: { status: 'pending' } }),
+        Payment.count({ where: { status: 'failed' } }),
+        Payment.count({ where: { status: 'cancelled' } }),
+      ]);
+
+      return {
+        statusCounts: {
+          completed,
+          pending,
+          failed,
+          cancelled,
+        },
+      };
+    } catch (error) {
+      console.error('[AdminService.getPaymentStatusCounts] Error:', error);
+      throw error;
+    }
+  }
+
+  /**
    * Get all users
    */
   async getUsers() {
