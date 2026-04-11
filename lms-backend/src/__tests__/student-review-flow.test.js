@@ -2,6 +2,8 @@ const request = require('supertest');
 const app = require('../app');
 const { seedCore, TEST_PREFIX } = require('./jest.teardown');
 
+const db = require('../models');
+
 async function loginStudent() {
   const res = await request(app)
     .post('/api/auth/login')
@@ -19,6 +21,19 @@ describe('Student review flow', () => {
   it('POST /api/student/courses/:courseId/reviews should create review and return user+course', async () => {
     const seeded = await seedCore();
     const token = await loginStudent();
+
+    // Fake a completed lecture since users must complete at least 1 lecture to review
+    await db.models.LectureProgress.destroy({ where: { userId: seeded.student.id, courseId: seeded.course.id }});
+    const fakeChapter = await db.models.Chapter.create({ courseId: seeded.course.id, title: 'test chapter', order: 1 });
+    const fakeLecture = await db.models.Lecture.create({ chapterId: fakeChapter.id, title: 'test lecture', type: 'text', order: 1 });
+    await db.models.LectureProgress.create({
+      userId: seeded.student.id,
+      courseId: seeded.course.id,
+      lectureId: fakeLecture.id,
+      progressPercent: 100,
+      watchedPercent: 100,
+      isCompleted: true
+    });
 
     const uniqueComment = `Integration test comment ${Date.now()} - should be >= 10 chars`;
 

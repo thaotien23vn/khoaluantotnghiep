@@ -46,7 +46,7 @@ class ChapterController {
       const validationError = handleValidationErrors(req, res);
       if (validationError) return;
 
-      const { courseId } = req.params;
+      const { courseId } = req.body;
       const { id: userId, role } = req.user;
       const result = await chapterService.createChapter(courseId, userId, role, req.body);
       res.status(201).json({

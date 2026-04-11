@@ -118,7 +118,7 @@ describe('Lecture Progress API', () => {
     it('should auto-update course progress percentage', async () => {
       // First check course progress
       const progressRes = await request(app)
-        .get(`/api/student/student-courses/${courseId}/progress`)
+        .get(`/api/progress/courses/${courseId}`)
         .set('Authorization', `Bearer ${studentToken}`);
 
       expect(progressRes.status).toBe(200);
@@ -133,9 +133,9 @@ describe('Lecture Progress API', () => {
         .send({ title: 'Other Course', price: 0 });
 
       const otherChapter = await request(app)
-        .post(`/api/teacher/courses/${otherCourse.body.data.course.id}/chapters`)
+        .post(`/api/teacher/chapters`)
         .set('Authorization', `Bearer ${teacherToken}`)
-        .send({ title: 'Chapter', order: 1 });
+        .send({ courseId: otherCourse.body.data.course.id, title: 'Chapter', order: 1 });
 
       const otherLecture = await request(app)
         .post(`/api/teacher/chapters/${otherChapter.body.data.chapter.id}/lectures`)
@@ -165,10 +165,10 @@ describe('Lecture Progress API', () => {
     });
   });
 
-  describe('GET /api/student/student-courses/:courseId/progress', () => {
+  describe('GET /api/progress/courses/:courseId', () => {
     it('should get student course progress with lecture details', async () => {
       const res = await request(app)
-        .get(`/api/student/student-courses/${courseId}/progress`)
+        .get(`/api/progress/courses/${courseId}`)
         .set('Authorization', `Bearer ${studentToken}`);
 
       expect(res.status).toBe(200);
@@ -180,7 +180,7 @@ describe('Lecture Progress API', () => {
 
     it('should fail if not enrolled', async () => {
       const res = await request(app)
-        .get('/api/student/student-courses/99999/progress')
+        .get('/api/progress/courses/99999')
         .set('Authorization', `Bearer ${studentToken}`);
 
       expect(res.status).toBe(404);

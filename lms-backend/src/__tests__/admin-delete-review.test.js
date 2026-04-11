@@ -53,6 +53,25 @@ describe('Admin delete review (test-created only)', () => {
 
     expect([200, 201]).toContain(enrollRes.statusCode);
 
+    // create a chapter and lecture so we can mark it completed
+    const chapterRes = await request(app)
+      .post(`/api/teacher/chapters`)
+      .set('Authorization', `Bearer ${teacherToken}`)
+      .send({ courseId, title: 'Test Chapter', order: 1 });
+    const chapterId = chapterRes.body.data.chapter.id;
+
+    const lectureRes = await request(app)
+      .post(`/api/teacher/chapters/${chapterId}/lectures`)
+      .set('Authorization', `Bearer ${teacherToken}`)
+      .send({ title: 'Test Lecture', content: 'content', type: 'text', order: 1 });
+    const lectureId = lectureRes.body.data.lecture.id;
+
+    // mark lecture as completed
+    await request(app)
+      .put(`/api/progress/lectures/${lectureId}`)
+      .set('Authorization', `Bearer ${studentToken}`)
+      .send({ watchedPercent: 100 });
+
     // create review
     const createReviewRes = await request(app)
       .post(`/api/student/courses/${courseId}/reviews`)
