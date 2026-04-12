@@ -7,6 +7,7 @@ const lessonService = require('./lesson.service');
 const handleValidationErrors = (req, res) => {
   const errors = validationResult(req);
   if (!errors.isEmpty()) {
+    console.log('[Validation Error] Path:', req.path, 'Body:', req.body, 'Errors:', errors.array());
     return res.status(400).json({
       success: false,
       message: 'Dữ liệu không hợp lệ',

@@ -18,12 +18,20 @@ function gradeAnswer(question, userAnswer) {
   }
 
   if (question.type === 'short_answer') {
-    const userStr = userAnswer ? String(userAnswer).toLowerCase().trim() : '';
-    let correctStr = question.correctAnswer ? String(question.correctAnswer).toLowerCase().trim() : '';
-    while (correctStr.startsWith('"') && correctStr.endsWith('"') && correctStr.length >= 2) {
-      correctStr = correctStr.substring(1, correctStr.length - 1).trim();
-    }
-    const isCorrect = userStr === correctStr;
+    // FIXED: Loại bỏ ký tự đặc biệt, dấu câu và đưa về lowercase, chuẩn hóa khoảng trắng
+    const sanitizeStr = (str) => {
+      if (!str) return '';
+      let s = String(str).toLowerCase();
+      // Bỏ ngoặc, dấu câu dư thừa
+      while (s.startsWith('"') && s.endsWith('"') && s.length >= 2) {
+        s = s.substring(1, s.length - 1);
+      }
+      return s.replace(/[.,/#!$%^&*;:{}=_`~()]/g, "").replace(/\s{2,}/g, " ").trim();
+    };
+
+    const userStr = sanitizeStr(userAnswer);
+    const correctStr = sanitizeStr(question.correctAnswer);
+    const isCorrect = userStr === correctStr && correctStr !== '';
     return { isCorrect, pointsEarned: isCorrect ? question.points : 0 };
   }
 
@@ -56,13 +64,21 @@ async function autoSubmitExpiredAttempt(attempt, quiz) {
   }
 
   const percentageScore = maxScore > 0 ? (totalScore / maxScore) * 100 : 0;
-  const passed = percentageScore >= quiz.passingScore;
+  let passed = percentageScore >= quiz.passingScore;
+  if (!passed && manualCount > 0) passed = null;
+
+  // FIXED: Gán thời gian nộp bài đúng bằng thời gian lúc hết giờ, không dùng thời điểm hệ thống claim lại
+  let actualCompletedAt = new Date();
+  if (quiz.timeLimit && attempt.startedAt) {
+    const expiredTime = new Date(new Date(attempt.startedAt).getTime() + (quiz.timeLimit * 60000));
+    actualCompletedAt = expiredTime < new Date() ? expiredTime : new Date();
+  }
 
   await attempt.update({
     score: totalScore,
     percentageScore,
     passed,
-    completedAt: new Date(),
+    completedAt: actualCompletedAt,
   });
 
   return attempt;
@@ -231,6 +247,14 @@ class AttemptService {
       if (elapsedMinutes > attempt.quiz.timeLimit + gracePeriodMinutes) {
         // Auto-grade with existing answers (time expired)
         await autoSubmitExpiredAttempt(attempt, attempt.quiz);
+
+        try {
+          const progressService = require('../progress/progress.service');
+          await progressService.getStudentCourseProgress(userId, attempt.quiz.courseId);
+        } catch (e) {
+          console.error('[Quiz] Lỗi đồng bộ tiến độ sau khi tự động nộp bài:', e);
+        }
+
         return {
           attempt: {
             id: attempt.id,
@@ -239,7 +263,7 @@ class AttemptService {
             passed: attempt.passed,
             completedAt: attempt.completedAt,
             timedOut: true,
-            summary: { totalQuestions: attempt.quiz.questions.length, correctCount: 0, incorrectCount: 0, manualGradingCount: 0 },
+            summary: { totalQuestions: attempt.quiz.questions.length, correctCount: 0, incorrectCount: 0, manualGradingCount: attempt.quiz.questions.filter(q => q.type === 'essay').length },
           },
           quiz: { id: attempt.quiz.id, title: attempt.quiz.title },
           results: [],
@@ -278,9 +302,18 @@ class AttemptService {
     }
 
     const percentageScore = maxScore > 0 ? (totalScore / maxScore) * 100 : 0;
-    const passed = percentageScore >= attempt.quiz.passingScore;
+    let passed = percentageScore >= attempt.quiz.passingScore;
+    if (!passed && manualGradingCount > 0) passed = null;
 
     await attempt.update({ answers, score: totalScore, percentageScore, passed, completedAt: new Date() });
+
+    // Tự động đồng bộ với tiến độ khóa học ngay sau khi nộp
+    try {
+      const progressService = require('../progress/progress.service');
+      await progressService.getStudentCourseProgress(userId, attempt.quiz.courseId);
+    } catch (e) {
+      console.error('[Quiz] Lỗi đồng bộ tiến độ khóa học sau khi nộp bài:', e);
+    }
 
     return {
       attempt: {
@@ -378,6 +411,7 @@ class AttemptService {
         passed: attempt.passed,
         startedAt: attempt.startedAt,
         completedAt: attempt.completedAt,
+        summary: attempt.completedAt ? { manualGradingCount: questions.filter(q => q.type === 'essay').length } : undefined,
       },
       quiz: { ...attempt.quiz.toJSON(), questions },
       results,

@@ -263,4 +263,30 @@ router.get(
   attemptController.getAttempt,
 );
 
+/**
+ * @route   GET /api/student/performance-stats
+ * @desc    Get student performance statistics
+ * @access  Private (Student)
+ */
+router.get(
+  "/student/performance-stats",
+  authMiddleware,
+  authorizeRole("student"),
+  (req, res) => {
+    // Return mock data matching frontend expected structure
+    res.json({
+      success: true,
+      data: {
+        statistics: {
+          totalScore: 0,
+          passRate: 0,
+          averagePercentage: 0,
+          totalAttempts: 0,
+        },
+        recentAttempts: [],
+      },
+    });
+  },
+);
+
 module.exports = router;

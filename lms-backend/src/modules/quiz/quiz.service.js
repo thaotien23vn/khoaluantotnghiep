@@ -18,6 +18,7 @@ class QuizService {
       startTime,
       endTime,
       showResults,
+      chapterId,
     } = quizData;
 
     const course = await Course.findByPk(courseId);
@@ -40,6 +41,7 @@ class QuizService {
       endTime: endTime || null,
       showResults: showResults !== undefined ? showResults : true,
       createdBy: userId,
+      chapterId: chapterId || null,
     });
 
     return { quiz };
@@ -253,16 +255,32 @@ class QuizService {
 
     const formattedQuizzes = quizzes.map((quiz) => {
       const attempts = quiz.attempts || [];
+      // Explicitly sort attempts descending by startedAt to guarantee latest Attempt is at index 0
+      attempts.sort((a, b) => new Date(b.startedAt) - new Date(a.startedAt));
+
       let status = 'not_started';
       let latestAttempt = null;
+      let bestAttempt = null;
 
       if (attempts.length > 0) {
         latestAttempt = attempts[0];
+        
+        // Find best COMPLETED attempt
+        bestAttempt = attempts.reduce((best, current) => {
+          if (!current.completedAt) return best;
+          if (!best) return current;
+          return (current.percentageScore || 0) > (best.percentageScore || 0) ? current : best;
+        }, null);
+
         const hasCompleted = attempts.some((a) => a.completedAt);
         const hasInProgress = attempts.some((a) => !a.completedAt);
         if (hasInProgress) status = 'in_progress';
         else if (hasCompleted) status = 'completed';
       }
+
+      // If no best attempt was found (e.g., all are in progress), fallback to latest Attempt
+      const referenceAttempt = bestAttempt || latestAttempt;
+      const isPassed = attempts.some(a => a.passed === true) ? true : (attempts.some(a => a.passed === null) ? null : false);
 
       return {
         ...quiz.toJSON(),
@@ -270,8 +288,8 @@ class QuizService {
         status,
         userStatus: {
           status,
-          lastScore: latestAttempt?.percentageScore || 0,
-          isPassed: latestAttempt?.passed || false,
+          lastScore: referenceAttempt?.percentageScore || 0, // Using best score here
+          isPassed: isPassed,
           attemptCount: attempts.length,
           latestAttemptId: latestAttempt?.id || null,
         },
@@ -314,16 +332,32 @@ class QuizService {
 
     const formattedQuizzes = quizzes.map((quiz) => {
       const attempts = quiz.attempts || [];
+      // Explicitly sort attempts descending by startedAt to guarantee latest Attempt is at index 0
+      attempts.sort((a, b) => new Date(b.startedAt) - new Date(a.startedAt));
+
       let status = 'not_started';
       let latestAttempt = null;
+      let bestAttempt = null;
 
       if (attempts.length > 0) {
         latestAttempt = attempts[0];
+
+        // Find best COMPLETED attempt
+        bestAttempt = attempts.reduce((best, current) => {
+          if (!current.completedAt) return best;
+          if (!best) return current;
+          return (current.percentageScore || 0) > (best.percentageScore || 0) ? current : best;
+        }, null);
+
         const hasCompleted = attempts.some((a) => a.completedAt);
         const hasInProgress = attempts.some((a) => !a.completedAt);
         if (hasInProgress) status = 'in_progress';
         else if (hasCompleted) status = 'completed';
       }
+
+      // If no best attempt was found, fallback to latest Attempt
+      const referenceAttempt = bestAttempt || latestAttempt;
+      const isPassed = attempts.some(a => a.passed === true) ? true : (attempts.some(a => a.passed === null) ? null : false);
 
       return {
         ...quiz.toJSON(),
@@ -332,8 +366,8 @@ class QuizService {
         courseTitle: quiz.course?.title,
         userStatus: {
           status,
-          lastScore: latestAttempt?.percentageScore || 0,
-          isPassed: latestAttempt?.passed || false,
+          lastScore: referenceAttempt?.percentageScore || 0, // Using best score
+          isPassed: isPassed,
           attemptCount: attempts.length,
           latestAttemptId: latestAttempt?.id || null,
         },

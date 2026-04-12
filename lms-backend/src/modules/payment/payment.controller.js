@@ -446,13 +446,55 @@ class PaymentController {
         });
       }
 
+      // Check if this is a cart checkout (check paymentDetails for cart type)
+      console.log('Payment details:', payment.paymentDetails);
+      const paymentDetails = payment.paymentDetails || {};
+      const isCartCheckout = paymentDetails.type === 'checkout_session_cart';
+      console.log('Is cart checkout:', isCartCheckout);
+
+      let courses = [];
+      let totalAmount = 0;
+
+      if (isCartCheckout) {
+        // Find all payments with the same session (cart checkout creates multiple payments)
+        console.log('Finding related payments for user:', payment.userId, 'session:', session_id);
+        const relatedPayments = await Payment.findAll({
+          where: { 
+            providerTxn: session_id,
+            userId: payment.userId,
+          },
+          include: [
+            { model: Course, as: 'course', attributes: ['id', 'title', 'price'] },
+          ],
+          order: [['created_at', 'ASC']],
+        });
+        console.log('Found related payments:', relatedPayments.length);
+
+        courses = relatedPayments.map(p => ({
+          id: p.course ? p.course.id : p.courseId,
+          title: p.course ? p.course.title : 'Khóa học',
+          price: parseFloat(p.amount) || 0,
+        }));
+
+        totalAmount = relatedPayments.reduce((sum, p) => sum + (parseFloat(p.amount) || 0), 0);
+      } else {
+        // Single course purchase
+        courses = [{
+          id: payment.course ? payment.course.id : payment.courseId,
+          title: payment.course ? payment.course.title : 'Khóa học',
+          price: parseFloat(payment.amount) || 0,
+        }];
+        totalAmount = parseFloat(payment.amount) || 0;
+      }
+
       res.json({
         success: true,
         data: {
           id: payment.id,
           courseId: payment.courseId,
           courseTitle: payment.course?.title || 'Khóa học',
-          amount: payment.amount,
+          courses: courses.length > 1 ? courses : undefined,
+          amount: totalAmount,
           currency: payment.currency,
           status: payment.status,
           provider: payment.provider,

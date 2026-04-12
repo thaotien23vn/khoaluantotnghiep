@@ -55,6 +55,16 @@ class ProgressService {
       },
     });
 
+    // FIXED: Anti-cheat bypassing video progress bypass
+    if (lecture.type === 'video' && lecture.duration > 0) {
+      const elapsedSeconds = (new Date() - new Date(progress.createdAt)) / 1000;
+      const claimedWatchSeconds = (watched / 100) * lecture.duration;
+      // If elapsed time is extremely small compared to claimed progress (e.g. < 5%), reject it
+      if (!progress.isCompleted && watched > 50 && elapsedSeconds < Math.max(10, claimedWatchSeconds * 0.05)) {
+        throw { status: 400, message: 'Phát hiện thao tác bỏ qua video bất thường. Vui lòng học đúng tiến trình.' };
+      }
+    }
+
     if (!created) {
       // Only advance watchedPercent, never regress
       const newWatched = Math.max(progress.watchedPercent, watched);
@@ -74,41 +84,31 @@ class ProgressService {
     return { progress };
   }
 
-  /**
-   * Auto calculate and update course progress
-   */
   async updateCourseProgress(userId, courseId) {
-    const totalLectures = await Lecture.count({
-      include: [{
-        model: Chapter,
-        as: 'chapter',
-        where: { courseId },
-        required: true,
-      }],
-    });
-
-    if (totalLectures === 0) return;
+    const totalLectures = await this.countCourseLectures(courseId);
+    const totalQuizzes = await this.countCourseQuizzes(courseId);
 
     const completedLectures = await LectureProgress.count({
-      where: {
-        userId,
-        courseId,
-        isCompleted: true,
-      },
+        where: { userId, courseId, isCompleted: true },
     });
 
-    const progressPercent = Math.round((completedLectures / totalLectures) * 100);
+    const quizProgress = await this._checkAllQuizzesPassed(userId, courseId);
+    const completedQuizzes = quizProgress.passed;
+
+    const totalItems = totalLectures + totalQuizzes;
+    const completedItems = completedLectures + completedQuizzes;
+    const progressPercent = totalItems > 0 ? Math.round((completedItems / totalItems) * 100) : 0;
 
     await Enrollment.update(
-      { progressPercent },
-      { where: { userId, courseId } }
+        { progressPercent },
+        { where: { userId, courseId } }
     );
 
-    return { progressPercent, totalLectures, completedLectures };
+    return { progressPercent, totalLectures, completedLectures, totalQuizzes, completedQuizzes };
   }
 
   /**
-   * Get student's lecture progress for a course
+   * Get student's lecture progress for a course (includes quizzes)
    */
   async getStudentCourseProgress(userId, courseId) {
     const enrollment = await Enrollment.findOne({
@@ -121,6 +121,8 @@ class ProgressService {
     }
 
     const totalLectures = await this.countCourseLectures(courseId);
+    const totalQuizzes = await this.countCourseQuizzes(courseId);
+    console.log('[DEBUG Backend] totalLectures:', totalLectures, 'totalQuizzes:', totalQuizzes);
 
     const progressList = await LectureProgress.findAll({
       where: { userId, courseId },
@@ -138,15 +140,37 @@ class ProgressService {
 
     const completedLectures = progressList.filter(p => p.isCompleted).length;
 
-    return {
+    // Get quiz progress
+    const quizProgress = await this._checkAllQuizzesPassed(userId, courseId);
+    const completedQuizzes = quizProgress.passed;
+    console.log('[DEBUG Backend] completedLectures:', completedLectures, 'completedQuizzes:', completedQuizzes, 'quizProgress:', quizProgress);
+
+    // Calculate combined progress (lectures + quizzes)
+    const totalItems = totalLectures + totalQuizzes;
+    const completedItems = completedLectures + completedQuizzes;
+    const combinedProgress = totalItems > 0 ? Math.round((completedItems / totalItems) * 100) : 0;
+    console.log('[DEBUG Backend] totalItems:', totalItems, 'completedItems:', completedItems, 'combinedProgress:', combinedProgress);
+
+    // FIXED: Auto-heal Stale Progress Bug
+    if (Number(enrollment.progressPercent) !== combinedProgress) {
+        await enrollment.update({ progressPercent: combinedProgress });
+        enrollment.progressPercent = combinedProgress;
+    }
+
+    const result = {
       course: enrollment.Course,
-      courseProgress: Number(enrollment.progressPercent),
+      courseProgress: combinedProgress,
       enrolledAt: enrollment.enrolledAt,
       lecturesProgress: progressList,
       totalLectures,
       completedLectures,
-      isCompleted: totalLectures > 0 && completedLectures >= totalLectures,
+      totalQuizzes,
+      completedQuizzes,
+      quizProgress: quizProgress,
+      isCompleted: totalItems > 0 && completedItems >= totalItems,
     };
+    console.log('[DEBUG Backend] RETURN:', { courseProgress: result.courseProgress, totalLectures, completedLectures, totalQuizzes, completedQuizzes, isCompleted: result.isCompleted });
+    return result;
   }
 
   /**
@@ -248,7 +272,12 @@ class ProgressService {
       ? Math.round((completedLectures / totalLectures) * 100)
       : 0;
 
-    const isEligible = progressPercent === 100 && totalLectures > 0;
+    // FIXED: Heal stale progress via Certificate Eligibility check
+    if (Number(enrollment.progressPercent) !== progressPercent && totalLectures > 0) {
+      await enrollment.update({ progressPercent });
+    }
+
+    const isEligible = progressPercent >= 100 && totalLectures > 0;
 
     // Check quiz pass requirement (all published quizzes must be passed)
     const quizzesPassed = await this._checkAllQuizzesPassed(userId, courseId);
@@ -278,11 +307,19 @@ class ProgressService {
    */
   async _checkAllQuizzesPassed(userId, courseId) {
     try {
-      const { Quiz, Attempt } = db.models;
+      const { Quiz, Attempt, Chapter } = db.models;
+      // Only check quizzes attached to chapters (like lectures)
       const publishedQuizzes = await Quiz.findAll({
-        where: { courseId, status: 'published' },
+        include: [{
+          model: Chapter,
+          as: 'quizChapter',
+          where: { courseId },
+          required: true,
+        }],
+        where: { status: 'published' },
         attributes: ['id', 'title', 'passingScore'],
       });
+      console.log('[DEBUG Backend] _checkAllQuizzesPassed - courseId:', courseId, 'publishedQuizzes:', publishedQuizzes.length, publishedQuizzes.map(q => ({ id: q.id, title: q.title })));
 
       if (publishedQuizzes.length === 0) {
         return { allPassed: true, total: 0, passed: 0, quizDetails: [] };
@@ -332,13 +369,54 @@ class ProgressService {
       order: [['enrolledAt', 'DESC']],
     });
 
+    const courseIds = enrollments.map(e => e.courseId);
+
+    // FIXED: Auto-heal Stale Progress on Dashboard via bulk aggregation
+    if (courseIds.length > 0) {
+      // Get completed lectures count for all enrolled courses
+      const completedPerCourse = await LectureProgress.findAll({
+        where: { userId, courseId: { [Op.in]: courseIds }, isCompleted: true },
+        attributes: ['courseId', [db.sequelize.fn('COUNT', db.sequelize.col('id')), 'completed']],
+        group: ['courseId'],
+        raw: true,
+      });
+      const completedMap = Object.fromEntries(completedPerCourse.map(r => [r.courseId, parseInt(r.completed, 10)]));
+
+      // Get total lectures per course by mapping through Chapters
+      const totalLecturesPerCourse = await Chapter.findAll({
+        where: { courseId: { [Op.in]: courseIds } },
+        attributes: [
+          'courseId',
+          [db.sequelize.col('Lectures.id'), 'lectureId']
+        ],
+        include: [{ model: Lecture, as: 'Lectures', attributes: [] }],
+        raw: true,
+      });
+
+      const totalMap = {};
+      totalLecturesPerCourse.forEach(row => {
+        if (row.lectureId) {
+          totalMap[row.courseId] = (totalMap[row.courseId] || 0) + 1;
+        }
+      });
+
+      // Heal records if mismatch
+      for (let enrollment of enrollments) {
+        const t = totalMap[enrollment.courseId] || 0;
+        const c = completedMap[enrollment.courseId] || 0;
+        const actualProgress = t > 0 ? Math.round((c / t) * 100) : 0;
+        
+        if (Number(enrollment.progressPercent) !== actualProgress) {
+          enrollment.progressPercent = actualProgress;
+          await enrollment.update({ progressPercent: actualProgress });
+        }
+      }
+    }
+
     const totalEnrolled = enrollments.length;
     const inProgress = enrollments.filter(e => Number(e.progressPercent) > 0 && Number(e.progressPercent) < 100).length;
     const completedCourses = enrollments.filter(e => Number(e.progressPercent) >= 100).length;
     const notStarted = enrollments.filter(e => Number(e.progressPercent) === 0).length;
-
-    // 2. Recent progress (last 5 accessed courses)
-    const courseIds = enrollments.map(e => e.courseId);
     let recentProgress = [];
     if (courseIds.length > 0) {
       const lastAccessed = await LectureProgress.findAll({
@@ -656,6 +734,24 @@ class ProgressService {
         required: true,
       }],
     });
+  }
+
+  /**
+   * Count total quizzes in a course (only quizzes attached to chapters)
+   */
+  async countCourseQuizzes(courseId) {
+    const { Chapter } = db.models;
+    const count = await Quiz.count({
+      include: [{
+        model: Chapter,
+        as: 'quizChapter',
+        where: { courseId },
+        required: true,
+      }],
+      where: { status: 'published' },
+    });
+    console.log('[DEBUG Backend] countCourseQuizzes - courseId:', courseId, 'count:', count);
+    return count;
   }
 }
 

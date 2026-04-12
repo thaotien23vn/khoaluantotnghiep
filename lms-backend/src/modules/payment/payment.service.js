@@ -527,13 +527,18 @@ class PaymentService {
       throw { status: 400, message: 'Bạn chưa đăng ký khóa học này' };
     }
 
+    // FIXED: Anti-abuse for refunds (Don't allow if > 30% complete)
+    if (enrollment.progressPercent > 30) {
+      throw { status: 400, message: `Bạn đã học được ${enrollment.progressPercent}% khóa học. Chỉ có thể hoàn tiền khi tiến độ dưới 30% để đảm bảo tính công bằng.` };
+    }
+
     // Check if can refund (e.g., within 30 days, not completed too much)
     const daysSincePurchase = Math.floor(
       (Date.now() - new Date(payment.createdAt).getTime()) / (1000 * 60 * 60 * 24)
     );
 
     if (daysSincePurchase > 30) {
-      throw { status: 400, message: 'Đã quá thời hạn hoàn tiền (30 ngày)' };
+      throw { status: 400, message: 'Đã quá thời hạn giải quyết hoàn tiền (30 ngày)' };
     }
 
     // Process refund with mock processor

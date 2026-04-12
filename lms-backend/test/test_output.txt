@@ -1,0 +1,315 @@
+﻿
+> lms-backend@1.0.0 test
+> jest --runInBand attempt.service.test.js
+
+node.exe : (node:31008) [DEP0170] DeprecationWarning: The URL sqlite::memory: is invalid. Future versions of Node.js 
+will throw an error.
+At line:1 char:1
++ & "C:\Program Files\nodejs/node.exe" "C:\Users\VICTUS\AppData\Roaming ...
++ ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: ((node:31008) [D...throw an error.:String) [], RemoteException
+    + FullyQualifiedErrorId : NativeCommandError
+ 
+(Use `node --trace-deprecation ...` to show where the warning was created)
+FAIL src/__tests__/attempt.service.test.js
+  ΓùÅ Console
+
+    console.log
+      [dotenv@17.3.1] injecting env (34) from .env -- tip: ΓÜí∩╕Å secrets for agents: https://dotenvx.com/as2
+
+      at _log (node_modules/dotenv/lib/main.js:139:11)
+
+    console.warn
+      (sequelize) Warning: SQLite does not support 'INTEGER' with UNSIGNED or ZEROFILL. Plain 'INTEGER' will be used 
+instead. 
+      >> Check: https://www.sqlite.org/datatype3.html
+
+    [0m [90m 2 |[39m
+     [90m 3 |[39m module[33m.[39mexports [33m=[39m (sequelize) [33m=>[39m {
+    [31m[1m>[22m[39m[90m 4 |[39m   [36mconst[39m [33mUser[39m [33m=[39m 
+sequelize[33m.[39mdefine([32m'User'[39m[33m,[39m {
+     [90m   |[39m                          [31m[1m^[22m[39m
+     [90m 5 |[39m     id[33m:[39m {
+     [90m 6 |[39m       type[33m:[39m 
+[33mDataTypes[39m[33m.[39m[33mINTEGER[39m[33m.[39m[33mUNSIGNED[39m[33m,[39m
+     [90m 7 |[39m       autoIncrement[33m:[39m [36mtrue[39m[33m,[39m[0m
+
+      at Logger.warn (node_modules/sequelize/src/utils/logger.ts:41:13)
+      at warn (node_modules/sequelize/src/data-types.js:40:14)
+      at removeUnsupportedIntegerOptions (node_modules/sequelize/src/dialects/sqlite/data-types.js:14:7)
+      at new INTEGER (node_modules/sequelize/src/dialects/sqlite/data-types.js:146:7)
+      at Object.construct (node_modules/sequelize/src/utils/class-to-invokable.ts:25:14)
+      at Proxy.extend (node_modules/sequelize/src/data-types.js:44:12)
+      at Sequelize.normalizeDataType (node_modules/sequelize/src/sequelize.js:1302:37)
+      at Sequelize.normalizeAttribute (node_modules/sequelize/src/sequelize.js:1324:27)
+      at node_modules/sequelize/src/model.js:1043:34
+      at node_modules/lodash/lodash.js:13508:38
+      at node_modules/lodash/lodash.js:5006:15
+      at baseForOwn (node_modules/lodash/lodash.js:3032:24)
+      at Function.mapValues (node_modules/lodash/lodash.js:13507:7)
+      at Function.init (node_modules/sequelize/src/model.js:1042:28)
+      at Sequelize.define (node_modules/sequelize/src/sequelize.js:468:11)
+      at define (src/models/user.model.js:4:26)
+      at src/models/index.js:117:84
+          at Array.forEach (<anonymous>)
+      at Object.forEach (src/models/index.js:116:3)
+      at Object.require (src/__tests__/jest.teardown.js:2:12)
+
+  ΓùÅ Attempt Service - Comprehensive Tests ΓÇ║ startAttempt() ΓÇ║ should create new attempt for student
+
+    Bß║ín ch╞░a ─æ─âng k├╜ kh├│a hß╗ìc n├áy
+
+
+  ΓùÅ Attempt Service - Comprehensive Tests ΓÇ║ startAttempt() ΓÇ║ should throw when quiz not published
+
+    expect(received).rejects.toMatchObject(expected)
+
+    - Expected  - 1
+    + Received  + 1
+
+      Object {
+    -   "message": StringContaining "ch╞░a xuß║Ñt bß║ún",
+    +   "message": "Bß║ín ch╞░a ─æ─âng k├╜ kh├│a hß╗ìc n├áy",
+        "status": 403,
+      }
+
+    [0m [90m 160 |[39m       [36mawait[39m expect(
+     [90m 161 |[39m         attemptService[33m.[39mstartAttempt(draftQuiz[33m.[39mid[33m,[39m 
+testStudent[33m.[39mid[33m,[39m [32m'student'[39m)
+    [31m[1m>[22m[39m[90m 162 |[39m       )[33m.[39mrejects[33m.[39mtoMatchObject({
+     [90m     |[39m                 [31m[1m^[22m[39m
+     [90m 163 |[39m         status[33m:[39m [35m403[39m[33m,[39m
+     [90m 164 |[39m         message[33m:[39m expect[33m.[39mstringContaining([32m'ch╞░a xuß║Ñt 
+bß║ún'[39m)[33m,[39m
+     [90m 165 |[39m       })[33m;[39m[0m
+
+      at Object.toMatchObject (node_modules/expect/build/index.js:2155:20)
+      at Object.toMatchObject (src/__tests__/attempt.service.test.js:162:17)
+
+  ΓùÅ Attempt Service - Comprehensive Tests ΓÇ║ startAttempt() ΓÇ║ should check max attempts limit
+
+    expect(received).rejects.toMatchObject(expected)
+
+    - Expected  - 1
+    + Received  + 1
+
+      Object {
+    -   "message": StringContaining "─æ├ú hß║┐t l╞░ß╗út",
+    +   "message": "Bß║ín ch╞░a ─æ─âng k├╜ kh├│a hß╗ìc n├áy",
+        "status": 403,
+      }
+
+    [0m [90m 181 |[39m       [36mawait[39m expect(
+     [90m 182 |[39m         attemptService[33m.[39mstartAttempt(testQuiz[33m.[39mid[33m,[39m 
+testStudent[33m.[39mid[33m,[39m [32m'student'[39m)
+    [31m[1m>[22m[39m[90m 183 |[39m       )[33m.[39mrejects[33m.[39mtoMatchObject({
+     [90m     |[39m                 [31m[1m^[22m[39m
+     [90m 184 |[39m         status[33m:[39m [35m403[39m[33m,[39m
+     [90m 185 |[39m         message[33m:[39m expect[33m.[39mstringContaining([32m'─æ├ú hß║┐t 
+l╞░ß╗út'[39m)[33m,[39m
+     [90m 186 |[39m       })[33m;[39m[0m
+
+      at Object.toMatchObject (node_modules/expect/build/index.js:2155:20)
+      at Object.toMatchObject (src/__tests__/attempt.service.test.js:183:17)
+
+  ΓùÅ Attempt Service - Comprehensive Tests ΓÇ║ startAttempt() ΓÇ║ should include questions in started attempt
+
+    Bß║ín ch╞░a ─æ─âng k├╜ kh├│a hß╗ìc n├áy
+
+
+  ΓùÅ Attempt Service - Comprehensive Tests ΓÇ║ startAttempt() ΓÇ║ should not count incomplete attempts toward max 
+limit
+
+    Bß║ín ch╞░a ─æ─âng k├╜ kh├│a hß╗ìc n├áy
+
+
+  ΓùÅ Attempt Service - Comprehensive Tests ΓÇ║ startAttempt() ΓÇ║ should throw 403 for unpublished course quiz
+
+    expect(received).rejects.toMatchObject(expected)
+
+    - Expected  - 2
+    + Received  + 2
+
+      Object {
+    -   "message": StringContaining "ch╞░a xuß║Ñt bß║ún",
+    -   "status": 403,
+    +   "message": "Kh├│a hß╗ìc ch╞░a ─æ╞░ß╗úc xuß║Ñt bß║ún",
+    +   "status": 400,
+      }
+
+    [0m [90m 225 |[39m       [36mawait[39m expect(
+     [90m 226 |[39m         attemptService[33m.[39mstartAttempt(quizInDraft[33m.[39mid[33m,[39m 
+testStudent[33m.[39mid[33m,[39m [32m'student'[39m)
+    [31m[1m>[22m[39m[90m 227 |[39m       )[33m.[39mrejects[33m.[39mtoMatchObject({
+     [90m     |[39m                 [31m[1m^[22m[39m
+     [90m 228 |[39m         status[33m:[39m [35m403[39m[33m,[39m
+     [90m 229 |[39m         message[33m:[39m expect[33m.[39mstringContaining([32m'ch╞░a xuß║Ñt 
+bß║ún'[39m)[33m,[39m
+     [90m 230 |[39m       })[33m;[39m[0m
+
+      at Object.toMatchObject (node_modules/expect/build/index.js:2155:20)
+      at Object.toMatchObject (src/__tests__/attempt.service.test.js:227:17)
+
+  ΓùÅ Attempt Service - Comprehensive Tests ΓÇ║ submitAttempt() ΓÇ║ should grade multiple choice correctly
+
+    Bß║ín ch╞░a ─æ─âng k├╜ kh├│a hß╗ìc n├áy
+
+
+  ΓùÅ Attempt Service - Comprehensive Tests ΓÇ║ submitAttempt() ΓÇ║ should grade short answer with case insensitivity
+
+    Bß║ín ch╞░a ─æ─âng k├╜ kh├│a hß╗ìc n├áy
+
+
+  ΓùÅ Attempt Service - Comprehensive Tests ΓÇ║ submitAttempt() ΓÇ║ should mark essay questions as manual grading 
+required
+
+    Bß║ín ch╞░a ─æ─âng k├╜ kh├│a hß╗ìc n├áy
+
+
+  ΓùÅ Attempt Service - Comprehensive Tests ΓÇ║ submitAttempt() ΓÇ║ should calculate total score correctly
+
+    Bß║ín ch╞░a ─æ─âng k├╜ kh├│a hß╗ìc n├áy
+
+
+  ΓùÅ Attempt Service - Comprehensive Tests ΓÇ║ submitAttempt() ΓÇ║ should determine pass/fail based on passing score
+
+    Bß║ín ch╞░a ─æ─âng k├╜ kh├│a hß╗ìc n├áy
+
+
+  ΓùÅ Attempt Service - Comprehensive Tests ΓÇ║ submitAttempt() ΓÇ║ should throw when submitting wrong user attempt
+
+    Bß║ín ch╞░a ─æ─âng k├╜ kh├│a hß╗ìc n├áy
+
+
+  ΓùÅ Attempt Service - Comprehensive Tests ΓÇ║ submitAttempt() ΓÇ║ should throw when attempt already completed
+
+    Bß║ín ch╞░a ─æ─âng k├╜ kh├│a hß╗ìc n├áy
+
+
+  ΓùÅ Attempt Service - Comprehensive Tests ΓÇ║ submitAttempt() ΓÇ║ should record completion time
+
+    Bß║ín ch╞░a ─æ─âng k├╜ kh├│a hß╗ìc n├áy
+
+
+  ΓùÅ Attempt Service - Comprehensive Tests ΓÇ║ submitAttempt() ΓÇ║ should save all answers for review
+
+    Bß║ín ch╞░a ─æ─âng k├╜ kh├│a hß╗ìc n├áy
+
+
+  ΓùÅ Attempt Service - Comprehensive Tests ΓÇ║ getQuizAttempts() ΓÇ║ should return student attempts for quiz
+
+    Bß║ín ch╞░a ─æ─âng k├╜ kh├│a hß╗ìc n├áy
+
+
+  ΓùÅ Attempt Service - Comprehensive Tests ΓÇ║ getQuizAttempts() ΓÇ║ should show passed status
+
+    Bß║ín ch╞░a ─æ─âng k├╜ kh├│a hß╗ìc n├áy
+
+
+  ΓùÅ Attempt Service - Comprehensive Tests ΓÇ║ getAttempt() ΓÇ║ should include question details with user answers
+
+    expect(received).toBeDefined()
+
+    Received: undefined
+
+    [0m [90m 465 |[39m       [36mconst[39m result [33m=[39m [36mawait[39m 
+attemptService[33m.[39mgetAttempt(completedAttempt[33m.[39mid[33m,[39m testStudent[33m.[39mid[33m,[39m 
+[32m'student'[39m)[33m;[39m
+     [90m 466 |[39m
+    [31m[1m>[22m[39m[90m 467 |[39m       expect(result[33m.[39mquestions)[33m.[39mtoBeDefined()[33m;[39m
+     [90m     |[39m                                [31m[1m^[22m[39m
+     [90m 468 |[39m       
+expect(result[33m.[39mquestions[[35m0[39m][33m.[39muserAnswer)[33m.[39mtoBeDefined()[33m;[39m
+     [90m 469 |[39m     })[33m;[39m
+     [90m 470 |[39m[0m
+
+      at Object.toBeDefined (src/__tests__/attempt.service.test.js:467:32)
+
+  ΓùÅ Attempt Service - Comprehensive Tests ΓÇ║ Teacher Views ΓÇ║ should calculate statistics correctly
+
+    expect(received).toBe(expected) // Object.is equality
+
+    Expected: 3
+    Received: undefined
+
+    [0m [90m 542 |[39m       )[33m;[39m
+     [90m 543 |[39m
+    [31m[1m>[22m[39m[90m 544 |[39m       
+expect(result[33m.[39mstatistics[33m.[39mpassedCount)[33m.[39mtoBe([35m3[39m)[33m;[39m
+     [90m     |[39m                                             [31m[1m^[22m[39m
+     [90m 545 |[39m       
+expect(result[33m.[39mstatistics[33m.[39mfailedCount)[33m.[39mtoBe([35m2[39m)[33m;[39m
+     [90m 546 |[39m       
+expect(result[33m.[39mstatistics[33m.[39mpassRate)[33m.[39mtoBe([35m60[39m)[33m;[39m
+     [90m 547 |[39m     })[33m;[39m[0m
+
+      at Object.toBe (src/__tests__/attempt.service.test.js:544:45)
+
+  ΓùÅ Attempt Service - Comprehensive Tests ΓÇ║ Teacher Views ΓÇ║ should get individual attempt for teacher
+
+    Kh├┤ng t├¼m thß║Ñy lß║ºn l├ám b├ái
+
+
+  ΓùÅ Attempt Service - Comprehensive Tests ΓÇ║ deleteAttempt() ΓÇ║ should allow teacher to delete student attempt
+
+    expect(received).toBe(expected) // Object.is equality
+
+    Expected: true
+    Received: undefined
+
+    [0m [90m 609 |[39m       )[33m;[39m
+     [90m 610 |[39m
+    [31m[1m>[22m[39m[90m 611 |[39m       
+expect(result[33m.[39msuccess)[33m.[39mtoBe([36mtrue[39m)[33m;[39m
+     [90m     |[39m                              [31m[1m^[22m[39m
+     [90m 612 |[39m
+     [90m 613 |[39m       [36mconst[39m deleted [33m=[39m [36mawait[39m 
+[33mAttempt[39m[33m.[39mfindByPk(attemptToDelete[33m.[39mid)[33m;[39m
+     [90m 614 |[39m       expect(deleted)[33m.[39mtoBeNull()[33m;[39m[0m
+
+      at Object.toBe (src/__tests__/attempt.service.test.js:611:30)
+
+  ΓùÅ Attempt Service - Comprehensive Tests ΓÇ║ deleteAttempt() ΓÇ║ should allow admin to delete any attempt
+
+    expect(received).toBe(expected) // Object.is equality
+
+    Expected: true
+    Received: undefined
+
+    [0m [90m 622 |[39m       )[33m;[39m
+     [90m 623 |[39m
+    [31m[1m>[22m[39m[90m 624 |[39m       
+expect(result[33m.[39msuccess)[33m.[39mtoBe([36mtrue[39m)[33m;[39m
+     [90m     |[39m                              [31m[1m^[22m[39m
+     [90m 625 |[39m     })[33m;[39m
+     [90m 626 |[39m
+     [90m 627 |[39m     it([32m'should throw 403 when non-owner tries to delete'[39m[33m,[39m [36masync[39m () 
+[33m=>[39m {[0m
+
+      at Object.toBe (src/__tests__/attempt.service.test.js:624:30)
+
+  ΓùÅ Attempt Service - Comprehensive Tests ΓÇ║ Time Limit Enforcement ΓÇ║ should auto-submit when time expires
+
+    Bß║ín ch╞░a ─æ─âng k├╜ kh├│a hß╗ìc n├áy
+
+
+  ΓùÅ Attempt Service - Comprehensive Tests ΓÇ║ Grading Edge Cases ΓÇ║ should handle empty answers
+
+    Bß║ín ch╞░a ─æ─âng k├╜ kh├│a hß╗ìc n├áy
+
+
+  ΓùÅ Attempt Service - Comprehensive Tests ΓÇ║ Grading Edge Cases ΓÇ║ should handle answers with extra whitespace
+
+    Bß║ín ch╞░a ─æ─âng k├╜ kh├│a hß╗ìc n├áy
+
+
+  ΓùÅ Attempt Service - Comprehensive Tests ΓÇ║ Grading Edge Cases ΓÇ║ should handle special characters in short answer
+
+    Bß║ín ch╞░a ─æ─âng k├╜ kh├│a hß╗ìc n├áy
+
+
+Test Suites: 1 failed, 1 total
+Tests:       26 failed, 9 passed, 35 total
+Snapshots:   0 total
+Time:        1.577 s, estimated 2 s
+Ran all test suites matching attempt.service.test.js.

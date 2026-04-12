@@ -20,7 +20,7 @@ const createLessonValidation = [
     .trim()
     .notEmpty()
     .withMessage('Loại bài giảng không được để trống')
-    .isIn(['video', 'text', 'pdf', 'quiz', 'audio'])
+    .isIn(['video', 'text', 'pdf', 'quiz', 'audio', 'document'])
     .withMessage('Loại bài giảng không hợp lệ'),
   
   body('content')
@@ -72,7 +72,7 @@ const updateLessonValidation = [
   body('type')
     .optional()
     .trim()
-    .isIn(['video', 'text', 'pdf', 'quiz', 'audio'])
+    .isIn(['video', 'text', 'pdf', 'quiz', 'audio', 'document'])
     .withMessage('Loại bài giảng không hợp lệ'),
   
   body('content')

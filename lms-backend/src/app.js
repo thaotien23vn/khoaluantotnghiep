@@ -17,6 +17,7 @@ const chatRoutes = require("./routes/chat.routes");
 const protectedRoutes = require("./routes/protected.routes");
 const progressRoutes = require("./routes/progress.routes");
 const scheduleRoutes = require("./routes/schedule.routes");
+const certificateRoutes = require("./routes/certificate.routes");
 const validateInput = require("./middlewares/validateInput");
 const { apiLimiter } = require("./middlewares/rateLimiter");
 const { randomUUID } = require("crypto");
@@ -179,6 +180,7 @@ app.use("/api/student/payments", paymentRoutes);
 app.use("/api/cart", cartRoutes);
 
 // Protected routes (require authentication and authorization)
+app.use("/api/certificate", certificateRoutes);
 app.use("/api/progress", progressRoutes);
 app.use("/api/admin", protectedRoutes);
 app.use("/api/teacher", protectedRoutes);
