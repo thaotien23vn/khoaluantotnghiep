@@ -194,7 +194,7 @@ class CourseService {
     const limitNum = Math.min(Math.max(parseInt(limit, 10) || 20, 1), 100);
     const offset = (pageNum - 1) * limitNum;
 
-    const where = { published: true };
+    const where = { status: 'published', published: true };
     if (q) {
       where.title = { [Op.like]: `%${q}%` };
     }
@@ -269,8 +269,8 @@ class CourseService {
   async getCourseDetail(courseIdOrSlug) {
     const isNumericId = /^\d+$/.test(courseIdOrSlug);
     const whereClause = isNumericId
-      ? { id: Number(courseIdOrSlug), published: true }
-      : { slug: courseIdOrSlug, published: true };
+      ? { id: Number(courseIdOrSlug), status: 'published', published: true }
+      : { slug: courseIdOrSlug, status: 'published', published: true };
 
     const course = await Course.findOne({
       where: whereClause,
@@ -336,11 +336,8 @@ class CourseService {
       where.title = { [Op.like]: `%${q}%` };
     }
 
-    if (status === 'published') {
-      where.published = true;
-    }
-    if (status === 'draft') {
-      where.published = false;
+    if (status !== 'all') {
+      where.status = status;
     }
 
     const order = (() => {
@@ -513,9 +510,15 @@ class CourseService {
   }
 
   /**
-   * Set course published status
+   * Set course published status - CHỈ ADMIN ĐƯỢC SỬ DỤNG
+   * Teacher không thể tự publish, phải gửi yêu cầu duyệt
    */
   async setCoursePublished(courseId, userId, role, published) {
+    // Chỉ admin được phép publish/unpublish trực tiếp
+    if (role !== 'admin') {
+      throw { status: 403, message: 'Chỉ admin mới có quyền publish/unpublish khóa học. Giáo viên vui lòng sử dụng chức năng "Gửi yêu cầu duyệt".' };
+    }
+
     if (typeof published !== 'boolean') {
       throw { status: 400, message: 'Trường published phải là boolean' };
     }
@@ -526,18 +529,151 @@ class CourseService {
       throw { status: 404, message: 'Không tìm thấy khóa học' };
     }
 
-    if (role === 'teacher' && Number(course.createdBy) !== Number(userId)) {
-      throw { status: 403, message: 'Bạn không có quyền thay đổi trạng thái khóa học này' };
-    }
+    const newStatus = published ? 'published' : 'draft';
 
     await course.update({
       published,
+      status: newStatus,
+      reviewedBy: published ? userId : null,
+      reviewedAt: published ? new Date() : null,
       lastUpdated: new Date(),
     });
 
     return {
       message: published ? 'Đã publish khóa học' : 'Đã chuyển khóa học về draft',
       course,
+    };
+  }
+
+  /**
+   * Teacher submit course for admin review
+   * Giáo viên gửi yêu cầu duyệt khóa học
+   */
+  async submitCourseForReview(courseId, userId, role) {
+    if (role !== 'teacher' && role !== 'admin') {
+      throw { status: 403, message: 'Bạn không có quyền thực hiện hành động này' };
+    }
+
+    const course = await Course.findByPk(courseId);
+
+    if (!course) {
+      throw { status: 404, message: 'Không tìm thấy khóa học' };
+    }
+
+    // Teacher chỉ được gửi review khóa học của mình
+    if (role === 'teacher' && Number(course.createdBy) !== Number(userId)) {
+      throw { status: 403, message: 'Bạn không có quyền gửi duyệt khóa học này' };
+    }
+
+    // Kiểm tra trạng thái hiện tại
+    if (course.status === 'pending_review') {
+      throw { status: 400, message: 'Khóa học đang chờ duyệt, không cần gửi lại' };
+    }
+
+    if (course.status === 'published') {
+      throw { status: 400, message: 'Khóa học đã được publish, không cần gửi duyệt' };
+    }
+
+    await course.update({
+      status: 'pending_review',
+      lastUpdated: new Date(),
+    });
+
+    return {
+      message: 'Đã gửi yêu cầu duyệt khóa học. Vui lòng chờ admin phê duyệt.',
+      course,
+    };
+  }
+
+  /**
+   * Admin review course - approve or reject
+   * Admin phê duyệt hoặc từ chối khóa học
+   */
+  async adminReviewCourse(courseId, userId, role, action, rejectionReason = null) {
+    if (role !== 'admin') {
+      throw { status: 403, message: 'Chỉ admin mới có quyền duyệt khóa học' };
+    }
+
+    const course = await Course.findByPk(courseId);
+
+    if (!course) {
+      throw { status: 404, message: 'Không tìm thấy khóa học' };
+    }
+
+    if (action === 'approve') {
+      await course.update({
+        status: 'published',
+        published: true,
+        reviewedBy: userId,
+        reviewedAt: new Date(),
+        rejectionReason: null,
+        lastUpdated: new Date(),
+      });
+
+      return {
+        message: 'Đã phê duyệt và publish khóa học',
+        course,
+      };
+    } else if (action === 'reject') {
+      if (!rejectionReason || rejectionReason.trim() === '') {
+        throw { status: 400, message: 'Vui lòng cung cấp lý do từ chối' };
+      }
+
+      await course.update({
+        status: 'rejected',
+        published: false,
+        reviewedBy: userId,
+        reviewedAt: new Date(),
+        rejectionReason: rejectionReason.trim(),
+        lastUpdated: new Date(),
+      });
+
+      return {
+        message: 'Đã từ chối khóa học',
+        course,
+      };
+    } else {
+      throw { status: 400, message: 'Hành động không hợp lệ. Chỉ chấp nhận: approve, reject' };
+    }
+  }
+
+  /**
+   * Get courses pending review (for admin)
+   * Lấy danh sách khóa học đang chờ duyệt
+   */
+  async getPendingReviewCourses(query) {
+    const { page = 1, limit = 20 } = query;
+
+    const pageNum = Math.max(parseInt(page, 10) || 1, 1);
+    const limitNum = Math.min(Math.max(parseInt(limit, 10) || 20, 1), 100);
+    const offset = (pageNum - 1) * limitNum;
+
+    const { rows: courses, count: total } = await Course.findAndCountAll({
+      where: { status: 'pending_review' },
+      order: [['createdAt', 'DESC']],
+      include: [
+        {
+          model: User,
+          as: 'creator',
+          attributes: ['id', 'name', 'username', 'email'],
+        },
+        {
+          model: Category,
+          attributes: ['id', 'name'],
+        },
+      ],
+      limit: limitNum,
+      offset,
+    });
+
+    return {
+      courses,
+      pagination: {
+        total,
+        page: pageNum,
+        limit: limitNum,
+        totalPages: Math.ceil(total / limitNum),
+      },
     };
   }
 
@@ -628,6 +764,33 @@ class CourseService {
     });
 
     return { course, chapters: formattedChapters };
+  }
+
+  /**
+   * Toggle course publish status
+   */
+  async togglePublishStatus(courseId) {
+    const { models } = require('../../models');
+    const { Course } = models;
+    
+    const course = await Course.findByPk(courseId);
+    if (!course) {
+      throw { status: 404, message: 'Không tìm thấy khóa học' };
+    }
+
+    // Toggle published status
+    course.published = !course.published;
+    
+    // If publishing, also set status to published
+    if (course.published) {
+      course.status = 'published';
+    } else {
+      course.status = 'draft';
+    }
+    
+    await course.save();
+
+    return course;
   }
 }
 

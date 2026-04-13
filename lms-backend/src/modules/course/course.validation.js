@@ -198,22 +198,22 @@ const getMyCoursesValidation = [
     .trim()
     .isLength({ max: 100 })
     .withMessage('Từ khóa tìm kiếm không được vượt quá 100 ký tự'),
-  
+
   query('status')
     .optional()
-    .isIn(['all', 'published', 'draft'])
+    .isIn(['all', 'published', 'draft', 'pending_review', 'rejected'])
     .withMessage('Trạng thái không hợp lệ'),
-  
+
   query('sort')
     .optional()
     .isIn(['newest', 'oldest', 'updated_desc'])
     .withMessage('Sắp xếp không hợp lệ'),
-  
+
   query('page')
     .optional()
     .isInt({ min: 1 })
     .withMessage('Trang phải là số nguyên dương'),
-  
+
   query('limit')
     .optional()
     .isInt({ min: 1, max: 100 })
@@ -236,6 +236,31 @@ const getCourseEnrollmentsValidation = [
     .withMessage('Course ID phải là số nguyên dương'),
 ];
 
+const submitForReviewValidation = [
+  param('id')
+    .isInt({ min: 1 })
+    .withMessage('Course ID phải là số nguyên dương'),
+];
+
+const adminReviewValidation = [
+  param('id')
+    .isInt({ min: 1 })
+    .withMessage('Course ID phải là số nguyên dương'),
+
+  body('action')
+    .trim()
+    .notEmpty()
+    .withMessage('Action không được để trống')
+    .isIn(['approve', 'reject'])
+    .withMessage('Action phải là "approve" hoặc "reject"'),
+
+  body('rejectionReason')
+    .optional()
+    .trim()
+    .isLength({ max: 1000 })
+    .withMessage('Lý do từ chối không được vượt quá 1000 ký tự'),
+];
+
 module.exports = {
   createCourseValidation,
   updateCourseValidation,
@@ -244,4 +269,6 @@ module.exports = {
   getMyCoursesValidation,
   setPublishedValidation,
   getCourseEnrollmentsValidation,
+  submitForReviewValidation,
+  adminReviewValidation,
 };

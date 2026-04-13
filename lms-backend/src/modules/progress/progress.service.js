@@ -122,7 +122,6 @@ class ProgressService {
 
     const totalLectures = await this.countCourseLectures(courseId);
     const totalQuizzes = await this.countCourseQuizzes(courseId);
-    console.log('[DEBUG Backend] totalLectures:', totalLectures, 'totalQuizzes:', totalQuizzes);
 
     const progressList = await LectureProgress.findAll({
       where: { userId, courseId },
@@ -143,13 +142,11 @@ class ProgressService {
     // Get quiz progress
     const quizProgress = await this._checkAllQuizzesPassed(userId, courseId);
     const completedQuizzes = quizProgress.passed;
-    console.log('[DEBUG Backend] completedLectures:', completedLectures, 'completedQuizzes:', completedQuizzes, 'quizProgress:', quizProgress);
 
     // Calculate combined progress (lectures + quizzes)
     const totalItems = totalLectures + totalQuizzes;
     const completedItems = completedLectures + completedQuizzes;
     const combinedProgress = totalItems > 0 ? Math.round((completedItems / totalItems) * 100) : 0;
-    console.log('[DEBUG Backend] totalItems:', totalItems, 'completedItems:', completedItems, 'combinedProgress:', combinedProgress);
 
     // FIXED: Auto-heal Stale Progress Bug
     if (Number(enrollment.progressPercent) !== combinedProgress) {
@@ -169,7 +166,6 @@ class ProgressService {
       quizProgress: quizProgress,
       isCompleted: totalItems > 0 && completedItems >= totalItems,
     };
-    console.log('[DEBUG Backend] RETURN:', { courseProgress: result.courseProgress, totalLectures, completedLectures, totalQuizzes, completedQuizzes, isCompleted: result.isCompleted });
     return result;
   }
 
@@ -319,7 +315,6 @@ class ProgressService {
         where: { status: 'published' },
         attributes: ['id', 'title', 'passingScore'],
       });
-      console.log('[DEBUG Backend] _checkAllQuizzesPassed - courseId:', courseId, 'publishedQuizzes:', publishedQuizzes.length, publishedQuizzes.map(q => ({ id: q.id, title: q.title })));
 
       if (publishedQuizzes.length === 0) {
         return { allPassed: true, total: 0, passed: 0, quizDetails: [] };
@@ -387,9 +382,9 @@ class ProgressService {
         where: { courseId: { [Op.in]: courseIds } },
         attributes: [
           'courseId',
-          [db.sequelize.col('Lectures.id'), 'lectureId']
+          [db.sequelize.col('lectures.id'), 'lectureId']
         ],
-        include: [{ model: Lecture, as: 'Lectures', attributes: [] }],
+        include: [{ model: Lecture, as: 'lectures', attributes: [] }],
         raw: true,
       });
 
@@ -750,7 +745,6 @@ class ProgressService {
       }],
       where: { status: 'published' },
     });
-    console.log('[DEBUG Backend] countCourseQuizzes - courseId:', courseId, 'count:', count);
     return count;
   }
 }

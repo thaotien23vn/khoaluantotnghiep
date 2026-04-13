@@ -221,6 +221,82 @@ class CourseController {
       handleServiceError(error, res);
     }
   }
+
+  /**
+   * Teacher submit course for admin review
+   */
+  async submitCourseForReview(req, res) {
+    try {
+      const validationError = handleValidationErrors(req, res);
+      if (validationError) return;
+
+      const { id } = req.params;
+      const { id: userId, role } = req.user;
+      const result = await courseService.submitCourseForReview(id, userId, role);
+      res.json({
+        success: true,
+        message: result.message,
+        data: { course: result.course },
+      });
+    } catch (error) {
+      handleServiceError(error, res);
+    }
+  }
+
+  /**
+   * Admin review course (approve or reject)
+   */
+  async adminReviewCourse(req, res) {
+    try {
+      const validationError = handleValidationErrors(req, res);
+      if (validationError) return;
+
+      const { id } = req.params;
+      const { id: userId, role } = req.user;
+      const { action, rejectionReason } = req.body;
+      const result = await courseService.adminReviewCourse(id, userId, role, action, rejectionReason);
+      res.json({
+        success: true,
+        message: result.message,
+        data: { course: result.course },
+      });
+    } catch (error) {
+      handleServiceError(error, res);
+    }
+  }
+
+  /**
+   * Get courses pending review (for admin)
+   */
+  async getPendingReviewCourses(req, res) {
+    try {
+      const { id: userId, role } = req.user;
+      const result = await courseService.getPendingReviewCourses(req.query);
+      res.json({
+        success: true,
+        data: result,
+      });
+    } catch (error) {
+      handleServiceError(error, res);
+    }
+  }
+
+  /**
+   * Toggle course publish status (admin only)
+   */
+  async togglePublish(req, res) {
+    try {
+      const { id } = req.params;
+      const course = await courseService.togglePublishStatus(id);
+      res.json({
+        success: true,
+        message: course.published ? 'Khóa học đã được publish' : 'Khóa học đã được unpublish',
+        data: course,
+      });
+    } catch (error) {
+      handleServiceError(error, res);
+    }
+  }
 }
 
 module.exports = new CourseController();

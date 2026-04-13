@@ -48,6 +48,22 @@ module.exports = (sequelize) => {
       type: DataTypes.BOOLEAN,
       defaultValue: false,
     },
+    status: {
+      type: DataTypes.ENUM('draft', 'pending_review', 'published', 'rejected'),
+      defaultValue: 'draft',
+    },
+    reviewedBy: {
+      type: DataTypes.INTEGER,
+      allowNull: true,
+    },
+    reviewedAt: {
+      type: DataTypes.DATE,
+      allowNull: true,
+    },
+    rejectionReason: {
+      type: DataTypes.TEXT,
+      allowNull: true,
+    },
     aiGenerated: {
       type: DataTypes.BOOLEAN,
       defaultValue: false,

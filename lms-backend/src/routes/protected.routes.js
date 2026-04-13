@@ -14,12 +14,14 @@ const paymentController = require('../modules/payment/payment.controller');
 const enrollmentController = require('../modules/enrollment/enrollment.controller');
 const adminController = require('../modules/admin/admin.controller');
 const scheduleController = require('../modules/schedule/schedule.controller');
+const trackingController = require('../modules/tracking/tracking.controller');
 const {
   createCourseValidation,
   updateCourseValidation,
   getMyCoursesValidation,
   setPublishedValidation,
   getCourseEnrollmentsValidation,
+  submitForReviewValidation,
 } = require('../modules/course/course.validation');
 
 const {
@@ -318,6 +320,48 @@ router.delete(
   adminController.deleteCategory
 );
 
+// ==========================================
+// ADMIN COURSE REVIEW ROUTES
+// ==========================================
+const { adminReviewValidation } = require('../modules/course/course.validation');
+
+/**
+ * @route   GET /api/admin/courses/pending-review
+ * @desc    Get all courses pending review
+ * @access  Private (Admin only)
+ */
+router.get(
+  '/courses/pending-review',
+  authMiddleware,
+  authorizeRole('admin'),
+  courseController.getPendingReviewCourses
+);
+
+/**
+ * @route   POST /api/admin/courses/:id/review
+ * @desc    Admin approve or reject a course
+ * @access  Private (Admin only)
+ */
+router.post(
+  '/courses/:id/review',
+  authMiddleware,
+  authorizeRole('admin'),
+  adminReviewValidation,
+  courseController.adminReviewCourse
+);
+
+/**
+ * @route   PATCH /api/admin/courses/:id/toggle-publish
+ * @desc    Toggle course publish status (admin only)
+ * @access  Private (Admin only)
+ */
+router.patch(
+  '/courses/:id/toggle-publish',
+  authMiddleware,
+  authorizeRole('admin'),
+  courseController.togglePublish
+);
+
 /**
  * @route   GET /api/teacher/courses
  * @desc    Get teacher's courses
@@ -408,15 +452,28 @@ router.put(
 
 /**
  * @route   PUT /api/teacher/courses/:id/publish
- * @desc    Publish or unpublish a course
- * @access  Private (Teacher & Admin)
+ * @desc    Publish or unpublish a course - CHỈ ADMIN
+ * @access  Private (Admin only)
  */
 router.put(
   '/courses/:id/publish',
   authMiddleware,
-  authorizeRole('teacher', 'admin'),
+  authorizeRole('admin'),
   setPublishedValidation,
   courseController.setCoursePublished
+);
+
+/**
+ * @route   POST /api/teacher/courses/:id/submit-review
+ * @desc    Submit course for admin review
+ * @access  Private (Teacher & Admin)
+ */
+router.post(
+  '/courses/:id/submit-review',
+  authMiddleware,
+  authorizeRole('teacher', 'admin'),
+  submitForReviewValidation,
+  courseController.submitCourseForReview
 );
 
 /**
@@ -830,27 +887,13 @@ router.get(
 );
 
 // ==========================================
-// TRACKING ANALYTICS STUB (Temporary)
+// TRACKING ANALYTICS (Real Implementation)
 // ==========================================
 router.get(
   '/tracking/analytics',
   authMiddleware,
   authorizeRole('admin'),
-  (req, res) => {
-    res.json({
-      stats: {
-        totalViews: 0,
-        uniqueUsers: 0,
-      },
-      activities: {
-        items: [],
-        total: 0,
-        page: parseInt(req.query.page) || 1,
-        totalPages: 1,
-      },
-      pageStats: [],
-    });
-  }
+  trackingController.getAnalytics
 );
 
 module.exports = router;

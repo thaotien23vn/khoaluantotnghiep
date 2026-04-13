@@ -15,6 +15,7 @@ const teacherStatisticsRoutes = require("./routes/teacher_statistics.routes");
 const placementRoutes = require("./routes/placement.routes");
 const chatRoutes = require("./routes/chat.routes");
 const protectedRoutes = require("./routes/protected.routes");
+const trackingRoutes = require("./routes/tracking.routes");
 const progressRoutes = require("./routes/progress.routes");
 const scheduleRoutes = require("./routes/schedule.routes");
 const certificateRoutes = require("./routes/certificate.routes");
@@ -178,6 +179,10 @@ app.use("/api/student/payments", paymentRoutes);
 
 // Cart routes
 app.use("/api/cart", cartRoutes);
+
+// Tracking routes (mixed public and protected)
+app.use("/api/tracking", trackingRoutes);
+console.log('[Routes] Mounted /api/tracking routes');
 
 // Protected routes (require authentication and authorization)
 app.use("/api/certificate", certificateRoutes);

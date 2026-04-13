@@ -113,6 +113,7 @@ const models = {};
   'courseChatParticipant',
   'courseChatEscalation',
   'courseChatAnalytics',
+  'tracking',
 ].forEach((name) => {
   models[name.charAt(0).toUpperCase() + name.slice(1)] = require(`./${name}.model`)(sequelize);
 });
@@ -164,6 +165,7 @@ const {
   CourseChatParticipant,
   CourseChatEscalation,
   CourseChatAnalytics,
+  Tracking,
 } = models;
 
 User.hasMany(Course, { foreignKey: 'createdBy', as: 'createdCourses' });
@@ -327,6 +329,10 @@ ChatPermission.belongsTo(Course, { foreignKey: 'courseId', as: 'course' });
 
 Lecture.hasMany(ChatPermission, { foreignKey: 'lectureId', as: 'chatPermissions' });
 ChatPermission.belongsTo(Lecture, { foreignKey: 'lectureId', as: 'lecture' });
+
+// Tracking associations
+User.hasMany(Tracking, { foreignKey: 'userId', as: 'trackingActivities' });
+Tracking.belongsTo(User, { foreignKey: 'userId', as: 'user' });
 
 const connectDB = async () => {
   await sequelize.authenticate();
