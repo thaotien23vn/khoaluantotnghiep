@@ -1,5 +1,6 @@
 const cron = require('node-cron');
 const NotificationScheduler = require('./notification.scheduler');
+const courseChatService = require('../chat/courseChat.service');
 
 class NotificationCron {
   constructor() {
@@ -34,6 +35,23 @@ class NotificationCron {
     });
 
     this.jobs.push(studyReminderJob);
+
+    // Run admin escalation check every hour (after quiz reminders)
+    const escalationCheckJob = cron.schedule('15 * * * *', async () => {
+      if (process.env.NODE_ENV !== 'test') {
+        console.log('[Cron] Running admin escalation check...');
+      }
+      try {
+        const count = await courseChatService.checkAdminEscalation();
+        if (process.env.NODE_ENV !== 'test') {
+          console.log('[Cron] Admin escalations notified:', count);
+        }
+      } catch (error) {
+        console.error('[Cron] Admin escalation check failed:', error.message);
+      }
+    });
+
+    this.jobs.push(escalationCheckJob);
 
     if (process.env.NODE_ENV !== 'test') {
       console.log('[Cron] Notification scheduler started');

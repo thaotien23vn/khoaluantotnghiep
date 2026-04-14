@@ -316,6 +316,7 @@ Trả lời dựa trên toàn bộ nội dung khóa học trên. Nếu thông ti
           messageId,
           escalationId: escalation.id,
           type: 'course_chat_escalation',
+          courseId: chat.courseId,
         },
       });
 
@@ -459,6 +460,7 @@ Trả lời dựa trên toàn bộ nội dung khóa học trên. Nếu thông ti
             messageId: escalation.messageId,
             escalationId: escalation.id,
             type: 'course_chat_escalation_admin',
+            courseId: escalation.chat?.courseId,
           },
         });
       }

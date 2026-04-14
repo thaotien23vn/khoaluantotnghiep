@@ -37,6 +37,18 @@ router.get(
 );
 
 /**
+ * @route   GET /api/student/notifications/:notificationId
+ * @desc    Get notification by ID
+ * @access  Private (Student & Admin)
+ */
+router.get(
+  '/student/notifications/:notificationId',
+  authMiddleware,
+  authorizeRole('student', 'admin'),
+  notificationController.getById
+);
+
+/**
  * @route   PUT /api/student/notifications/:notificationId/read
  * @desc    Mark notification as read
  * @access  Private (Student & Admin)
@@ -97,6 +109,13 @@ router.get(
    authMiddleware,
    authorizeRole('teacher', 'admin'),
    notificationController.getUnreadCount
+ );
+
+ router.get(
+   '/teacher/notifications/:notificationId',
+   authMiddleware,
+   authorizeRole('teacher', 'admin'),
+   notificationController.getById
  );
 
  router.put(
@@ -175,6 +194,13 @@ router.get(
   authorizeRole('admin'),
   getNotificationsValidation,
   notificationController.getUserNotifications
+);
+
+router.get(
+  '/admin/my-notifications/:notificationId',
+  authMiddleware,
+  authorizeRole('admin'),
+  notificationController.getById
 );
 
 router.put(

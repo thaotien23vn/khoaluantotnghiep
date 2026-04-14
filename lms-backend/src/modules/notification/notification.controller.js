@@ -91,6 +91,19 @@ class NotificationController {
     }
   }
 
+  async getById(req, res) {
+    try {
+      const { notificationId } = req.params;
+      const result = await notificationService.getById(req.user.id, notificationId);
+      if (!result.success) {
+        return res.status(result.message === 'Không tìm thấy thông báo' ? 404 : 403).json(result);
+      }
+      res.json({ success: true, notification: result.notification });
+    } catch (error) {
+      handleServiceError(error, res);
+    }
+  }
+
   async markAsRead(req, res) {
     try {
       const { notificationId } = req.params;

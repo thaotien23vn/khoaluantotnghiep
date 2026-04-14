@@ -46,6 +46,17 @@ class NotificationService {
     return { success: true };
   }
 
+  async getById(userId, notificationId) {
+    const notification = await Notification.findByPk(notificationId);
+    if (!notification) {
+      return { success: false, message: 'Không tìm thấy thông báo' };
+    }
+    if (notification.userId !== userId) {
+      return { success: false, message: 'Không có quyền' };
+    }
+    return { success: true, notification };
+  }
+
   async markAsRead(userId, notificationId) {
     const notification = await Notification.findByPk(notificationId);
     if (!notification) {

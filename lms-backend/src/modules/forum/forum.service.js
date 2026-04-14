@@ -1,5 +1,6 @@
 const { Op, literal } = require('sequelize');
 const db = require('../../models');
+const notificationService = require('../notification/notification.service');
 
 const { ForumTopic, ForumPost, ForumReport, User } = db.models;
 
@@ -169,6 +170,25 @@ class ForumService {
     const full = await ForumPost.findByPk(post.id, {
       include: [{ model: User, as: 'author', attributes: ['id', 'name', 'avatar', 'role'] }],
     });
+
+    // If it's a reply (has parentId), notify the parent post author
+    if (parentId) {
+      const parentPost = await ForumPost.findByPk(parentId);
+      if (parentPost && parentPost.userId !== userId) {
+        await notificationService.createNotification({
+          userId: parentPost.userId,
+          title: 'Có người phản hồi bình luận của bạn',
+          message: `Có người đã phản hồi bình luận của bạn trong chủ đề "${topic.title}"`,
+          type: 'forum_reply',
+          payload: { 
+            topicId: topic.id, 
+            topicTitle: topic.title,
+            postId: post.id,
+            parentId: parentId
+          },
+        });
+      }
+    }
 
     return { post: full };
   }

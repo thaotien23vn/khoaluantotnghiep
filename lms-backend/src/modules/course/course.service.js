@@ -1,6 +1,7 @@
 const { Op } = require('sequelize');
 const db = require('../../models');
 const courseAggregatesService = require('../../services/courseAggregates.service');
+const notificationService = require('../notification/notification.service');
 
 const { Course, User, Category, Enrollment, Chapter, Lecture, Quiz } = db.models;
 
@@ -610,6 +611,15 @@ class CourseService {
         lastUpdated: new Date(),
       });
 
+      // Notify teacher that course was approved
+      await notificationService.createNotification({
+        userId: course.createdBy,
+        title: 'Khóa học đã được phê duyệt',
+        message: `Khóa học "${course.title}" của bạn đã được admin phê duyệt và publish.`,
+        type: 'course_approved',
+        payload: { courseId: course.id, courseTitle: course.title },
+      });
+
       return {
         message: 'Đã phê duyệt và publish khóa học',
         course,
@@ -626,6 +636,15 @@ class CourseService {
         reviewedAt: new Date(),
         rejectionReason: rejectionReason.trim(),
         lastUpdated: new Date(),
+      });
+
+      // Notify teacher that course was rejected
+      await notificationService.createNotification({
+        userId: course.createdBy,
+        title: 'Khóa học bị từ chối',
+        message: `Khóa học "${course.title}" của bạn đã bị từ chối. Lý do: ${rejectionReason}`,
+        type: 'course_rejected',
+        payload: { courseId: course.id, courseTitle: course.title, rejectionReason },
       });
 
       return {

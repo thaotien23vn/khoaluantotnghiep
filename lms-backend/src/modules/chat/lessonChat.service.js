@@ -355,6 +355,8 @@ Trả lời dựa trên nội dung bài học trên. Nếu không có thông tin
           messageId,
           escalationId: escalation.id,
           type: 'chat_escalation',
+          courseId: chat.courseId,
+          lessonId: chat.lessonId,
         },
       });
 
@@ -533,6 +535,8 @@ Trả lời dựa trên nội dung bài học trên. Nếu không có thông tin
             messageId: escalation.messageId,
             escalationId: escalation.id,
             type: 'chat_escalation_admin',
+            courseId: escalation.chat?.courseId,
+            lessonId: escalation.chat?.lessonId,
           },
         });
       }

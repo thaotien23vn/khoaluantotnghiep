@@ -13,7 +13,7 @@ module.exports = (sequelize) => {
       field: 'user_id',
     },
     type: {
-      type: DataTypes.ENUM('enrollment', 'quiz', 'review', 'payment', 'course_update', 'certificate', 'announcement', 'system', 'quiz_reminder', 'study_reminder', 'chapter_complete'),
+      type: DataTypes.ENUM('enrollment', 'quiz', 'review', 'payment', 'course_update', 'certificate', 'announcement', 'system', 'quiz_reminder', 'study_reminder', 'chapter_complete', 'review_reply', 'forum_reply', 'message_mention', 'course_approved', 'course_rejected'),
       allowNull: false,
     },
     title: {
