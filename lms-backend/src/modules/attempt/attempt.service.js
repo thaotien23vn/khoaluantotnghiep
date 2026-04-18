@@ -1,4 +1,6 @@
+const { Op } = require('sequelize');
 const db = require('../../models');
+const EnrollmentAccess = require('../enrollment/enrollment.access');
 const { Attempt, Quiz, Question, Course, User, Enrollment } = db.models;
 
 /**
@@ -111,12 +113,12 @@ class AttemptService {
       throw { status: 403, message: 'Bài thi đã hết thời gian thực hiện', data: { endTime: quiz.endTime } };
     }
 
-    // Check enrollment
+    // Check enrollment using unified access helper
     if (userRole !== 'admin') {
-      const enrollment = await Enrollment.findOne({
-        where: { userId, courseId: quiz.courseId, status: 'enrolled' },
-      });
-      if (!enrollment) throw { status: 403, message: 'Bạn chưa đăng ký khóa học này' };
+      const access = await EnrollmentAccess.checkAccess(userId, quiz.courseId);
+      if (!access.hasAccess) {
+        throw { status: 403, message: access.message || 'Bạn chưa đăng ký hoặc ghi danh đã hết hạn' };
+      }
     }
 
     // Check for active (in-progress) attempt
@@ -344,10 +346,10 @@ class AttemptService {
     }
 
     if (userRole !== 'admin') {
-      const enrollment = await Enrollment.findOne({
-        where: { userId, courseId: quiz.courseId, status: 'enrolled' },
-      });
-      if (!enrollment) throw { status: 403, message: 'Bạn chưa đăng ký khóa học này' };
+      const access = await EnrollmentAccess.checkAccess(userId, quiz.courseId);
+      if (!access.hasAccess) {
+        throw { status: 403, message: access.message || 'Bạn chưa đăng ký hoặc ghi danh đã hết hạn' };
+      }
     }
 
     const attempts = await Attempt.findAll({

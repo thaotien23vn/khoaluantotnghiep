@@ -1,4 +1,5 @@
 const db = require('../../models');
+const EnrollmentAccess = require('../enrollment/enrollment.access');
 const { Quiz, Question, Attempt, Course } = db.models;
 
 /**
@@ -90,7 +91,10 @@ class QuizService {
     }
 
     if (quiz.course.createdBy !== userId && userRole !== 'admin') {
-      throw { status: 403, message: 'Bạn không có quyền xem quiz này' };
+      const access = await EnrollmentAccess.checkAccess(userId, quiz.courseId);
+      if (!access.hasAccess) {
+        throw { status: 403, message: access.message || 'Bạn không có quyền xem quiz này' };
+      }
     }
 
     return { quiz };
@@ -229,11 +233,9 @@ class QuizService {
     }
 
     if (userRole !== 'admin') {
-      const enrollment = await db.models.Enrollment.findOne({
-        where: { userId, courseId, status: 'enrolled' },
-      });
-      if (!enrollment) {
-        throw { status: 403, message: 'Bạn chưa đăng ký khóa học này' };
+      const access = await EnrollmentAccess.checkAccess(userId, courseId);
+      if (!access.hasAccess) {
+        throw { status: 403, message: access.message || 'Bạn chưa đăng ký hoặc ghi danh đã hết hạn' };
       }
     }
 
@@ -304,7 +306,10 @@ class QuizService {
    */
   async getAllMyQuizzes(userId) {
     const enrollments = await db.models.Enrollment.findAll({
-      where: { userId, status: 'enrolled' },
+      where: { 
+        userId, 
+        enrollmentStatus: { [db.Sequelize.Op.in]: ['active', 'grace_period'] } 
+      },
       attributes: ['courseId'],
     });
 

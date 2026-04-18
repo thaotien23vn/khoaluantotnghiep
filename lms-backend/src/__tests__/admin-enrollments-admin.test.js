@@ -16,11 +16,11 @@ async function createTestCourseAsTeacher() {
   const courseId = createCourseRes.body?.data?.course?.id;
   expect(courseId).toBeTruthy();
 
-  // Some implementations ignore `published` at creation; force publish to satisfy admin enrollment rules
-  await request(app)
-    .put(`/api/teacher/courses/${courseId}/publish`)
-    .set('Authorization', `Bearer ${teacherToken}`)
-    .send({ published: true });
+    const adminToken = await loginByRole('admin');
+    await request(app)
+      .put(`/api/teacher/courses/${courseId}/publish`)
+      .set('Authorization', `Bearer ${adminToken}`)
+      .send({ published: true });
 
   return { teacherToken, courseId };
 }

@@ -1,5 +1,6 @@
 const { validationResult } = require('express-validator');
 const lessonService = require('./lesson.service');
+const logger = require('../../utils/logger');
 
 /**
  * Handle validation errors
@@ -7,7 +8,11 @@ const lessonService = require('./lesson.service');
 const handleValidationErrors = (req, res) => {
   const errors = validationResult(req);
   if (!errors.isEmpty()) {
-    console.log('[Validation Error] Path:', req.path, 'Body:', req.body, 'Errors:', errors.array());
+    logger.warn('LESSON_VALIDATION_ERROR', {
+      path: req.path,
+      errors: errors.array(),
+      userId: req.user?.id,
+    });
     return res.status(400).json({
       success: false,
       message: 'Dữ liệu không hợp lệ',
@@ -28,7 +33,7 @@ const handleServiceError = (error, res) => {
       error: error.message,
     });
   }
-  console.error('Lỗi:', error);
+  logger.error('LESSON_CONTROLLER_ERROR', { error: error.message, stack: error.stack });
   return res.status(500).json({
     success: false,
     message: 'Lỗi máy chủ',

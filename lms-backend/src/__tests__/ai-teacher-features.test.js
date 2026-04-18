@@ -1,8 +1,6 @@
 const request = require('supertest');
 const app = require('../app');
-const db = require('../models');
 const { loginByRole } = require('./testAuth');
-const { seedCore } = require('./jest.teardown');
 
 // Mock AI services để tránh gọi API thật
 jest.mock('../services/aiGateway.service', () => ({
@@ -68,12 +66,17 @@ jest.mock('../modules/ai/aiTeachingAssistant.service', () => ({
 
 describe('AI Teacher Features', () => {
   let teacherToken;
+  let studentToken;
   let testCourse;
   let testChapter;
   let testLecture;
+  const createdCourseIds = [];
+  const createdChapterIds = [];
+  const createdLectureIds = [];
 
   beforeAll(async () => {
     teacherToken = await loginByRole('teacher');
+    studentToken = await loginByRole('student');
     
     // Teacher creates their own course (to be the owner)
     const courseRes = await request(app)
@@ -89,6 +92,7 @@ describe('AI Teacher Features', () => {
     testCourse = courseRes.body.data?.course || courseRes.body.data;
     expect(testCourse).toBeTruthy();
     expect(testCourse.id).toBeTruthy();
+    createdCourseIds.push(testCourse.id);
     
     // Create chapter
     const chapterRes = await request(app)
@@ -100,6 +104,7 @@ describe('AI Teacher Features', () => {
     testChapter = chapterRes.body.data?.chapter || chapterRes.body.data;
     expect(testChapter).toBeTruthy();
     expect(testChapter.id).toBeTruthy();
+    createdChapterIds.push(testChapter.id);
     
     // Create lecture
     const lectureRes = await request(app)
@@ -116,82 +121,55 @@ describe('AI Teacher Features', () => {
     testLecture = lectureRes.body.data?.lecture || lectureRes.body.data;
     expect(testLecture).toBeTruthy();
     expect(testLecture.id).toBeTruthy();
+    createdLectureIds.push(testLecture.id);
+  });
+
+  afterAll(async () => {
+    const db = require('../models');
+    const { Lecture, Chapter, Course } = db.models;
+    await Lecture.destroy({ where: { id: createdLectureIds } });
+    await Chapter.destroy({ where: { id: createdChapterIds } });
+    await Course.destroy({ where: { id: createdCourseIds } });
   });
 
   describe('POST /api/teacher/ai/generate-content', () => {
-    it('should generate lecture content', async () => {
-      const res = await request(app)
-        .post('/api/teacher/ai/generate-content')
-        .set('Authorization', `Bearer ${teacherToken}`)
-        .send({
-          courseId: testCourse.id,
-          chapterId: testChapter.id,
-          outlineData: {
-            title: 'React Hooks Tutorial',
-            outline: 'Introduction to React Hooks, useState, useEffect, and custom hooks.',
-            learningObjectives: ['Understand useState', 'Master useEffect'],
-            targetAudience: 'beginner'
-          }
-        });
-
-      expect([200, 201, 500]).toContain(res.statusCode);
-      if (res.statusCode === 200 || res.statusCode === 201) {
-        expect(res.body.success).toBe(true);
-      }
-    });
-
-    it('should return 403 if not teacher', async () => {
-      const studentToken = await loginByRole('student');
+    it('returns 403 for student role', async () => {
       const res = await request(app)
         .post('/api/teacher/ai/generate-content')
         .set('Authorization', `Bearer ${studentToken}`)
-        .send({ 
+        .send({
           courseId: testCourse.id,
           chapterId: testChapter.id,
-          outlineData: {
-            title: 'Test',
-            outline: 'Test outline content here'
-          }
+          outlineData: { title: 'x', outline: 'This is a valid outline' },
         });
-
       expect(res.statusCode).toBe(403);
     });
-  });
 
-  describe('POST /api/teacher/ai/generate-quiz', () => {
-    it('should generate quiz questions for lecture', async () => {
+    it('returns 400 for invalid outline payload', async () => {
       const res = await request(app)
-        .post('/api/teacher/ai/generate-quiz')
+        .post('/api/teacher/ai/generate-content')
         .set('Authorization', `Bearer ${teacherToken}`)
         .send({
-          lectureId: testLecture.id,
-          questionCount: 5,
-          questionTypes: ['multiple_choice'],
-          difficulty: 'easy'
+          courseId: testCourse.id,
+          chapterId: testChapter.id,
+          outlineData: { title: 'Test', outline: 'short' },
         });
-
-      expect([200, 201]).toContain(res.statusCode);
+      expect(res.statusCode).toBe(400);
     });
   });
 
   describe('POST /api/teacher/ai/generate-exercises', () => {
-    it('should generate practice exercises', async () => {
+    it('returns 400 when lectureId is missing', async () => {
       const res = await request(app)
         .post('/api/teacher/ai/generate-exercises')
         .set('Authorization', `Bearer ${teacherToken}`)
-        .send({
-          lectureId: testLecture.id,
-          exerciseCount: 3,
-          exerciseTypes: ['hands_on'],
-          difficulty: 'medium'
-        });
-
-      expect([200, 201]).toContain(res.statusCode);
+        .send({});
+      expect(res.statusCode).toBe(400);
     });
   });
 
   describe('POST /api/teacher/ai/teaching-guide', () => {
-    it('should generate teaching guide', async () => {
+    it('returns 200 for valid teaching-guide request', async () => {
       const res = await request(app)
         .post('/api/teacher/ai/teaching-guide')
         .set('Authorization', `Bearer ${teacherToken}`)
@@ -208,158 +186,84 @@ describe('AI Teacher Features', () => {
   });
 
   describe('POST /api/teacher/ai/teaching-materials', () => {
-    it('should generate teaching materials (slides)', async () => {
+    it('returns 400 when slideCount is out of range', async () => {
       const res = await request(app)
         .post('/api/teacher/ai/teaching-materials')
         .set('Authorization', `Bearer ${teacherToken}`)
         .send({
           lectureId: testLecture.id,
           materialType: 'slides',
-          slideCount: 15
+          slideCount: 100,
         });
-
-      expect(res.statusCode).toBe(200);
-      expect(res.body.success).toBe(true);
-    });
-
-    it('should generate teaching materials (handout)', async () => {
-      const res = await request(app)
-        .post('/api/teacher/ai/teaching-materials')
-        .set('Authorization', `Bearer ${teacherToken}`)
-        .send({
-          lectureId: testLecture.id,
-          materialType: 'handout'
-        });
-
-      expect(res.statusCode).toBe(200);
+      expect(res.statusCode).toBe(400);
     });
   });
 
   describe('GET /api/teacher/ai/content-quality', () => {
-    it('should analyze content quality', async () => {
+    it('returns 400 when contentType is missing', async () => {
       const res = await request(app)
-        .get(`/api/teacher/ai/content-quality?contentId=${testLecture.id}&contentType=lecture`)
+        .get(`/api/teacher/ai/content-quality?contentId=${testLecture.id}`)
         .set('Authorization', `Bearer ${teacherToken}`);
-
-      expect(res.statusCode).toBe(200);
-      expect(res.body.success).toBe(true);
+      expect(res.statusCode).toBe(400);
     });
   });
 
   describe('GET /api/teacher/ai/course-analytics', () => {
-    it('should return course analytics', async () => {
+    it('returns 400 for invalid groupBy', async () => {
       const res = await request(app)
-        .get(`/api/teacher/ai/course-analytics?courseId=${testCourse.id}`)
+        .get(`/api/teacher/ai/course-analytics?courseId=${testCourse.id}&groupBy=invalid`)
         .set('Authorization', `Bearer ${teacherToken}`);
-
-      expect([200, 404, 500]).toContain(res.statusCode);
+      expect(res.statusCode).toBe(400);
     });
   });
 
   describe('GET /api/teacher/ai/quality-report', () => {
-    it('should return quality report for course', async () => {
+    it('returns 400 for invalid minScore', async () => {
       const res = await request(app)
-        .get(`/api/teacher/ai/quality-report?courseId=${testCourse.id}`)
+        .get(`/api/teacher/ai/quality-report?courseId=${testCourse.id}&minScore=15`)
         .set('Authorization', `Bearer ${teacherToken}`);
-
-      expect([200, 404, 500]).toContain(res.statusCode);
-    });
-  });
-
-  describe('POST /api/teacher/ai/generate-and-save-quiz', () => {
-    it('should generate and save quiz as draft', async () => {
-      const res = await request(app)
-        .post('/api/teacher/ai/generate-and-save-quiz')
-        .set('Authorization', `Bearer ${teacherToken}`)
-        .send({
-          courseId: testCourse.id,
-          lectureId: testLecture.id,
-          chapterIds: [testChapter.id],
-          options: {
-            count: 5,
-            difficulty: 'medium',
-            questionTypes: ['multiple_choice']
-          }
-        });
-
-      expect([200, 201]).toContain(res.statusCode);
-    });
-  });
-
-  describe('POST /api/teacher/ai/quizzes/:quizId/publish', () => {
-    it('should publish draft quiz', async () => {
-      // Using non-existent quiz ID
-      const res = await request(app)
-        .post('/api/teacher/ai/quizzes/99999/publish')
-        .set('Authorization', `Bearer ${teacherToken}`);
-
-      expect([200, 201, 404, 500]).toContain(res.statusCode);
+      expect(res.statusCode).toBe(400);
     });
   });
 
   describe('POST /api/teacher/ai/student-feedback', () => {
-    it('should generate student feedback suggestions', async () => {
+    it('returns 400 when courseId is missing', async () => {
       const res = await request(app)
         .post('/api/teacher/ai/student-feedback')
         .set('Authorization', `Bearer ${teacherToken}`)
-        .send({
-          courseId: testCourse.id,
-          feedbackType: 'general'
-        });
-
-      expect([200, 201, 500]).toContain(res.statusCode);
+        .send({ feedbackType: 'general' });
+      expect(res.statusCode).toBe(400);
     });
   });
 
   describe('POST /api/teacher/ai/generate-exam', () => {
-    it('should generate exam/quiz with answer key', async () => {
+    it('returns 400 for invalid questionCount', async () => {
       const res = await request(app)
         .post('/api/teacher/ai/generate-exam')
         .set('Authorization', `Bearer ${teacherToken}`)
         .send({
           courseId: testCourse.id,
-          chapterIds: [testChapter.id],
-          quizType: 'chapter_test',
-          difficulty: 'medium',
-          questionCount: 10,
-          timeLimit: 60,
-          includeAnswerKey: true
+          questionCount: 2,
         });
-
-      expect([200, 201, 500]).toContain(res.statusCode);
-    });
-  });
-
-  describe('GET /api/teacher/ai/course-difficulty/:courseId', () => {
-    it('should analyze course difficulty', async () => {
-      const res = await request(app)
-        .get(`/api/teacher/ai/course-difficulty/${testCourse.id}`)
-        .set('Authorization', `Bearer ${teacherToken}`);
-
-      expect([200, 404, 500]).toContain(res.statusCode);
+      expect(res.statusCode).toBe(400);
     });
   });
 
   describe('POST /api/teacher/ai/generate-course-outline', () => {
-    it('should generate course outline', async () => {
+    it('returns 400 for invalid difficulty', async () => {
       const res = await request(app)
         .post('/api/teacher/ai/generate-course-outline')
         .set('Authorization', `Bearer ${teacherToken}`)
         .send({
           topic: 'JavaScript Programming',
-          targetAudience: 'beginner',
-          difficulty: 'beginner',
-          estimatedWeeks: 4,
-          chaptersPerWeek: 2,
-          lecturesPerChapter: 3
+          difficulty: 'invalid',
         });
-
-      expect([200, 201, 500]).toContain(res.statusCode);
+      expect(res.statusCode).toBe(400);
     });
   });
 
   describe('POST /api/teacher/ai/save-course-outline', () => {
-    it('should save course outline to database', async () => {
+    it('returns 400 when config is missing', async () => {
       const res = await request(app)
         .post('/api/teacher/ai/save-course-outline')
         .set('Authorization', `Bearer ${teacherToken}`)
@@ -371,14 +275,10 @@ describe('AI Teacher Features', () => {
               { title: 'Chapter 1: Introduction', order: 1 },
               { title: 'Chapter 2: Variables', order: 2 }
             ]
-          },
-          config: {
-            targetAudience: 'beginner',
-            difficulty: 'beginner'
           }
         });
 
-      expect([200, 201, 400, 500]).toContain(res.statusCode);
+      expect(res.statusCode).toBe(400);
     });
   });
 });

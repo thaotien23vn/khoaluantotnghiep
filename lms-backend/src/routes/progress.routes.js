@@ -11,8 +11,6 @@ const {
 
 const router = express.Router();
 
-console.log('[Routes] progress.routes.js loaded');
-
 /**
  * @route   PUT /api/progress/lectures/:lectureId
  * @desc    Update lecture progress when watching video

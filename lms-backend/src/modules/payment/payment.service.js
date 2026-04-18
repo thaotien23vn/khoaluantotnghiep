@@ -3,7 +3,7 @@ const cartService = require('../cart/cart.service');
 const courseAggregatesService = require('../../services/courseAggregates.service');
 const vnpayService = require('../../services/vnpay.service');
 
-const { Payment, Course, User, Enrollment } = db.models;
+const { Payment, Course, User, Enrollment, LectureProgress } = db.models;
 
 /**
  * Generate unique provider transaction ID
@@ -80,6 +80,70 @@ const mockProcessor = new MockPaymentProcessor();
  * Payment Service - Business logic for payment operations
  */
 class PaymentService {
+  _calculateExpiryDate(startDate, value, unit) {
+    const date = new Date(startDate);
+    switch (unit) {
+      case 'days':
+        date.setDate(date.getDate() + value);
+        break;
+      case 'years':
+        date.setFullYear(date.getFullYear() + value);
+        break;
+      case 'months':
+      default:
+        // Handle fractional months (0.25 = 1 week, 0.5 = 2 weeks)
+        // Average month = 30.44 days (365.25 / 12)
+        const totalDays = Math.round(value * 30.44);
+        date.setDate(date.getDate() + totalDays);
+        break;
+    }
+    return date;
+  }
+
+  _addDays(date, days) {
+    const result = new Date(date);
+    result.setDate(result.getDate() + days);
+    return result;
+  }
+
+  async _renewEnrollmentAfterPayment(userId, courseId, renewalMonths, enrollmentId = null) {
+    const months = Number(renewalMonths);
+    if (!Number.isFinite(months) || months <= 0) {
+      return null;
+    }
+
+    const where = enrollmentId
+      ? { id: Number(enrollmentId), userId: Number(userId), courseId: Number(courseId) }
+      : { userId: Number(userId), courseId: Number(courseId) };
+
+    const enrollment = await Enrollment.findOne({
+      where,
+      include: [{ model: Course, as: 'Course', attributes: ['id', 'gracePeriodDays'] }],
+    });
+
+    if (!enrollment) {
+      throw { status: 404, message: 'Không tìm thấy ghi danh để gia hạn' };
+    }
+
+    let startFrom = new Date();
+    if (enrollment.expiresAt && enrollment.expiresAt > startFrom) {
+      startFrom = enrollment.expiresAt;
+    }
+
+    const newExpiresAt = this._calculateExpiryDate(startFrom, months, 'months');
+    const graceDays = Number(enrollment.Course?.gracePeriodDays || 7);
+    const newGracePeriodEndsAt = this._addDays(newExpiresAt, graceDays);
+
+    enrollment.expiresAt = newExpiresAt;
+    enrollment.gracePeriodEndsAt = newGracePeriodEndsAt;
+    enrollment.renewalCount = Number(enrollment.renewalCount || 0) + 1;
+    enrollment.lastRenewedAt = new Date();
+    enrollment.enrollmentStatus = 'active';
+    await enrollment.save();
+
+    return enrollment;
+  }
+
   /**
    * Create payment intent/order for a course
    */
@@ -141,8 +205,10 @@ class PaymentService {
       throw { status: 409, message: 'Bạn đã thanh toán khóa học này rồi' };
     }
 
-    // Create new payment record
-    const amount = customAmount || price;
+    // Price tampering defense: always use authoritative Course.price
+    // If client sent amount, ignore it (do not trust client input).
+    // Keep API contract compatible by not failing old clients that send amount.
+    const amount = price;
     const providerTxn = generateProviderTxn(provider);
 
     const payment = await Payment.create({
@@ -259,7 +325,14 @@ class PaymentService {
         throw { status: 404, message: 'Không tìm thấy khóa học' };
       }
 
+      if (!course.published) {
+        throw { status: 400, message: 'Khóa học chưa được xuất bản' };
+      }
+
       const price = Number(course.price || 0);
+      if (price === 0) {
+        throw { status: 400, message: 'Khóa học miễn phí, không cần thanh toán' };
+      }
       const providerTxnNew = generateProviderTxn(provider);
 
       // Create payment with completed status for mock provider
@@ -460,8 +533,31 @@ class PaymentService {
       offset,
     });
 
+    // Manually sum to handle mixed currencies
+    const allPayments = await Payment.findAll({
+      where: {
+        userId,
+        status: 'completed',
+      },
+      attributes: ['amount', 'currency'],
+    });
+
+    const totalSpent = allPayments.reduce((sum, p) => {
+      const amt = Number(p.amount || 0);
+      const isUSD = p.currency?.toUpperCase() === 'USD';
+      
+      if (isUSD) {
+        // If USD amount is large (> 1000), it's probably mislabeled VND
+        if (amt >= 1000) return sum + amt;
+        // Otherwise convert real USD to VND (approx 25,000 rate)
+        return sum + (amt * 25000);
+      }
+      return sum + amt;
+    }, 0);
+
     return {
       payments,
+      totalSpent: Math.round(totalSpent),
       pagination: {
         total: count,
         page: pageNum,
@@ -469,6 +565,117 @@ class PaymentService {
         totalPages: Math.ceil(count / limitNum),
       },
     };
+  }
+
+  /**
+   * Generate Invoice PDF
+   */
+  async generateInvoicePDF(paymentId, userId) {
+    const payment = await Payment.findOne({
+      where: { id: paymentId, userId },
+      include: [
+        {
+          model: Course,
+          as: 'course',
+          attributes: ['id', 'title', 'price'],
+        },
+        {
+          model: User,
+          as: 'user',
+          attributes: ['id', 'name', 'email'],
+        },
+      ],
+    });
+
+    if (!payment) {
+      throw { status: 404, message: 'Không tìm thấy giao dịch thanh toán' };
+    }
+
+    if (payment.status !== 'completed') {
+      throw { status: 400, message: 'Chỉ có thể xuất hóa đơn cho giao dịch thành công' };
+    }
+
+    const PDFDocument = require('pdfkit');
+    const doc = new PDFDocument({ margin: 50 });
+
+    // Register font to support Vietnamese
+    const fontPath = 'C:\\Windows\\Fonts\\arial.ttf';
+    doc.registerFont('Arial', fontPath);
+    doc.font('Arial');
+
+    // Header logic
+    doc.fillColor('#444444')
+      .fontSize(20)
+      .text('HÓA ĐƠN THANH TOÁN', 110, 57)
+      .fontSize(10)
+      .text('E-Learning Project', 200, 65, { align: 'right' })
+      .text('123 Đường ABC, Quận XYZ', 200, 80, { align: 'right' })
+      .moveDown();
+
+    // Line separator
+    doc.strokeColor('#aaaaaa')
+      .lineWidth(1)
+      .moveTo(50, 100)
+      .lineTo(550, 100)
+      .stroke();
+
+    // Information Section
+    const paymentDate = payment.updatedAt || payment.updated_at || new Date();
+    doc.fontSize(12)
+      .text(`Mã hóa đơn: #INV-${payment.id}`, 50, 115)
+      .text(`Ngày thanh toán: ${new Date(paymentDate).toLocaleDateString('vi-VN')}`, 50, 130)
+      .text(`Phương thức: ${payment.provider.toUpperCase()}`, 50, 145)
+      .moveDown();
+
+    doc.text('THÔNG TIN KHÁCH HÀNG', 50, 170, { underline: true })
+      .text(`Họ tên: ${payment.user?.name || 'N/A'}`, 50, 185)
+      .text(`Email: ${payment.user?.email || 'N/A'}`, 50, 200)
+      .moveDown();
+
+    // Table Header
+    doc.fillColor('#444444')
+      .fontSize(10)
+      .text('Tên khóa học', 50, 230)
+      .text('Số lượng', 280, 230, { width: 90, align: 'right' })
+      .text('Giá', 370, 230, { width: 90, align: 'right' })
+      .text('Thành tiền', 460, 230, { width: 90, align: 'right' });
+
+    doc.strokeColor('#aaaaaa')
+      .lineWidth(1)
+      .moveTo(50, 245)
+      .lineTo(550, 245)
+      .stroke();
+
+    // Table Row
+    const courseTitle = payment.course?.title || 'Khóa học';
+    const amount = Number(payment.amount);
+    const currencyLabel = (payment.currency || 'VND').toUpperCase() === 'USD' ? '$' : 'đ';
+    const formattedAmount = amount.toLocaleString('vi-VN');
+
+    doc.fontSize(10)
+      .text(courseTitle, 50, 255)
+      .text('1', 280, 255, { width: 90, align: 'right' })
+      .text(`${formattedAmount}${currencyLabel}`, 370, 255, { width: 90, align: 'right' })
+      .text(`${formattedAmount}${currencyLabel}`, 460, 255, { width: 90, align: 'right' });
+
+    // Total section
+    doc.strokeColor('#aaaaaa')
+      .lineWidth(1)
+      .moveTo(50, 275)
+      .lineTo(550, 275)
+      .stroke();
+
+    doc.fontSize(14)
+      .fillColor('#000000')
+      .text('TỔNG CỘNG:', 350, 290, { width: 100, align: 'right' })
+      .text(`${formattedAmount}${currencyLabel}`, 460, 290, { width: 90, align: 'right' });
+
+    // Footer
+    doc.fontSize(10)
+      .fillColor('#777777')
+      .text('Cảm ơn bạn đã tin tưởng và tham gia khóa học của chúng tôi!', 50, 400, { align: 'center' });
+
+    return doc;
   }
 
   /**
@@ -562,6 +769,13 @@ class PaymentService {
         await enrollment.destroy();
       }
 
+      // Cleanup per-course lecture progress after refund unenroll
+      try {
+        await LectureProgress.destroy({ where: { userId, courseId: Number(payment.courseId) } });
+      } catch (e) {
+        console.error('Cleanup lecture progress after refund (silent) error:', e);
+      }
+
       // Update course student count
       try {
         await courseAggregatesService.recomputeCourseStudents(payment.courseId);
@@ -590,12 +804,22 @@ class PaymentService {
     }
 
     // Create enrollment
-    const enrollment = await Enrollment.create({
-      userId,
-      courseId,
-      status: 'enrolled',
-      progressPercent: 0,
-    });
+    let enrollment;
+    try {
+      enrollment = await Enrollment.create({
+        userId,
+        courseId,
+        status: 'enrolled',
+        enrollmentStatus: 'active',
+        progressPercent: 0,
+      });
+    } catch (err) {
+      if (err?.name === 'SequelizeUniqueConstraintError') {
+        const existingAfterRace = await Enrollment.findOne({ where: { userId, courseId } });
+        if (existingAfterRace) return existingAfterRace;
+      }
+      throw err;
+    }
 
     // Update course students count
     try {
@@ -614,7 +838,15 @@ class PaymentService {
    * @param {string} ipAddr - Client IP address
    * @returns {Promise<Object>} - Payment URL and transaction info
    */
-  async createVNPayPayment(userId, courseId, ipAddr) {
+  async createVNPayPayment(
+    userId,
+    courseId,
+    ipAddr,
+    isRenewal = false,
+    renewalPrice = null,
+    enrollmentId = null,
+    renewalMonths = null
+  ) {
     const course = await Course.findByPk(courseId);
     if (!course) {
       throw { status: 404, message: 'Không tìm thấy khóa học' };
@@ -624,15 +856,18 @@ class PaymentService {
       throw { status: 400, message: 'Khóa học chưa được xuất bản' };
     }
 
-    // Check if user already enrolled
-    const existingEnrollment = await Enrollment.findOne({
-      where: { userId, courseId },
-    });
-    if (existingEnrollment) {
-      throw { status: 409, message: 'Bạn đã đăng ký khóa học này rồi' };
+    // Check if user already enrolled (skip for renewal)
+    if (!isRenewal) {
+      const existingEnrollment = await Enrollment.findOne({
+        where: { userId, courseId },
+      });
+      if (existingEnrollment) {
+        throw { status: 409, message: 'Bạn đã đăng ký khóa học này rồi' };
+      }
     }
 
-    const price = Number(course.price || 0);
+    // Use renewal price if provided, otherwise use full course price
+    const price = renewalPrice && renewalPrice > 0 ? Number(renewalPrice) : Number(course.price || 0);
     if (price === 0) {
       throw { status: 400, message: 'Khóa học miễn phí, không cần thanh toán' };
     }
@@ -653,6 +888,9 @@ class PaymentService {
         initiatedAt: new Date().toISOString(),
         source: 'vnpay',
         provider: 'vnpay',
+        isRenewal,
+        enrollmentId: enrollmentId ? Number(enrollmentId) : null,
+        renewalMonths: renewalMonths != null ? Number(renewalMonths) : null,
       },
     });
 
@@ -704,6 +942,21 @@ class PaymentService {
       throw { status: 404, message: 'Không tìm thấy giao dịch' };
     }
 
+    // Replay-safe: if already completed, do not re-process/re-enroll
+    if (payment.status === 'completed') {
+      const enrollment = await Enrollment.findOne({
+        where: { userId: payment.userId, courseId: payment.courseId },
+      });
+      return {
+        success: true,
+        message: 'Thanh toán thành công',
+        payment,
+        enrollment,
+        course: payment.course,
+        alreadyProcessed: true,
+      };
+    }
+
     // Update payment status
     payment.status = 'completed';
     payment.paymentDetails = {
@@ -718,10 +971,23 @@ class PaymentService {
     };
     await payment.save();
 
-    // Enroll user
+    const isRenewal = Boolean(payment.paymentDetails?.isRenewal);
+    const renewalMonths = Number(payment.paymentDetails?.renewalMonths);
+    const renewalEnrollmentId = payment.paymentDetails?.enrollmentId;
+
+    // Enroll user or renew existing enrollment
     let enrollment = null;
     try {
-      enrollment = await this._enrollAfterPayment(payment.userId, payment.courseId);
+      if (isRenewal && Number.isFinite(renewalMonths) && renewalMonths > 0) {
+        enrollment = await this._renewEnrollmentAfterPayment(
+          payment.userId,
+          payment.courseId,
+          renewalMonths,
+          renewalEnrollmentId
+        );
+      } else {
+        enrollment = await this._enrollAfterPayment(payment.userId, payment.courseId);
+      }
       // Remove from cart if exists
       await cartService.removeCourseFromCart(payment.userId, payment.courseId);
     } catch (err) {
@@ -763,8 +1029,21 @@ class PaymentService {
           };
           await payment.save();
 
-          // Auto enroll
-          await this._enrollAfterPayment(payment.userId, payment.courseId);
+          const isRenewal = Boolean(payment.paymentDetails?.isRenewal);
+          const renewalMonths = Number(payment.paymentDetails?.renewalMonths);
+          const renewalEnrollmentId = payment.paymentDetails?.enrollmentId;
+
+          // Auto enroll or renew
+          if (isRenewal && Number.isFinite(renewalMonths) && renewalMonths > 0) {
+            await this._renewEnrollmentAfterPayment(
+              payment.userId,
+              payment.courseId,
+              renewalMonths,
+              renewalEnrollmentId
+            );
+          } else {
+            await this._enrollAfterPayment(payment.userId, payment.courseId);
+          }
           await cartService.removeCourseFromCart(payment.userId, payment.courseId);
         }
       } catch (err) {

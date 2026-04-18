@@ -6,13 +6,18 @@ const { loginByRole } = require('../testAuth');
 describe('Enrollment and Course Access Integration Test', () => {
   let studentToken;
   let teacherToken;
+  let adminToken;
   let testCourse;
   let testChapter;
   let testLecture;
+  const createdCourseIds = [];
+  const createdChapterIds = [];
+  const createdLectureIds = [];
 
   beforeAll(async () => {
     studentToken = await loginByRole('student');
     teacherToken = await loginByRole('teacher');
+    adminToken = await loginByRole('admin');
 
     // 1. Teacher creates a course
     const courseRes = await request(app)
@@ -23,38 +28,51 @@ describe('Enrollment and Course Access Integration Test', () => {
         description: 'Testing enrollment access',
         price: 0
       });
+    expect(courseRes.statusCode).toBe(201);
     testCourse = courseRes.body.data.course;
+    createdCourseIds.push(testCourse.id);
 
     // Publish the course
-    await request(app)
+    const publishRes = await request(app)
       .put(`/api/teacher/courses/${testCourse.id}/publish`)
-      .set('Authorization', `Bearer ${teacherToken}`)
+      .set('Authorization', `Bearer ${adminToken}`)
       .send({ published: true });
+    expect(publishRes.statusCode).toBe(200);
 
     // 2. Teacher adds a chapter
     const chapterRes = await request(app)
       .post(`/api/teacher/chapters`)
       .set('Authorization', `Bearer ${teacherToken}`)
       .send({ courseId: testCourse.id, title: 'Chapter 1', order: 1 });
+    expect(chapterRes.statusCode).toBe(201);
     testChapter = chapterRes.body.data.chapter;
+    createdChapterIds.push(testChapter.id);
 
     // 3. Teacher adds a lecture
     const lectureRes = await request(app)
       .post(`/api/teacher/chapters/${testChapter.id}/lectures`)
       .set('Authorization', `Bearer ${teacherToken}`)
       .send({ title: 'Lecture 1', content: 'Secret content', type: 'text', order: 1 });
+    expect(lectureRes.statusCode).toBe(201);
     testLecture = lectureRes.body.data.lecture;
-  });
+    createdLectureIds.push(testLecture.id);
 
-  it('should allow access to course detail after enrollment', async () => {
-    // 1. Student enrolls (free course)
+    // Ensure enrollment exists for deterministic assertions.
     const enrollRes = await request(app)
       .post(`/api/student/enroll/${testCourse.id}`)
       .set('Authorization', `Bearer ${studentToken}`);
-    
-    expect(enrollRes.statusCode).toBe(201);
+    expect([201, 409]).toContain(enrollRes.statusCode);
+  });
 
-    // 2. Student accesses course detail (which includes lectures for published courses)
+  afterAll(async () => {
+    const { Enrollment, Lecture, Chapter, Course } = db.models;
+    await Enrollment.destroy({ where: { courseId: createdCourseIds } });
+    await Lecture.destroy({ where: { id: createdLectureIds } });
+    await Chapter.destroy({ where: { id: createdChapterIds } });
+    await Course.destroy({ where: { id: createdCourseIds } });
+  });
+
+  it('should allow access to course detail after enrollment', async () => {
     const res = await request(app)
       .get(`/api/courses/${testCourse.id}`)
       .set('Authorization', `Bearer ${studentToken}`);
@@ -64,10 +82,7 @@ describe('Enrollment and Course Access Integration Test', () => {
     
     // Course detail includes curriculum with chapters/lectures
     const courseData = res.body.data.course || res.body.data;
-    
-    // Debug: Check curriculum structure
-    console.log('Curriculum:', JSON.stringify(courseData.curriculum, null, 2));
-    
+
     const curriculum = courseData.curriculum || [];
     expect(curriculum.length).toBeGreaterThan(0);
     

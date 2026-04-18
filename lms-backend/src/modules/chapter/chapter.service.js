@@ -1,5 +1,6 @@
 const db = require('../../models');
 const courseAggregatesService = require('../../services/courseAggregates.service');
+const mediaService = require('../../services/media.service');
 
 const { Chapter, Course, Lecture } = db.models;
 
@@ -84,6 +85,16 @@ class ChapterService {
 
     if (role === 'teacher' && course.createdBy !== userId) {
       throw { status: 403, message: 'Bạn không có quyền xóa chương này' };
+    }
+
+    const lectures = await Lecture.findAll({ where: { chapterId: chapter.id } });
+    for (const lecture of lectures) {
+      if (!lecture.contentUrl) continue;
+      try {
+        await mediaService.deleteMediaByUrl(lecture.contentUrl);
+      } catch (mediaErr) {
+        console.error('Delete chapter lecture media (silent) error:', mediaErr);
+      }
     }
 
     // Delete lectures first to avoid foreign key issues

@@ -15,7 +15,8 @@ let courseGenerationWorker;
 if (!isTest) {
   const redisOptions = {
     maxRetriesPerRequest: null, // BẮT BUỘC cho BullMQ Worker
-    retryStrategy: (times) => Math.min(times * 100, 2000),
+    enableReadyCheck: false,
+    retryStrategy: (times) => Math.min(times * 200, 5000),
     lazyConnect: true, // Chỉ kết nối khi cần
     ...(process.env.REDIS_URL && process.env.REDIS_URL.startsWith('rediss') && {
       tls: {
@@ -36,7 +37,8 @@ if (!isTest) {
   }
 
   redisConnection.on('error', (err) => {
-    console.error('❌ [CourseGenerationWorker] Connection Error:', err.message);
+    // Không throw để tránh crash startup
+    console.warn('⚠️  [CourseGenerationWorker] Redis connection issue. Background generation may be delayed.', err.message);
   });
 
   // Worker xử lý job từ queue

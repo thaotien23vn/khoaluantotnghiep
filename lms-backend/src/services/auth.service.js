@@ -5,8 +5,10 @@ const { Op } = require('sequelize');
 const db = require('../models');
 const jwtConfig = require('../config/jwt');
 const emailService = require('./email.service');
+const logger = require('../utils/logger');
 
 const UserModel = db.models.User;
+const GENERIC_FORGOT_PASSWORD_MESSAGE = 'Nếu email tồn tại trong hệ thống, chúng tôi đã gửi hướng dẫn đặt lại mật khẩu';
 
 /**
  * Generate secure random token (32 bytes hex)
@@ -31,12 +33,27 @@ const hashToken = async (token) => {
 };
 
 /**
+ * Deterministic reset token hash (index-friendly)
+ * Stored as v2:<sha256>
+ * @param {string} token
+ * @returns {string}
+ */
+const hashResetTokenDeterministic = (token) => {
+  const normalized = String(token || '');
+  const digest = crypto.createHash('sha256').update(normalized).digest('hex');
+  return `v2:${digest}`;
+};
+
+/**
  * Verify token against hash
  * @param {string} plainToken - Plain token
  * @param {string} hashedToken - Hashed token
  * @returns {Promise<boolean>} Verification result
  */
 const verifyToken = async (plainToken, hashedToken) => {
+  if (typeof hashedToken === 'string' && hashedToken.startsWith('v2:')) {
+    return hashResetTokenDeterministic(plainToken) === hashedToken;
+  }
   return bcrypt.compare(plainToken, hashedToken);
 };
 
@@ -105,7 +122,7 @@ const registerUser = async (userData) => {
   emailService.sendVerificationEmail(email, name, verificationCode, verificationLink)
     .then(result => {
       if (result.success) {
-        console.log('✅ Verification email sent:', email);
+        logger.info('AUTH_VERIFICATION_EMAIL_SENT', { email });
       } else {
       }
     })
@@ -121,7 +138,9 @@ const registerUser = async (userData) => {
       role: user.role,
       isEmailVerified: user.isEmailVerified,
     },
-    verificationCode, // Only for testing, should not be exposed in production
+    ...(String(process.env.NODE_ENV || '').toLowerCase() === 'test'
+      ? { verificationCode } // only expose for automated tests
+      : {}),
   };
 };
 
@@ -257,15 +276,14 @@ const requestPasswordReset = async (email) => {
   // Find user by email
   const user = await UserModel.findOne({ where: { email } });
   if (!user) {
-    throw {
-      status: 404,
-      message: 'Không tìm thấy tài khoản với email này',
+    return {
+      message: GENERIC_FORGOT_PASSWORD_MESSAGE,
     };
   }
 
   // Generate reset token
   const resetToken = generateSecureToken();
-  const hashedResetToken = await hashToken(resetToken);
+  const hashedResetToken = hashResetTokenDeterministic(resetToken);
 
   // Update user with reset token
   await user.update({
@@ -280,15 +298,12 @@ const requestPasswordReset = async (email) => {
   try {
     await emailService.sendResetPasswordEmail(email, user.name, resetToken, resetLink);
   } catch (emailError) {
+    // Intentionally do not leak delivery/internal errors to caller
     console.error('Failed to send reset password email:', emailError);
-    throw {
-      status: 500,
-      message: 'Lỗi gửi email. Vui lòng thử lại sau',
-    };
   }
 
   return {
-    message: 'Email đặt lại mật khẩu đã được gửi. Vui lòng kiểm tra email',
+    message: GENERIC_FORGOT_PASSWORD_MESSAGE,
   };
 };
 
@@ -321,21 +336,30 @@ const resetPassword = async (resetData) => {
     };
   }
 
-  // Find user by reset token (need to check all users since token is hashed)
-  const users = await UserModel.findAll({
+  const hashedTokenV2 = hashResetTokenDeterministic(token);
+  let user = await UserModel.findOne({
     where: {
-      resetPasswordToken: {
-        [Op.ne]: null,
-      },
+      resetPasswordToken: hashedTokenV2,
     },
   });
 
-  let user = null;
-  for (const u of users) {
-    const isValidToken = await verifyToken(token, u.resetPasswordToken);
-    if (isValidToken) {
-      user = u;
-      break;
+  // Backward-compatible fallback for legacy bcrypt-hashed reset tokens
+  if (!user) {
+    const legacyUsers = await UserModel.findAll({
+      where: {
+        resetPasswordToken: {
+          [Op.and]: [{ [Op.ne]: null }, { [Op.notLike]: 'v2:%' }],
+        },
+      },
+      attributes: ['id', 'passwordHash', 'resetPasswordToken', 'resetPasswordTokenExpires'],
+    });
+
+    for (const u of legacyUsers) {
+      const isValidToken = await verifyToken(token, u.resetPasswordToken);
+      if (isValidToken) {
+        user = u;
+        break;
+      }
     }
   }
 
@@ -382,21 +406,30 @@ const checkResetPasswordToken = async (token) => {
     };
   }
 
-  // Find user by reset token (need to check all users since token is hashed)
-  const users = await UserModel.findAll({
+  const hashedTokenV2 = hashResetTokenDeterministic(token);
+  let user = await UserModel.findOne({
     where: {
-      resetPasswordToken: {
-        [Op.ne]: null,
-      },
+      resetPasswordToken: hashedTokenV2,
     },
   });
 
-  let user = null;
-  for (const u of users) {
-    const isValidToken = await verifyToken(token, u.resetPasswordToken);
-    if (isValidToken) {
-      user = u;
-      break;
+  // Backward-compatible fallback for legacy bcrypt-hashed reset tokens
+  if (!user) {
+    const legacyUsers = await UserModel.findAll({
+      where: {
+        resetPasswordToken: {
+          [Op.and]: [{ [Op.ne]: null }, { [Op.notLike]: 'v2:%' }],
+        },
+      },
+      attributes: ['id', 'resetPasswordToken', 'resetPasswordTokenExpires'],
+    });
+
+    for (const u of legacyUsers) {
+      const isValidToken = await verifyToken(token, u.resetPasswordToken);
+      if (isValidToken) {
+        user = u;
+        break;
+      }
     }
   }
 
@@ -415,7 +448,7 @@ const checkResetPasswordToken = async (token) => {
   }
 
   return {
-    token,
+    valid: true,
     expiresAt: user.resetPasswordTokenExpires,
   };
 };
@@ -487,6 +520,7 @@ module.exports = {
   generateSecureToken,
   generateVerificationCode,
   hashToken,
+  hashResetTokenDeterministic,
   verifyToken,
   createJWTToken,
 };

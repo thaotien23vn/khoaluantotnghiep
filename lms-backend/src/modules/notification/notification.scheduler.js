@@ -58,9 +58,9 @@ class NotificationScheduler {
     
     // Fetch enrollments for the course
     const enrollments = await Enrollment.findAll({
-      where: { 
+      where: {
         courseId: quiz.courseId,
-        status: 'active'
+        enrollmentStatus: { [Op.in]: ['active', 'grace_period'] },
       },
     });
     

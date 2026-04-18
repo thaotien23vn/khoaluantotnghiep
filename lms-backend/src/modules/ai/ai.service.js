@@ -10,6 +10,7 @@ const aiAnalytics = require('../../services/aiAnalytics.service');
 const aiContent = require('../../services/aiContent.service');
 const aiLearningPath = require('../../services/aiLearningPath.service');
 const chatPermissionService = require('../../services/chatPermission.service');
+const EnrollmentAccess = require('../enrollment/enrollment.access');
 const { courseGenerationQueue } = require('../../services/courseGeneration.queue');
 
 const {
@@ -78,8 +79,8 @@ class AiService {
 
   // Helpers
   async ensureStudentEnrolled(userId, courseId) {
-    const row = await Enrollment.findOne({ where: { userId, courseId, status: 'enrolled' } });
-    return !!row;
+    const access = await EnrollmentAccess.checkAccess(userId, courseId);
+    return access.hasAccess;
   }
 
   async ensureTeacherOwnsCourseOrAdmin(reqUser, course) {
@@ -898,7 +899,7 @@ class AiService {
     }
 
     const enrollments = await Enrollment.findAll({
-      where: { courseId, status: 'enrolled' },
+      where: { courseId, enrollmentStatus: 'active' },
       attributes: ['userId'],
     });
 

@@ -1,8 +1,9 @@
 const db = require('../../models');
 const courseAggregatesService = require('../../services/courseAggregates.service');
+const EnrollmentAccess = require('../enrollment/enrollment.access');
 const { Op } = require('sequelize');
 
-const { Review, Course, User, Enrollment, LectureProgress } = db.models;
+const { Review, Course, User, LectureProgress } = db.models;
 
 /**
  * Review Service - Business logic for review operations
@@ -15,10 +16,8 @@ class ReviewService {
     if (!course) throw { status: 404, message: 'Không tìm thấy khóa học' };
     if (!course.published) throw { status: 400, message: 'Khóa học chưa được xuất bản' };
 
-    const enrollment = await Enrollment.findOne({
-      where: { userId, courseId, status: 'enrolled' },
-    });
-    if (!enrollment) throw { status: 403, message: 'Bạn cần đăng ký khóa học này để đánh giá' };
+    const access = await EnrollmentAccess.checkAccess(userId, courseId, 'content');
+    if (!access.hasAccess) throw { status: 403, message: access.message || 'Bạn cần đăng ký khóa học này để đánh giá' };
 
     // ADDED: Check that student has completed at least 1 lecture before reviewing
     const completedCount = await LectureProgress.count({

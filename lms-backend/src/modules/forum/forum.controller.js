@@ -59,7 +59,12 @@ const requireNotBanned = async (req, res) => {
 class ForumController {
   async listTopics(req, res) {
     try {
-      const result = await forumService.listTopics(req.query);
+      const query = {
+        ...req.query,
+        userId: req.user?.id,
+        userRole: req.user?.role,
+      };
+      const result = await forumService.listTopics(query);
       res.json({ success: true, data: result });
     } catch (error) {
       handleServiceError(error, res);
@@ -100,7 +105,7 @@ class ForumController {
 
   async getTopicDetails(req, res) {
     try {
-      const result = await forumService.getTopicDetails(req.params.id);
+      const result = await forumService.getTopicDetails(req.params.id, req.user?.id, req.user?.role);
       res.json({ success: true, data: { topic: result.topic, posts: result.posts } });
     } catch (error) {
       handleServiceError(error, res);

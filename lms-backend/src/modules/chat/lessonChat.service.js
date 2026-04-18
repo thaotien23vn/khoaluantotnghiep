@@ -11,6 +11,7 @@ const {
   ChatParticipant,
   ChatEscalation,
   ChatAnalytics,
+  Enrollment,
   Lecture,
   Course,
   User,
@@ -25,10 +26,81 @@ const {
 const AI_SYSTEM_USER_ID = 0;
 
 class LessonChatService {
+  async assertLessonAccessByLessonId(lessonId, userId, userRole) {
+    const lecture = await Lecture.findByPk(lessonId, {
+      include: [{ model: db.models.Chapter, as: 'chapter', attributes: ['courseId'] }],
+    });
+
+    if (!lecture?.chapter?.courseId) {
+      throw { status: 404, message: 'Không tìm thấy bài học' };
+    }
+
+    return this.assertCourseAccess(lecture.chapter.courseId, userId, userRole);
+  }
+
+  async assertLessonAccessByChatId(chatId, userId, userRole) {
+    const chat = await LessonChat.findByPk(chatId, {
+      attributes: ['id', 'lessonId'],
+    });
+
+    if (!chat?.lessonId) {
+      throw { status: 404, message: 'Không tìm thấy chat' };
+    }
+
+    // IMPORTANT: do not trust chat.courseId (can be poisoned); derive from lessonId
+    return this.assertLessonAccessByLessonId(chat.lessonId, userId, userRole);
+  }
+
+  async assertCourseAccess(courseId, userId, userRole) {
+    // Admin can always access
+    if (userRole === 'admin') {
+      return { courseId: Number(courseId), access: 'admin' };
+    }
+
+    const course = await Course.findByPk(courseId, {
+      attributes: ['id', 'createdBy'],
+    });
+
+    if (!course) {
+      throw { status: 404, message: 'Không tìm thấy khóa học' };
+    }
+
+    // Teacher can access only own course
+    if (userRole === 'teacher') {
+      if (Number(course.createdBy) !== Number(userId)) {
+        throw { status: 403, message: 'Bạn không có quyền truy cập chat của khóa học này' };
+      }
+      return { courseId: Number(course.id), access: 'teacher_owner' };
+    }
+
+    // Student must have valid enrollment
+    const enrollment = await Enrollment.findOne({
+      where: { userId, courseId: course.id },
+      attributes: ['id', 'status'],
+    });
+
+    if (!enrollment || !['enrolled', 'active', 'completed'].includes(String(enrollment.status || '').toLowerCase())) {
+      throw { status: 403, message: 'Bạn chưa đăng ký khóa học này' };
+    }
+
+    return { courseId: Number(course.id), access: 'enrolled_student' };
+  }
+
   /**
    * Get or create chat for a lesson
    */
   async getOrCreateChat(lessonId, courseId) {
+    // IMPORTANT: do not trust client-provided courseId; derive authoritative courseId from lessonId
+    const lecture = await Lecture.findByPk(lessonId, {
+      include: [{ model: db.models.Chapter, as: 'chapter', attributes: ['courseId'] }],
+    });
+
+    if (!lecture?.chapter?.courseId) {
+      throw { status: 404, message: 'Không tìm thấy bài học' };
+    }
+
+    const authoritativeCourseId = Number(lecture.chapter.courseId);
+
     let chat = await LessonChat.findOne({
       where: { lessonId },
       include: [
@@ -39,12 +111,22 @@ class LessonChatService {
     if (!chat) {
       chat = await LessonChat.create({
         lessonId,
-        courseId,
+        courseId: authoritativeCourseId,
         title: 'Lesson Discussion',
         isActive: true,
         aiEnabled: true,
       });
-      logger.info('LESSON_CHAT_CREATED', { chatId: chat.id, lessonId, courseId });
+      logger.info('LESSON_CHAT_CREATED', { chatId: chat.id, lessonId, courseId: authoritativeCourseId });
+    } else if (Number(chat.courseId) !== authoritativeCourseId) {
+      // Fix existing poisoned/mismatched records to prevent authorization bypass
+      const oldCourseId = chat.courseId;
+      await chat.update({ courseId: authoritativeCourseId });
+      logger.warn('LESSON_CHAT_COURSE_MISMATCH_FIXED', {
+        chatId: chat.id,
+        lessonId,
+        oldCourseId,
+        authoritativeCourseId,
+      });
     }
 
     return chat;

@@ -2,8 +2,22 @@ const { Op } = require('sequelize');
 const db = require('../../models');
 const courseAggregatesService = require('../../services/courseAggregates.service');
 const notificationService = require('../notification/notification.service');
+const mediaService = require('../../services/media.service');
 
-const { Course, User, Category, Enrollment, Chapter, Lecture, Quiz } = db.models;
+const {
+  Course,
+  User,
+  Category,
+  Enrollment,
+  Chapter,
+  Lecture,
+  Quiz,
+  Question,
+  Attempt,
+  Review,
+  Payment,
+  LectureProgress,
+} = db.models;
 
 // Helper: build URL-friendly slug from title
 const generateSlugFromTitle = (title) => {
@@ -61,30 +75,53 @@ const formatCourseForListing = (course) => ({
 
 // Format course detail with curriculum
 const formatCourseDetail = (course) => {
+  const sanitizePublicLesson = (lecture) => {
+    const isPreview = !!lecture.isPreview;
+    if (isPreview) {
+      return {
+        id: lecture.id.toString(),
+        title: lecture.title,
+        type: lecture.type || 'video',
+        duration: lecture.duration
+          ? `${Math.ceil(lecture.duration / 60)} phút`
+          : '0 phút',
+        isPreview: true,
+        videoUrl: lecture.contentUrl,
+        fileUrl: lecture.contentUrl,
+        content: lecture.content || '',
+        attachments: (() => {
+          if (!lecture.attachments) return [];
+          if (Array.isArray(lecture.attachments)) return lecture.attachments;
+          try {
+            const parsed = JSON.parse(String(lecture.attachments));
+            return Array.isArray(parsed) ? parsed : [];
+          } catch {
+            return [];
+          }
+        })(),
+      };
+    }
+
+    // Public endpoint: sanitize non-preview lesson content/media.
+    return {
+      id: lecture.id.toString(),
+      title: lecture.title,
+      type: lecture.type || 'video',
+      duration: lecture.duration
+        ? `${Math.ceil(lecture.duration / 60)} phút`
+        : '0 phút',
+      isPreview: false,
+      videoUrl: null,
+      fileUrl: null,
+      content: null,
+      attachments: [],
+    };
+  };
+
   const curriculum = course.Chapters
     ? course.Chapters.map((chapter) => {
         const lectures = chapter.lectures
-          ? chapter.lectures.map((lecture) => ({
-              id: lecture.id.toString(),
-              title: lecture.title,
-              type: lecture.type || 'video',
-              duration: lecture.duration
-                ? `${Math.ceil(lecture.duration / 60)} phút`
-                : '0 phút',
-              isPreview: !!lecture.isPreview,
-              videoUrl: lecture.contentUrl,
-              content: lecture.content || '',
-              attachments: (() => {
-                if (!lecture.attachments) return [];
-                if (Array.isArray(lecture.attachments)) return lecture.attachments;
-                try {
-                  const parsed = JSON.parse(String(lecture.attachments));
-                  return Array.isArray(parsed) ? parsed : [];
-                } catch {
-                  return [];
-                }
-              })(),
-            }))
+        ? chapter.lectures.map((lecture) => sanitizePublicLesson(lecture))
           : [];
         
         const quizzes = chapter.quizzes
@@ -157,6 +194,12 @@ const formatCourseDetail = (course) => {
     })(),
     price: parseFloat(course.price) || 0,
     lastUpdated: course.lastUpdated || new Date().toISOString(),
+    // Duration settings
+    durationType: course.durationType,
+    durationValue: course.durationValue,
+    durationUnit: course.durationUnit,
+    renewalDiscountPercent: course.renewalDiscountPercent,
+    gracePeriodDays: course.gracePeriodDays,
   };
 };
 
@@ -171,6 +214,19 @@ const parseJsonField = (value) => {
     return [];
   }
 };
+
+const TEACHER_REVIEW_TRIGGER_FIELDS = [
+  'title',
+  'description',
+  'imageUrl',
+  'price',
+  'categoryId',
+  'level',
+  'duration',
+  'willLearn',
+  'requirements',
+  'tags',
+];
 
 /**
  * Course Service - Business logic for course operations
@@ -387,17 +443,25 @@ class CourseService {
       willLearn,
       requirements,
       tags,
+      // Duration settings
+      durationType,
+      durationValue,
+      durationUnit,
+      renewalDiscountPercent,
+      gracePeriodDays,
     } = courseData;
 
     const slug = await generateUniqueSlug(title);
 
+    const canSetPublished = userRole === 'admin';
     const course = await Course.create({
       title,
       slug,
       description: description || '',
       imageUrl: imageUrl || null,
       price: price != null ? price : 0,
-      published: !!published,
+      // Backward-compatible: accept field but ignore for non-admin.
+      published: canSetPublished ? !!published : false,
       categoryId: categoryId || null,
       createdBy: userId,
       level: level || 'Mọi cấp độ',
@@ -405,6 +469,12 @@ class CourseService {
       willLearn: parseJsonField(willLearn),
       requirements: parseJsonField(requirements),
       tags: parseJsonField(tags),
+      // Duration settings
+      durationType: durationType || 'lifetime',
+      durationValue: durationValue || null,
+      durationUnit: durationUnit || null,
+      renewalDiscountPercent: renewalDiscountPercent != null ? renewalDiscountPercent : 0,
+      gracePeriodDays: gracePeriodDays != null ? gracePeriodDays : 7,
     });
 
     return {
@@ -428,6 +498,12 @@ class CourseService {
         tags: course.tags,
         price: parseFloat(course.price),
         lastUpdated: course.updatedAt,
+        // Duration settings
+        durationType: course.durationType,
+        durationValue: course.durationValue,
+        durationUnit: course.durationUnit,
+        renewalDiscountPercent: course.renewalDiscountPercent,
+        gracePeriodDays: course.gracePeriodDays,
       },
     };
   }
@@ -463,7 +539,16 @@ class CourseService {
       throw { status: 403, message: 'Bạn không có quyền cập nhật khóa học này' };
     }
 
-    const { title, description, imageUrl, price, categoryId, published } = updateData;
+    const { title, description, imageUrl, price, categoryId, published,
+      // Duration settings
+      durationType, durationValue, durationUnit, renewalDiscountPercent, gracePeriodDays,
+    } = updateData;
+    const wasPublished = course.status === 'published' && !!course.published;
+    let teacherModifiedPublishedCourse = false;
+
+    if (role === 'teacher' && wasPublished) {
+      teacherModifiedPublishedCourse = TEACHER_REVIEW_TRIGGER_FIELDS.some((field) => updateData[field] !== undefined);
+    }
 
     if (title && title !== course.title) {
       course.slug = await generateUniqueSlug(title);
@@ -482,8 +567,35 @@ class CourseService {
     if (categoryId !== undefined) {
       course.categoryId = categoryId;
     }
-    if (published !== undefined) {
+    // Backward-compatible: silently ignore teacher attempts to set published.
+    if (published !== undefined && role === 'admin') {
       course.published = !!published;
+    }
+
+    // Duration settings
+    if (durationType !== undefined) {
+      course.durationType = durationType;
+    }
+    if (durationValue !== undefined) {
+      course.durationValue = durationValue;
+    }
+    if (durationUnit !== undefined) {
+      course.durationUnit = durationUnit;
+    }
+    if (renewalDiscountPercent !== undefined) {
+      course.renewalDiscountPercent = renewalDiscountPercent;
+    }
+    if (gracePeriodDays !== undefined) {
+      course.gracePeriodDays = gracePeriodDays;
+    }
+
+    // Policy hardening: teacher edits on published courses require re-review.
+    if (role === 'teacher' && teacherModifiedPublishedCourse) {
+      course.status = 'pending_review';
+      course.published = false;
+      course.reviewedBy = null;
+      course.reviewedAt = null;
+      course.rejectionReason = null;
     }
 
     await course.save();
@@ -505,7 +617,68 @@ class CourseService {
       throw { status: 403, message: 'Bạn không có quyền xóa khóa học này' };
     }
 
-    await course.destroy();
+    const transaction = await db.sequelize.transaction();
+    try {
+      const chapters = await Chapter.findAll({
+        where: { courseId: course.id },
+        attributes: ['id'],
+        transaction,
+      });
+      const chapterIds = chapters.map((chapter) => chapter.id);
+
+      const lectures = await Lecture.findAll({
+        where: chapterIds.length > 0 ? { chapterId: { [Op.in]: chapterIds } } : { id: null },
+        attributes: ['id', 'contentUrl'],
+        transaction,
+      });
+      const lectureIds = lectures.map((lecture) => lecture.id);
+
+      for (const lecture of lectures) {
+        if (!lecture.contentUrl) continue;
+        try {
+          await mediaService.deleteMediaByUrl(lecture.contentUrl);
+        } catch (mediaErr) {
+          console.error('Delete course lecture media (silent) error:', mediaErr);
+        }
+      }
+
+      await LectureProgress.destroy({ where: { courseId: course.id }, transaction });
+      await Payment.destroy({ where: { courseId: course.id }, transaction });
+      await Review.destroy({ where: { courseId: course.id }, transaction });
+      await Enrollment.destroy({ where: { courseId: course.id }, transaction });
+
+      const quizzes = await Quiz.findAll({
+        where: {
+          [Op.or]: [
+            { courseId: course.id },
+            chapterIds.length > 0 ? { chapterId: { [Op.in]: chapterIds } } : { chapterId: null },
+          ],
+        },
+        attributes: ['id'],
+        transaction,
+      });
+      const quizIds = quizzes.map((quiz) => quiz.id);
+
+      if (quizIds.length > 0) {
+        await Attempt.destroy({ where: { quizId: { [Op.in]: quizIds } }, transaction });
+        await Question.destroy({ where: { quizId: { [Op.in]: quizIds } }, transaction });
+        await Quiz.destroy({ where: { id: { [Op.in]: quizIds } }, transaction });
+      }
+
+      if (lectureIds.length > 0) {
+        await Lecture.destroy({ where: { id: { [Op.in]: lectureIds } }, transaction });
+      }
+
+      if (chapterIds.length > 0) {
+        await Chapter.destroy({ where: { id: { [Op.in]: chapterIds } }, transaction });
+      }
+
+      await course.destroy({ transaction });
+      await transaction.commit();
+    } catch (err) {
+      await transaction.rollback();
+      throw err;
+    }
 
     return { message: 'Xóa khóa học thành công' };
   }
@@ -783,6 +956,105 @@ class CourseService {
     });
 
     return { course, chapters: formattedChapters };
+  }
+
+  /**
+   * Get enrolled course content for students (with full video URLs)
+   * Returns full content only if student is enrolled
+   */
+  async getEnrolledCourseContent(courseId, userId) {
+    const EnrollmentAccess = require('../enrollment/enrollment.access');
+    const { models } = require('../../models');
+    const { Lecture, LectureProgress } = models;
+
+    // Use unified access checker for consistent enrollment validation
+    const accessCheck = await EnrollmentAccess.getEnrollmentWithAccessInfo(
+      Number(userId),
+      Number(courseId)
+    );
+
+    if (!accessCheck.hasAccess) {
+      throw { status: 403, message: accessCheck.message };
+    }
+
+    const enrollment = accessCheck.enrollment;
+    const isCompleted = enrollment.progressPercent >= 100;
+
+    // Get course with full content
+    const course = await Course.findByPk(Number(courseId));
+    if (!course) {
+      throw { status: 404, message: 'Không tìm thấy khóa học' };
+    }
+
+    // Get chapters with lectures
+    const chapters = await Chapter.findAll({
+      where: { courseId: Number(courseId) },
+      include: [
+        { model: Lecture, as: 'lectures' },
+        {
+          model: Quiz,
+          as: 'quizzes',
+          where: { status: 'published' },
+          required: false,
+        },
+      ],
+      order: [
+        ['order', 'ASC'],
+        ['lectures', 'order', 'ASC'],
+      ],
+    });
+
+    // Format chapters with full video URLs (no sanitization for enrolled students)
+    const formattedChapters = chapters.map((chapter) => {
+      const chapterData = chapter.get({ plain: true });
+      if (chapterData.lectures) {
+        chapterData.lectures = chapterData.lectures.map((lecture) => ({
+          ...lecture,
+          videoUrl: lecture.contentUrl,
+          fileUrl: lecture.contentUrl,
+          attachments: (() => {
+            if (!lecture.attachments) return [];
+            if (Array.isArray(lecture.attachments)) return lecture.attachments;
+            try {
+              const parsed = JSON.parse(String(lecture.attachments));
+              return Array.isArray(parsed) ? parsed : [];
+            } catch {
+              return [];
+            }
+          })(),
+        }));
+      }
+      return chapterData;
+    });
+
+    return {
+      course: {
+        id: course.id.toString(),
+        title: course.title,
+        description: course.description,
+        imageUrl: course.imageUrl,
+        level: course.level,
+        price: parseFloat(course.price),
+        // Duration settings
+        durationType: course.durationType,
+        durationValue: course.durationValue,
+        durationUnit: course.durationUnit,
+        renewalDiscountPercent: course.renewalDiscountPercent,
+        gracePeriodDays: course.gracePeriodDays,
+      },
+      chapters: formattedChapters,
+      enrollment: {
+        id: enrollment.id,
+        status: accessCheck.reason, // Use effective status (active, grace_period, etc.)
+        progressPercent: enrollment.progressPercent,
+        expiresAt: enrollment.expiresAt,
+        enrollmentStatus: accessCheck.reason,
+        gracePeriodEndsAt: enrollment.gracePeriodEndsAt,
+        daysRemaining: accessCheck.daysRemaining,
+        needsRenewal: accessCheck.needsRenewal,
+        isCompleted,
+      },
+    };
   }
 
   /**

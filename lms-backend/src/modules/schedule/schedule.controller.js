@@ -1,5 +1,6 @@
 const { validationResult } = require('express-validator');
 const scheduleService = require('./schedule.service');
+const logger = require('../../utils/logger');
 
 /**
  * Handle validation errors
@@ -26,7 +27,7 @@ const handleServiceError = (error, res) => {
       message: error.message,
     });
   }
-  console.error('Lỗi:', error);
+  logger.error('SCHEDULE_CONTROLLER_ERROR', { error: error.message, stack: error.stack });
   return res.status(500).json({
     success: false,
     message: 'Lỗi máy chủ',
@@ -62,7 +63,7 @@ class ScheduleController {
       if (validationError) return;
 
       const { id: userId } = req.user;
-      console.log('[DEBUG] getMySchedule called, userId:', userId, 'query:', req.query);
+      logger.debug('GET_MY_SCHEDULE_REQUEST', { userId, query: req.query });
       const result = await scheduleService.getMySchedule(userId, req.query);
 
       res.json({
@@ -71,7 +72,7 @@ class ScheduleController {
         data: result,
       });
     } catch (error) {
-      console.error('[DEBUG] getMySchedule error:', error);
+      logger.error('GET_MY_SCHEDULE_ERROR', { userId: req.user?.id, error: error.message, stack: error.stack });
       handleServiceError(error, res);
     }
   }

@@ -97,6 +97,40 @@ module.exports = (sequelize) => {
       type: DataTypes.STRING,
       allowNull: true,
     },
+    // Duration fields for course expiration system
+    durationType: {
+      type: DataTypes.ENUM('lifetime', 'fixed', 'subscription'),
+      field: 'duration_type',
+      defaultValue: 'lifetime',
+      comment: 'lifetime: unlimited access, fixed: expires after duration, subscription: auto-renew',
+    },
+    durationValue: {
+      type: DataTypes.INTEGER,
+      field: 'duration_value',
+      allowNull: true,
+      validate: { min: 1, max: 999 },
+      comment: 'Duration number (e.g., 6 for 6 months)',
+    },
+    durationUnit: {
+      type: DataTypes.ENUM('days', 'months', 'years'),
+      field: 'duration_unit',
+      allowNull: true,
+      comment: 'Unit for durationValue',
+    },
+    renewalDiscountPercent: {
+      type: DataTypes.INTEGER,
+      field: 'renewal_discount_percent',
+      defaultValue: 0,
+      validate: { min: 0, max: 100 },
+      comment: 'Discount percentage for course renewal (0-100)',
+    },
+    gracePeriodDays: {
+      type: DataTypes.INTEGER,
+      field: 'grace_period_days',
+      defaultValue: 7,
+      validate: { min: 0, max: 30 },
+      comment: 'Grace period after expiration (days)',
+    },
     willLearn: {
       type: DataTypes.JSON,
       defaultValue: [],
@@ -112,6 +146,15 @@ module.exports = (sequelize) => {
     lastUpdated: {
       type: DataTypes.DATE,
       field: 'updated_at',
+    },
+    createdBy: {
+      type: DataTypes.INTEGER,
+      allowNull: true,
+      field: 'created_by',
+      references: {
+        model: 'users',
+        key: 'id',
+      },
     },
   }, {
     tableName: 'courses',

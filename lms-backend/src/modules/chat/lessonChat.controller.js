@@ -9,12 +9,11 @@ function emitChatMessage(chatId, event, message) {
   try {
     const io = getIO();
     const roomName = `lesson_${chatId}`;
-    console.log(`[Socket] Emitting ${event} to room ${roomName}`, message?.id || message);
+    logger.debug('SOCKET_EMIT_ATTEMPT', { chatId, event, roomName, messageId: message?.id });
     io.to(roomName).emit(event, message);
-    console.log(`[Socket] Emitted successfully`);
+    logger.debug('SOCKET_EMIT_SUCCESS', { chatId, event, roomName });
   } catch (err) {
     logger.error('SOCKET_EMIT_ERROR', { error: err.message, chatId, event, stack: err.stack });
-    console.error('[Socket] Emit failed:', err.message);
   }
 }
 
@@ -31,6 +30,9 @@ class LessonChatController {
       const { lessonId } = req.params;
       const { courseId } = req.query;
       const userId = req.user?.id;
+      const userRole = req.user?.role;
+
+      await lessonChatService.assertLessonAccessByLessonId(lessonId, userId, userRole);
 
       const chat = await lessonChatService.getOrCreateChat(lessonId, courseId);
       
@@ -73,17 +75,20 @@ class LessonChatController {
       const { chatId } = req.params;
       const { content, parentId } = req.body;
       const userId = req.user?.id;
+      const userRole = req.user?.role;
       const senderType = req.user?.role === 'admin' ? 'admin' : 
                         req.user?.role === 'teacher' ? 'teacher' : 'student';
 
-      console.log(`[Chat API] Sending message to chatId: ${chatId}, userId: ${userId}`);
+      await lessonChatService.assertLessonAccessByChatId(chatId, userId, userRole);
+
+      logger.info('CHAT_MESSAGE_SEND_ATTEMPT', { chatId, userId, senderType });
 
       const result = await lessonChatService.sendMessage(chatId, userId, content, {
         parentId,
         senderType,
       });
 
-      console.log(`[Chat API] Message saved, emitting socket to room lesson_${chatId}`);
+      logger.debug('CHAT_MESSAGE_SAVED_EMIT_SOCKET', { chatId, messageId: result.message?.id });
 
       // Format message with sender object for socket - convert to plain object
       const user = req.user;
@@ -103,7 +108,7 @@ class LessonChatController {
 
       // Emit AI response if available
       if (result.aiResponse) {
-        console.log(`[Chat API] Emitting AI response`);
+        logger.debug('CHAT_AI_RESPONSE_EMIT', { chatId, aiMessageId: result.aiResponse?.id });
         const aiData = result.aiResponse.toJSON ? result.aiResponse.toJSON() : result.aiResponse;
         const aiMessageWithSender = {
           ...aiData,

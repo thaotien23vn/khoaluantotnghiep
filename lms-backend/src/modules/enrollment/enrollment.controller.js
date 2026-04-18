@@ -146,6 +146,71 @@ class EnrollmentController {
       handleServiceError(error, res);
     }
   }
+
+  /**
+   * Get expiring enrollments (renewal reminders)
+   */
+  async getExpiringEnrollments(req, res) {
+    try {
+      const { id: userId } = req.user;
+      const daysThreshold = parseInt(req.query.days) || 7;
+      const result = await enrollmentService.getExpiringEnrollments(userId, daysThreshold);
+      
+      res.json({
+        success: true,
+        message: `Danh sách khóa học sắp hết hạn (trong ${daysThreshold} ngày)`,
+        data: result,
+      });
+    } catch (error) {
+      handleServiceError(error, res);
+    }
+  }
+
+  /**
+   * Get renewal price for an enrollment
+   */
+  async getRenewalPrice(req, res) {
+    try {
+      const { id } = req.params;
+      const months = parseFloat(req.query.months) || 1; // Support fractional months (0.25 = 1 week)
+      const result = await enrollmentService.getRenewalPrice(id, months);
+      
+      res.json({
+        success: true,
+        data: result,
+      });
+    } catch (error) {
+      handleServiceError(error, res);
+    }
+  }
+
+  /**
+   * Renew enrollment
+   */
+  async renewEnrollment(req, res) {
+    try {
+      const { id } = req.params;
+      const { id: userId } = req.user;
+      const { months, paymentId } = req.body;
+      
+      if (!months || months < 1 || months > 24) {
+        return res.status(400).json({
+          success: false,
+          message: 'Thời gian gia hạn phải từ 1-24 tháng',
+        });
+      }
+      
+      const result = await enrollmentService.renewEnrollment(userId, id, months, paymentId);
+      
+      res.json({
+        success: true,
+        message: `Gia hạn khóa học thành công thêm ${months} tháng`,
+        data: result,
+      });
+    } catch (error) {
+      handleServiceError(error, res);
+    }
+  }
 }
 
 module.exports = new EnrollmentController();

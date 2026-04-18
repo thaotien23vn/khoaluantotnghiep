@@ -297,6 +297,26 @@ class CourseController {
       handleServiceError(error, res);
     }
   }
+
+  /**
+   * Get enrolled course content for students (with full video URLs)
+   */
+  async getEnrolledCourseContent(req, res) {
+    try {
+      const validationError = handleValidationErrors(req, res);
+      if (validationError) return;
+
+      const { courseId } = req.params;
+      const { id: userId } = req.user;
+      const result = await courseService.getEnrolledCourseContent(courseId, userId);
+      res.json({
+        success: true,
+        data: result,
+      });
+    } catch (error) {
+      handleServiceError(error, res);
+    }
+  }
 }
 
 module.exports = new CourseController();

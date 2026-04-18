@@ -1,6 +1,7 @@
 const { validationResult } = require('express-validator');
 const notificationService = require('./notification.service');
 const NotificationScheduler = require('./notification.scheduler');
+const logger = require('../../utils/logger');
 
 /**
  * Handle validation errors
@@ -21,7 +22,7 @@ const handleValidationErrors = (req, res) => {
  * Handle service errors
  */
 const handleServiceError = (error, res) => {
-  console.error('Notification error:', error);
+  logger.error('NOTIFICATION_CONTROLLER_ERROR', { error: error.message, stack: error.stack });
   
   // Handle specific database errors with user-friendly messages
   if (error.name === 'SequelizeForeignKeyConstraintError') {
@@ -147,17 +148,21 @@ class NotificationController {
 
       const { userIds, title, message, type } = req.body;
       
-      console.log(`[DEBUG] Sending notification to users: ${userIds.join(', ')}`);
-      console.log(`[DEBUG] Notification data:`, { title, message, type });
+      logger.info('ADMIN_SEND_NOTIFICATION_REQUEST', {
+        userCount: userIds.length,
+        type,
+      });
       
       const notifications = await Promise.all(
         userIds.map(userId => {
-          console.log(`[DEBUG] Creating notification for userId: ${userId}`);
           return notificationService.createNotification({ userId, title, message, type });
         })
       );
       
-      console.log(`[DEBUG] Successfully created ${notifications.length} notifications`);
+      logger.info('ADMIN_SEND_NOTIFICATION_COMPLETED', {
+        requestedUsers: userIds.length,
+        createdNotifications: notifications.length,
+      });
       
       res.status(201).json({
         success: true,

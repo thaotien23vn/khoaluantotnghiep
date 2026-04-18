@@ -1,6 +1,5 @@
 const request = require('supertest');
 const app = require('../../app');
-const db = require('../../models');
 const { loginByRole } = require('../testAuth');
 
 // Mock AI services để tránh timeout
@@ -19,13 +18,19 @@ jest.mock('../../services/aiRag.service', () => ({
 describe('AI Tutor Flow Integration Test', () => {
   let studentToken;
   let teacherToken;
+  let adminToken;
   let testCourse;
+  let testChapter;
   let testLecture;
   let conversationId;
+  const createdCourseIds = [];
+  const createdChapterIds = [];
+  const createdLectureIds = [];
 
   beforeAll(async () => {
     studentToken = await loginByRole('student');
     teacherToken = await loginByRole('teacher');
+    adminToken = await loginByRole('admin');
 
     // 1. Create course and lecture
     const courseRes = await request(app)
@@ -36,40 +41,56 @@ describe('AI Tutor Flow Integration Test', () => {
         description: 'Testing AI tutor flow',
         price: 0
       });
+    expect(courseRes.status).toBe(201);
     testCourse = courseRes.body.data.course;
+    createdCourseIds.push(testCourse.id);
 
-    // Publish the course
-    await request(app)
+    // Publish requires admin role in current codebase.
+    const publishRes = await request(app)
       .put(`/api/teacher/courses/${testCourse.id}/publish`)
-      .set('Authorization', `Bearer ${teacherToken}`)
+      .set('Authorization', `Bearer ${adminToken}`)
       .send({ published: true });
+    expect(publishRes.status).toBe(200);
 
     const chapterRes = await request(app)
       .post(`/api/teacher/chapters`)
       .set('Authorization', `Bearer ${teacherToken}`)
       .send({ courseId: testCourse.id, title: 'AI Chapter', order: 1 });
-    const testChapter = chapterRes.body.data.chapter;
+    expect(chapterRes.status).toBe(201);
+    testChapter = chapterRes.body.data.chapter;
+    createdChapterIds.push(testChapter.id);
 
     const lectureRes = await request(app)
       .post(`/api/teacher/chapters/${testChapter.id}/lectures`)
       .set('Authorization', `Bearer ${teacherToken}`)
       .send({ title: 'AI Lecture', content: 'React hooks are functions that let you "hook into" React state and lifecycle features from function components.', type: 'text', order: 1 });
+    expect(lectureRes.status).toBe(201);
     testLecture = lectureRes.body.data.lecture;
+    createdLectureIds.push(testLecture.id);
 
     // 2. Student enrolls
-    await request(app)
+    const enrollRes = await request(app)
       .post(`/api/student/enroll/${testCourse.id}`)
       .set('Authorization', `Bearer ${studentToken}`);
+    expect(enrollRes.status).toBe(201);
 
     // 3. Ingest lecture for AI (Teacher)
-    // Note: In real test environment, this might be mocked or use a test AI provider
-    await request(app)
+    const ingestRes = await request(app)
       .post(`/api/teacher/ai/ingest/lecture/${testLecture.id}`)
       .set('Authorization', `Bearer ${teacherToken}`);
+    expect(ingestRes.status).toBe(200);
   });
 
-  it('should allow student to start a conversation and ask questions', async () => {
-    // 1. Create conversation
+  afterAll(async () => {
+    const db = require('../../models');
+    const { Lecture, Chapter, Course, Enrollment } = db.models;
+    await Enrollment.destroy({ where: { courseId: createdCourseIds } });
+    await Lecture.destroy({ where: { id: createdLectureIds } });
+    await Chapter.destroy({ where: { id: createdChapterIds } });
+    await Course.destroy({ where: { id: createdCourseIds } });
+  });
+
+  it('creates conversation for enrolled student', async () => {
     const convRes = await request(app)
       .post('/api/student/ai/conversations')
       .set('Authorization', `Bearer ${studentToken}`)
@@ -82,8 +103,10 @@ describe('AI Tutor Flow Integration Test', () => {
     expect(convRes.statusCode).toBe(201);
     expect(convRes.body.success).toBe(true);
     conversationId = convRes.body.data.conversation.id;
+  });
 
-    // 2. Send message (may return 201 on success or 500/503 if AI service not configured)
+  it('sends message and gets AI answer for created conversation', async () => {
+    expect(conversationId).toBeTruthy();
     const msgRes = await request(app)
       .post(`/api/student/ai/conversations/${conversationId}/messages`)
       .set('Authorization', `Bearer ${studentToken}`)
@@ -91,15 +114,12 @@ describe('AI Tutor Flow Integration Test', () => {
         message: 'What are React hooks?'
       });
 
-    // If AI service is configured: 201 with answer, otherwise may return 500/503
-    expect([201, 500, 503]).toContain(msgRes.statusCode);
-    if (msgRes.statusCode === 201) {
-      expect(msgRes.body.success).toBe(true);
-      expect(msgRes.body.data).toHaveProperty('answer');
-    }
-  }, 15000);
+    expect(msgRes.statusCode).toBe(201);
+    expect(msgRes.body.success).toBe(true);
+    expect(msgRes.body.data).toHaveProperty('answer');
+  });
 
-  it('should deny AI access if student is not enrolled', async () => {
+  it('denies AI conversation for unenrolled student', async () => {
     // Create a new course but DON'T enroll the student
     const newCourseRes = await request(app)
       .post('/api/teacher/courses')
@@ -109,26 +129,32 @@ describe('AI Tutor Flow Integration Test', () => {
         description: 'Testing AI access denial',
         price: 0
       });
+    expect(newCourseRes.status).toBe(201);
     const newCourse = newCourseRes.body.data.course;
+    createdCourseIds.push(newCourse.id);
 
-    // Publish the course
-    await request(app)
+    const publishRes = await request(app)
       .put(`/api/teacher/courses/${newCourse.id}/publish`)
-      .set('Authorization', `Bearer ${teacherToken}`)
+      .set('Authorization', `Bearer ${adminToken}`)
       .send({ published: true });
+    expect(publishRes.status).toBe(200);
 
     // Create chapter and lecture for the new course
     const chapterRes = await request(app)
       .post(`/api/teacher/chapters`)
       .set('Authorization', `Bearer ${teacherToken}`)
       .send({ courseId: newCourse.id, title: 'Chapter 1', order: 1 });
+    expect(chapterRes.status).toBe(201);
     const chapter = chapterRes.body.data.chapter;
+    createdChapterIds.push(chapter.id);
 
     const lectureRes = await request(app)
       .post(`/api/teacher/chapters/${chapter.id}/lectures`)
       .set('Authorization', `Bearer ${teacherToken}`)
       .send({ title: 'Test Lecture', content: 'Test content', type: 'text', order: 1 });
+    expect(lectureRes.status).toBe(201);
     const lecture = lectureRes.body.data.lecture;
+    createdLectureIds.push(lecture.id);
     
     // Try to create AI conversation for unenrolled course
     const convRes = await request(app)
@@ -142,5 +168,15 @@ describe('AI Tutor Flow Integration Test', () => {
 
     expect(convRes.statusCode).toBe(403);
     expect(convRes.body.success).toBe(false);
+  });
+
+  it('validates message payload for existing conversation', async () => {
+    const res = await request(app)
+      .post(`/api/student/ai/conversations/${conversationId}/messages`)
+      .set('Authorization', `Bearer ${studentToken}`)
+      .send({ message: '' });
+
+    expect(res.statusCode).toBe(400);
+    expect(res.body.success).toBe(false);
   });
 });

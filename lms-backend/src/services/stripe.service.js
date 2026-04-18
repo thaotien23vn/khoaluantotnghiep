@@ -4,6 +4,8 @@
 
 const db = require('../models');
 const cartService = require('../modules/cart/cart.service');
+const courseAggregatesService = require('./courseAggregates.service');
+const logger = require('../utils/logger');
 
 const { Payment, Course, Enrollment } = db.models;
 
@@ -27,17 +29,103 @@ if (process.env.STRIPE_SECRET_KEY) {
       constructEvent: () => { throw new Error('Stripe not configured'); },
     },
   };
-  console.warn('STRIPE_SECRET_KEY not set - Stripe features disabled');
+  logger.warn('STRIPE_SECRET_KEY_NOT_SET_STRIPE_DISABLED');
 }
 
 class StripeService {
+  _calculateExpiryDate(startDate, value, unit) {
+    const date = new Date(startDate);
+    switch (unit) {
+      case 'days':
+        date.setDate(date.getDate() + value);
+        break;
+      case 'years':
+        date.setFullYear(date.getFullYear() + value);
+        break;
+      case 'months':
+      default:
+        // Handle fractional months (0.25 = 1 week, 0.5 = 2 weeks)
+        // Average month = 30.44 days (365.25 / 12)
+        const totalDays = Math.round(value * 30.44);
+        date.setDate(date.getDate() + totalDays);
+        break;
+    }
+    return date;
+  }
+
+  _addDays(date, days) {
+    const result = new Date(date);
+    result.setDate(result.getDate() + days);
+    return result;
+  }
+
+  async _renewEnrollmentAfterPayment(userId, courseId, renewalMonths, enrollmentId = null) {
+    const uid = parseInt(userId, 10);
+    const cid = parseInt(courseId, 10);
+    const months = Number(renewalMonths);
+    if (!Number.isFinite(months) || months <= 0) return null;
+
+    const where = enrollmentId
+      ? { id: Number(enrollmentId), userId: uid, courseId: cid }
+      : { userId: uid, courseId: cid };
+
+    const enrollment = await Enrollment.findOne({
+      where,
+      include: [{ model: Course, as: 'Course', attributes: ['id', 'gracePeriodDays'] }],
+    });
+    if (!enrollment) {
+      throw { status: 404, message: 'Không tìm thấy ghi danh để gia hạn' };
+    }
+
+    let startFrom = new Date();
+    if (enrollment.expiresAt && enrollment.expiresAt > startFrom) {
+      startFrom = enrollment.expiresAt;
+    }
+
+    const newExpiresAt = this._calculateExpiryDate(startFrom, months, 'months');
+    const graceDays = Number(enrollment.Course?.gracePeriodDays || 7);
+    const newGracePeriodEndsAt = this._addDays(newExpiresAt, graceDays);
+
+    enrollment.expiresAt = newExpiresAt;
+    enrollment.gracePeriodEndsAt = newGracePeriodEndsAt;
+    enrollment.renewalCount = Number(enrollment.renewalCount || 0) + 1;
+    enrollment.lastRenewedAt = new Date();
+    enrollment.enrollmentStatus = 'active';
+    await enrollment.save();
+
+    return enrollment;
+  }
+
+  async _ensureEnrollment(userId, courseId) {
+    const uid = parseInt(userId, 10);
+    const cid = parseInt(courseId, 10);
+
+    const existing = await Enrollment.findOne({ where: { userId: uid, courseId: cid } });
+    if (existing) return existing;
+
+    try {
+      return await Enrollment.create({
+        userId: uid,
+        courseId: cid,
+        status: 'enrolled',
+        progressPercent: 0,
+      });
+    } catch (err) {
+      if (err?.name === 'SequelizeUniqueConstraintError') {
+        const afterRace = await Enrollment.findOne({ where: { userId: uid, courseId: cid } });
+        if (afterRace) return afterRace;
+      }
+      throw err;
+    }
+  }
+
   /**
    * Create Stripe Payment Intent for a course
    * @param {number} userId - User ID
    * @param {number} courseId - Course ID
    * @returns {Promise<Object>} - Payment intent and client secret
    */
-  async createPaymentIntent(userId, courseId) {
+  async createPaymentIntent(userId, courseId, isRenewal = false) {
     // Check course exists and published
     const course = await Course.findByPk(courseId);
     if (!course) {
@@ -48,15 +136,17 @@ class StripeService {
       throw { status: 400, message: 'Khóa học chưa được xuất bản' };
     }
 
-    // Check if already enrolled
-    const existingEnrollment = await Enrollment.findOne({
-      where: { userId, courseId },
-    });
-    if (existingEnrollment) {
-      throw { status: 409, message: 'Bạn đã đăng ký khóa học này rồi' };
+    // Check if already enrolled (skip for renewal)
+    if (!isRenewal) {
+      const existingEnrollment = await Enrollment.findOne({
+        where: { userId, courseId },
+      });
+      if (existingEnrollment) {
+        throw { status: 409, message: 'Bạn đã đăng ký khóa học này rồi' };
+      }
     }
 
-    const price = Math.round(Number(course.price || 0) * 100); // Convert to cents
+    const price = Math.round(Number(course.price || 0)); // VND is zero-decimal
 
     if (price === 0) {
       throw { status: 400, message: 'Khóa học miễn phí, không cần thanh toán' };
@@ -84,7 +174,7 @@ class StripeService {
     // Create Stripe Payment Intent
     const paymentIntent = await stripe.paymentIntents.create({
       amount: price,
-      currency: 'usd',
+      currency: 'vnd',
       automatic_payment_methods: { enabled: true },
       metadata: {
         userId: String(userId),
@@ -97,8 +187,8 @@ class StripeService {
     const payment = await Payment.create({
       userId,
       courseId,
-      amount: price / 100,
-      currency: 'USD',
+      amount: price,
+      currency: 'VND',
       provider: 'stripe',
       providerTxn: paymentIntent.id,
       status: 'pending',
@@ -173,7 +263,11 @@ class StripeService {
       process.env.STRIPE_WEBHOOK_SECRET
     );
 
+    logger.info('STRIPE_WEBHOOK_EVENT_RECEIVED', { eventType: event.type });
+
     switch (event.type) {
+      case 'checkout.session.completed':
+        return this.handleCheckoutCompleted(event.data.object);
       case 'payment_intent.succeeded':
         return this._handlePaymentSuccess(event.data.object);
       case 'payment_intent.payment_failed':
@@ -199,6 +293,11 @@ class StripeService {
       throw { status: 404, message: 'Không tìm thấy giao dịch' };
     }
 
+    // Idempotency: do not re-process already completed payments
+    if (payment.status === 'completed') {
+      return { success: true, payment, event: 'payment_intent.succeeded', alreadyProcessed: true };
+    }
+
     payment.status = 'completed';
     payment.paymentDetails = {
       ...payment.paymentDetails,
@@ -207,18 +306,19 @@ class StripeService {
     };
     await payment.save();
 
-    // Create enrollment
-    const existingEnrollment = await Enrollment.findOne({
-      where: { userId, courseId },
-    });
+    // Create enrollment (unique-safe / race-safe)
+    try {
+      await this._ensureEnrollment(userId, courseId);
+    } catch (err) {
+      if (err?.name !== 'SequelizeUniqueConstraintError') {
+        throw err;
+      }
+    }
 
-    if (!existingEnrollment) {
-      await Enrollment.create({
-        userId: parseInt(userId),
-        courseId: parseInt(courseId),
-        status: 'enrolled',
-        progressPercent: 0,
-      });
+    try {
+      await courseAggregatesService.recomputeCourseStudents(parseInt(courseId, 10));
+    } catch (aggErr) {
+      logger.warn('RECOMPUTE_COURSE_STUDENTS_AFTER_STRIPE_WEBHOOK_FAILED', { error: aggErr.message });
     }
 
     // Remove from cart
@@ -265,7 +365,16 @@ class StripeService {
    * @param {string} cancelUrl - Redirect URL after cancel
    * @returns {Promise<Object>} - Checkout session URL
    */
-  async createCheckoutSession(userId, courseId, successUrl, cancelUrl) {
+  async createCheckoutSession(
+    userId,
+    courseId,
+    successUrl,
+    cancelUrl,
+    isRenewal = false,
+    renewalPrice = null,
+    enrollmentId = null,
+    renewalMonths = null
+  ) {
     // Check course exists and published
     const course = await Course.findByPk(courseId);
     if (!course) {
@@ -276,15 +385,20 @@ class StripeService {
       throw { status: 400, message: 'Khóa học chưa được xuất bản' };
     }
 
-    // Check if already enrolled
-    const existingEnrollment = await Enrollment.findOne({
-      where: { userId, courseId },
-    });
-    if (existingEnrollment) {
-      throw { status: 409, message: 'Bạn đã đăng ký khóa học này rồi' };
+    // Check if already enrolled (skip for renewal)
+    if (!isRenewal) {
+      const existingEnrollment = await Enrollment.findOne({
+        where: { userId, courseId },
+      });
+      if (existingEnrollment) {
+        throw { status: 409, message: 'Bạn đã đăng ký khóa học này rồi' };
+      }
     }
+    
+    logger.info('STRIPE_CHECKOUT_SESSION_CREATE', { userId, courseId, isRenewal, renewalPrice });
 
-    const price = Number(course.price || 0);
+    // Use renewal price if provided, otherwise use full course price
+    const price = renewalPrice && renewalPrice > 0 ? Number(renewalPrice) : Number(course.price || 0);
 
     if (price === 0) {
       throw { status: 400, message: 'Khóa học miễn phí, không cần thanh toán' };
@@ -296,12 +410,12 @@ class StripeService {
       line_items: [
         {
           price_data: {
-            currency: 'usd',
+            currency: 'vnd',
             product_data: {
               name: course.title,
               description: course.description || 'Khóa học trực tuyến',
             },
-            unit_amount: Math.round(price * 100), // cents
+            unit_amount: Math.round(price), // VND is zero-decimal
           },
           quantity: 1,
         },
@@ -313,6 +427,9 @@ class StripeService {
         userId: String(userId),
         courseId: String(courseId),
         source: 'stripe_checkout',
+        isRenewal: isRenewal ? 'true' : 'false',
+        enrollmentId: enrollmentId ? String(enrollmentId) : '',
+        renewalMonths: renewalMonths != null ? String(renewalMonths) : '',
       },
     });
 
@@ -321,14 +438,25 @@ class StripeService {
       userId,
       courseId,
       amount: price,
-      currency: 'USD',
+      currency: 'VND',
       provider: 'stripe',
       providerTxn: session.id,
       status: 'pending',
+      paymentMethod: 'card',
       paymentDetails: {
         initiatedAt: new Date().toISOString(),
         sessionId: session.id,
         type: 'checkout_session',
+        // Include renewal metadata for proper renewal handling
+        ...(isRenewal ? {
+          isRenewal: true,
+          renewalMonths: renewalMonths,
+          enrollmentId,
+          renewalPrice,
+          source: 'stripe_renewal',
+        } : {
+          source: 'stripe_checkout',
+        }),
       },
     });
 
@@ -357,12 +485,12 @@ class StripeService {
     // Build line items from cart
     const lineItems = cartData.items.map(item => ({
       price_data: {
-        currency: 'usd',
+        currency: 'vnd',
         product_data: {
           name: item.course?.title || 'Khóa học',
           description: item.notes || 'Khóa học trực tuyến',
         },
-        unit_amount: Math.round(Number(item.course?.price || 0) * 100),
+        unit_amount: Math.round(Number(item.course?.price || 0)),
       },
       quantity: 1,
     }));
@@ -388,7 +516,7 @@ class StripeService {
         userId,
         courseId: item.courseId,
         amount: item.course?.price || 0,
-        currency: 'USD',
+        currency: 'VND',
         provider: 'stripe',
         providerTxn: session.id,
         status: 'pending',
@@ -415,10 +543,9 @@ class StripeService {
    * @param {Object} session - Checkout session object
    */
   async handleCheckoutCompleted(session) {
-    console.log('handleCheckoutCompleted called with session:', {
-      id: session.id,
-      payment_status: session.payment_status,
-      metadata: session.metadata,
+    logger.info('STRIPE_CHECKOUT_COMPLETED_HANDLER_CALLED', {
+      sessionId: session.id,
+      paymentStatus: session.payment_status,
     });
 
     // Verify payment status
@@ -426,22 +553,32 @@ class StripeService {
       throw { status: 400, message: `Payment not completed. Status: ${session.payment_status}` };
     }
 
-    const { userId, courseId, courseIds } = session.metadata;
-    console.log('Extracted metadata:', { userId, courseId, courseIds });
+    const { userId, courseId, courseIds, isRenewal, enrollmentId, renewalMonths } = session.metadata;
+    logger.debug('STRIPE_CHECKOUT_METADATA_EXTRACTED', {
+      userId,
+      courseId,
+      hasCourseIds: !!courseIds,
+      isRenewal,
+      enrollmentId,
+      renewalMonths,
+    });
 
     // Handle cart payment (multiple courses)
     if (courseIds) {
       const courseIdList = JSON.parse(courseIds);
-      console.log('Processing cart payment for courses:', courseIdList);
+      logger.info('STRIPE_CART_CHECKOUT_PROCESSING', { sessionId: session.id, itemCount: courseIdList.length });
       
       // Find all payments with this session ID
       const payments = await Payment.findAll({
         where: { providerTxn: session.id },
       });
       
-      console.log('Found payments:', payments.length);
+      logger.debug('STRIPE_CART_PAYMENTS_FOUND', { sessionId: session.id, count: payments.length });
       
       for (const payment of payments) {
+        if (payment.status === 'completed') {
+          continue;
+        }
         payment.status = 'completed';
         payment.paymentDetails = {
           ...payment.paymentDetails,
@@ -450,18 +587,18 @@ class StripeService {
         };
         await payment.save();
         
-        // Create enrollment
-        const existingEnrollment = await Enrollment.findOne({
-          where: { userId: parseInt(userId), courseId: payment.courseId },
-        });
-        
-        if (!existingEnrollment) {
-          await Enrollment.create({
-            userId: parseInt(userId),
-            courseId: payment.courseId,
-            status: 'enrolled',
-            progressPercent: 0,
-          });
+        // Create enrollment (unique-safe / race-safe)
+        try {
+          await this._ensureEnrollment(userId, payment.courseId);
+        } catch (err) {
+          if (err?.name !== 'SequelizeUniqueConstraintError') {
+            throw err;
+          }
+        }
+        try {
+          await courseAggregatesService.recomputeCourseStudents(payment.courseId);
+        } catch (aggErr) {
+          logger.warn('RECOMPUTE_COURSE_STUDENTS_AFTER_STRIPE_CART_CHECKOUT_FAILED', { error: aggErr.message });
         }
         
         // Remove from cart
@@ -477,42 +614,69 @@ class StripeService {
       where: { providerTxn: session.id },
     });
 
-    console.log('Found payment:', payment ? { id: payment.id, status: payment.status } : 'NOT FOUND');
+    logger.debug('STRIPE_SINGLE_PAYMENT_FOUND', {
+      sessionId: session.id,
+      found: !!payment,
+      paymentId: payment?.id,
+      status: payment?.status,
+    });
 
     if (!payment) {
       throw { status: 404, message: 'Không tìm thấy giao dịch với session ID: ' + session.id };
     }
 
-    // Update payment status
-    payment.status = 'completed';
-    payment.paymentDetails = {
-      ...payment.paymentDetails,
-      completedAt: new Date().toISOString(),
-      receiptUrl: session.receipt_url,
-    };
-    await payment.save();
-    console.log('Payment updated to completed:', payment.id);
+    // For renewal checkout, extend enrollment validity. Otherwise enroll new learner.
+    const renewalMode =
+      isRenewal === 'true' ||
+      payment.paymentDetails?.isRenewal === true ||
+      session.metadata?.isRenewal === 'true';
+    const monthsFromPayment = Number(payment.paymentDetails?.renewalMonths);
+    const monthsFromMetadata = Number(renewalMonths);
+    const resolvedMonths = Number.isFinite(monthsFromPayment) && monthsFromPayment > 0
+      ? monthsFromPayment
+      : monthsFromMetadata;
+    const resolvedEnrollmentId = payment.paymentDetails?.enrollmentId || enrollmentId || null;
+    const accessAppliedAt = payment.paymentDetails?.accessAppliedAt;
 
-    // Create enrollment
-    const existingEnrollment = await Enrollment.findOne({
-      where: { userId: parseInt(userId), courseId: parseInt(courseId) },
-    });
+    // Idempotency for payment state.
+    if (payment.status !== 'completed') {
+      payment.status = 'completed';
+      payment.paymentDetails = {
+        ...payment.paymentDetails,
+        completedAt: new Date().toISOString(),
+        receiptUrl: session.receipt_url,
+      };
+      await payment.save();
+      logger.info('STRIPE_PAYMENT_MARKED_COMPLETED', { paymentId: payment.id, sessionId: session.id });
+    }
 
-    console.log('Existing enrollment:', existingEnrollment ? 'YES' : 'NO');
-
-    if (!existingEnrollment) {
-      await Enrollment.create({
-        userId: parseInt(userId),
-        courseId: parseInt(courseId),
-        status: 'enrolled',
-        progressPercent: 0,
-      });
-      console.log('Enrollment created for user', userId, 'course', courseId);
+    // Idempotency for access application (renew/enroll).
+    if (!accessAppliedAt) {
+      if (renewalMode && Number.isFinite(resolvedMonths) && resolvedMonths > 0) {
+        await this._renewEnrollmentAfterPayment(userId, courseId, resolvedMonths, resolvedEnrollmentId);
+      } else {
+        try {
+          await this._ensureEnrollment(userId, courseId);
+        } catch (err) {
+          if (err?.name !== 'SequelizeUniqueConstraintError') {
+            throw err;
+          }
+        }
+      }
+      payment.paymentDetails = {
+        ...payment.paymentDetails,
+        accessAppliedAt: new Date().toISOString(),
+      };
+      await payment.save();
+    }
+    try {
+      await courseAggregatesService.recomputeCourseStudents(parseInt(courseId, 10));
+    } catch (aggErr) {
+      logger.warn('RECOMPUTE_COURSE_STUDENTS_AFTER_STRIPE_CHECKOUT_FAILED', { error: aggErr.message });
     }
 
     // Remove from cart
     await cartService.removeCourseFromCart(parseInt(userId), parseInt(courseId));
-    console.log('Course removed from cart');
 
     return { success: true, payment };
   }

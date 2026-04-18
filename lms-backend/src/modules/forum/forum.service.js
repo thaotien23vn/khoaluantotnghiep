@@ -1,8 +1,9 @@
 const { Op, literal } = require('sequelize');
 const db = require('../../models');
 const notificationService = require('../notification/notification.service');
+const EnrollmentAccess = require('../enrollment/enrollment.access');
 
-const { ForumTopic, ForumPost, ForumReport, User } = db.models;
+const { ForumTopic, ForumPost, ForumReport, User, Lecture } = db.models;
 
 // Helpers
 const getIO = () => {
@@ -25,6 +26,17 @@ class ForumService {
     if (type) where.type = type;
     if (courseId) where.courseId = Number(courseId);
     if (lectureId) where.lectureId = Number(lectureId);
+
+    // Access check for course-bound topics
+    if (query.userId && query.userRole !== 'admin') {
+      const targetCourseId = courseId || (lectureId ? (await Lecture.findByPk(lectureId))?.chapter?.courseId : null);
+      if (targetCourseId) {
+        const access = await EnrollmentAccess.checkAccess(query.userId, targetCourseId);
+        if (!access.hasAccess) {
+          return { topics: [], meta: { total: 0, page, limit, totalPages: 0 }, message: access.message };
+        }
+      }
+    }
 
     const order = (() => {
       switch (sort) {
@@ -106,6 +118,22 @@ class ForumService {
     if (normalizedType === 'course' && !finalCourseId) throw { status: 400, message: 'courseId không hợp lệ' };
     if (normalizedType === 'lecture' && !finalLectureId) throw { status: 400, message: 'lectureId không hợp lệ' };
 
+    // Enrollment access check
+    let accessCourseId = finalCourseId;
+    if (normalizedType === 'lecture' && finalLectureId) {
+      const lecture = await Lecture.findByPk(finalLectureId, {
+        include: [{ model: db.models.Chapter, as: 'chapter', attributes: ['courseId'] }]
+      });
+      accessCourseId = lecture?.chapter?.courseId || null;
+    }
+
+    if (accessCourseId) {
+      const access = await EnrollmentAccess.checkAccess(userId, accessCourseId);
+      if (!access.hasAccess) {
+        throw { status: 403, message: access.message || 'Bạn không có quyền tham gia diễn đàn này' };
+      }
+    }
+
     const topic = await ForumTopic.create({
       title,
       content,
@@ -126,12 +154,20 @@ class ForumService {
     return { topic: full };
   }
 
-  async getTopicDetails(id) {
+  async getTopicDetails(id, userId, userRole) {
     const topic = await ForumTopic.findByPk(id, {
       include: [{ model: User, as: 'author', attributes: ['id', 'name', 'avatar', 'role'] }],
     });
 
     if (!topic) throw { status: 404, message: 'Không tìm thấy chủ đề' };
+
+    // Access check for course-bound topics
+    if (userRole !== 'admin' && topic.type !== 'global' && topic.courseId) {
+      const access = await EnrollmentAccess.checkAccess(userId, topic.courseId);
+      if (!access.hasAccess) {
+        throw { status: 403, message: access.message || 'Bạn không có quyền xem chủ đề này' };
+      }
+    }
 
     await topic.increment('views');
 
@@ -150,6 +186,14 @@ class ForumService {
     const topic = await ForumTopic.findByPk(topicId);
     if (!topic) throw { status: 404, message: 'Không tìm thấy chủ đề' };
     if (topic.isLocked) throw { status: 403, message: 'Chủ đề đã bị khóa' };
+
+    // Access check
+    if (topic.type !== 'global' && topic.courseId) {
+      const access = await EnrollmentAccess.checkAccess(userId, topic.courseId);
+      if (!access.hasAccess) {
+        throw { status: 403, message: access.message || 'Bạn đã hết hạn quyền tham gia diễn đàn của khóa học này' };
+      }
+    }
 
     if (parentId) {
       const parent = await ForumPost.findOne({ where: { id: parentId, topicId: topic.id } });

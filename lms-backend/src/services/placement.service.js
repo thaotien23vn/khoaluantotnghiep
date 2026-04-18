@@ -6,7 +6,7 @@ const logger = require('../utils/logger');
 const { Op } = require('sequelize');
 const { sequelize } = db;
 
-logger.info('[DEBUG] Sequelize Op import check:', { Op: typeof Op, OpKeys: Op ? Object.keys(Op) : 'undefined' });
+logger.debug('PLACEMENT_SEQUELIZE_OP_CHECK', { opType: typeof Op, opKeys: Op ? Object.keys(Op) : 'undefined' });
 
 const {
   PlacementSession,
@@ -925,7 +925,7 @@ class PlacementService {
     };
     
     const fallbackLevels = getFallbackLevels(userLevelIndex);
-    logger.info('[DEBUG] getSuggestedCourses - fallback levels:', { userLevel: level, fallbackLevels });
+    logger.debug('PLACEMENT_SUGGESTED_COURSES_FALLBACK_LEVELS', { userLevel: level, fallbackLevels });
     
     // Try each level in fallback order
     for (const tryLevel of fallbackLevels) {
@@ -971,7 +971,7 @@ class PlacementService {
             }).sort((a, b) => b.matchScore - a.matchScore);
           }
         } catch (e) {
-          logger.warn('[DEBUG] getSuggestedCourses - weak area search error:', { level: tryLevel, error: e.message });
+          logger.warn('PLACEMENT_SUGGESTED_COURSES_WEAK_AREA_SEARCH_ERROR', { level: tryLevel, error: e.message });
         }
       }
       
@@ -984,7 +984,7 @@ class PlacementService {
         });
         
         if (courses.length > 0) {
-          logger.info('[DEBUG] getSuggestedCourses - found courses at level:', { level: tryLevel, count: courses.length });
+          logger.debug('PLACEMENT_SUGGESTED_COURSES_FOUND_AT_LEVEL', { level: tryLevel, count: courses.length });
           return courses.map(course => ({
             ...course.toJSON(),
             matchScore: tryLevel === courseLevel ? 10 : 5, // Higher score for exact match
@@ -995,12 +995,12 @@ class PlacementService {
           }));
         }
       } catch (e) {
-        logger.warn('[DEBUG] getSuggestedCourses - course search error:', { level: tryLevel, error: e.message });
+        logger.warn('PLACEMENT_SUGGESTED_COURSES_SEARCH_ERROR', { level: tryLevel, error: e.message });
       }
     }
     
     // Ultimate fallback: return any published courses
-    logger.warn('[DEBUG] getSuggestedCourses - no courses at any level, returning all published');
+    logger.warn('PLACEMENT_SUGGESTED_COURSES_NO_LEVEL_MATCH_FALLBACK_ALL');
     const allCourses = await Course.findAll({
       where: { published: true },
       attributes: ['id', 'title', 'description', 'imageUrl', 'level', 'willLearn', 'requirements', 'tags'],
@@ -1102,8 +1102,8 @@ class PlacementService {
 
   async getFromQuestionBank(ability, skillType, questionType = 'multiple_choice', excludeIds = [], limit = 10) {
     // Continuous adaptive: order by difficulty proximity, no range filter
-    logger.info('[DEBUG] getFromQuestionBank - START:', { ability, skillType, questionType, excludeIdsCount: excludeIds.length, limit });
-    logger.info('[DEBUG] getFromQuestionBank - Op check:', { Op: typeof Op, hasBetween: Op ? !!Op.between : false });
+    logger.debug('PLACEMENT_QUESTION_BANK_FETCH_STARTED', { ability, skillType, questionType, excludeIdsCount: excludeIds.length, limit });
+    logger.debug('PLACEMENT_QUESTION_BANK_OP_CHECK', { opType: typeof Op, hasBetween: Op ? !!Op.between : false });
     
     const whereClause = {
       skillType,
@@ -1118,7 +1118,7 @@ class PlacementService {
       [Op.between]: [minDifficulty, maxDifficulty]
     };
     
-    logger.info('[DEBUG] getFromQuestionBank - whereClause:', { 
+    logger.debug('PLACEMENT_QUESTION_BANK_WHERE_CLAUSE', {
       skillType, 
       questionType, 
       isActive: true, 
@@ -1134,18 +1134,18 @@ class PlacementService {
     const totalCount = await PlacementQuestionBank.count({
       where: { skillType, questionType, isActive: true }
     });
-    logger.info('[DEBUG] getFromQuestionBank - total available (no difficulty filter):', { totalCount });
+    logger.debug('PLACEMENT_QUESTION_BANK_TOTAL_AVAILABLE', { totalCount });
     
     // Count with difficulty filter
     const filteredCount = await PlacementQuestionBank.count({
       where: whereClause
     });
-    logger.info('[DEBUG] getFromQuestionBank - filtered count (with difficulty):', { filteredCount });
+    logger.debug('PLACEMENT_QUESTION_BANK_FILTERED_COUNT', { filteredCount });
     
     // If no questions with difficulty filter, try without filter
     let questions;
     if (filteredCount === 0 && totalCount > 0) {
-      logger.info('[DEBUG] getFromQuestionBank - no results with difficulty filter, trying without filter');
+      logger.debug('PLACEMENT_QUESTION_BANK_FALLBACK_WITHOUT_DIFFICULTY_FILTER');
       const whereClauseNoDifficulty = {
         skillType,
         questionType,
@@ -1159,7 +1159,7 @@ class PlacementService {
         order: db.sequelize.literal(`ABS(difficulty_score - ${ability})`),
         limit,
       });
-      logger.info('[DEBUG] getFromQuestionBank - fallback query result:', { foundCount: questions?.length || 0 });
+      logger.debug('PLACEMENT_QUESTION_BANK_FALLBACK_RESULT', { foundCount: questions?.length || 0 });
     } else {
       questions = await PlacementQuestionBank.findAll({
         where: whereClause,
@@ -1168,7 +1168,7 @@ class PlacementService {
       });
     }
 
-    logger.info('[DEBUG] getFromQuestionBank - final result:', { foundCount: questions?.length || 0 });
+    logger.debug('PLACEMENT_QUESTION_BANK_FINAL_RESULT', { foundCount: questions?.length || 0 });
     
     if (questions && questions.length > 0) {
       return questions.map(q => ({

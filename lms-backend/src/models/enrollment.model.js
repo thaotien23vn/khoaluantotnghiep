@@ -31,10 +31,61 @@ module.exports = (sequelize) => {
       field: 'enrolled_at',
       defaultValue: DataTypes.NOW,
     },
+    // Expiration fields for renewal system
+    expiresAt: {
+      type: DataTypes.DATE,
+      field: 'expires_at',
+      allowNull: true,
+      comment: 'Course access expiration date',
+    },
+    gracePeriodEndsAt: {
+      type: DataTypes.DATE,
+      field: 'grace_period_ends_at',
+      allowNull: true,
+      comment: 'End of grace period after expiration',
+    },
+    renewalCount: {
+      type: DataTypes.INTEGER,
+      field: 'renewal_count',
+      defaultValue: 0,
+      comment: 'Number of times enrollment has been renewed',
+    },
+    lastRenewedAt: {
+      type: DataTypes.DATE,
+      field: 'last_renewed_at',
+      allowNull: true,
+      comment: 'Last renewal timestamp',
+    },
+    enrollmentStatus: {
+      type: DataTypes.ENUM('active', 'expired', 'grace_period'),
+      field: 'enrollment_status',
+      defaultValue: 'active',
+      comment: 'Current enrollment status',
+    },
   }, {
     tableName: 'enrollments',
     timestamps: false,
-    // Optional: add unique index in DB manually: UNIQUE (user_id, course_id)
+    indexes: [
+      // Prevent duplicate enrollments and race-condition double-inserts
+      {
+        name: 'enrollments_user_course_unique',
+        unique: true,
+        fields: ['user_id', 'course_id'],
+      },
+      // Indexes for expiration queries
+      {
+        name: 'idx_enrollments_expires_at',
+        fields: ['expires_at'],
+      },
+      {
+        name: 'idx_enrollments_enrollment_status',
+        fields: ['enrollment_status'],
+      },
+      {
+        name: 'idx_enrollments_grace_period',
+        fields: ['grace_period_ends_at'],
+      },
+    ],
   });
 
   return Enrollment;

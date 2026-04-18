@@ -13,7 +13,6 @@ const lessonController = require('../modules/lesson/lesson.controller');
 const paymentController = require('../modules/payment/payment.controller');
 const enrollmentController = require('../modules/enrollment/enrollment.controller');
 const adminController = require('../modules/admin/admin.controller');
-const scheduleController = require('../modules/schedule/schedule.controller');
 const trackingController = require('../modules/tracking/tracking.controller');
 const {
   createCourseValidation,
@@ -39,9 +38,7 @@ const {
 
 const {
   createPaymentValidation,
-  processPaymentValidation,
   getPaymentHistoryValidation,
-  getPaymentDetailValidation,
 } = require('../middlewares/payment.validation');
 
 const {
@@ -53,20 +50,11 @@ const {
   unenrollUserValidation,
   getCourseEnrollmentsValidation: getAdminCourseEnrollmentsValidation,
   getUserEnrollmentsValidation,
-  getReviewsValidation,
   deleteReviewValidation,
   createCategoryValidation,
   updateCategoryValidation,
   deleteCategoryValidation,
 } = require('../modules/admin/admin.validation');
-
-const {
-  getMyScheduleValidation,
-  updateScheduleEventValidation,
-  deleteScheduleEventValidation,
-  listCourseScheduleEventsValidation,
-  createScheduleEventValidation,
-} = require('../modules/schedule/schedule.validation');
 
 const {
   enrollCourseValidation,
@@ -75,16 +63,20 @@ const {
   updateProgressValidation,
 } = require('../modules/enrollment/enrollment.validation');
 
-const router = express.Router();
-
-console.log('[Routes] protected.routes.js loaded, defining routes...');
+// IMPORTANT:
+// This file is mounted at /api/admin, /api/teacher, /api/student.
+// Using a single router causes route shadowing (e.g. /dashboard admin route matches /api/student/dashboard).
+// Split routers by audience to keep identical subpaths safe.
+const adminRouter = express.Router();
+const teacherRouter = express.Router();
+const studentRouter = express.Router();
 
 /**
  * @route   GET /api/admin/dashboard
  * @desc    Admin-only endpoint
  * @access  Private (Admin only)
  */
-router.get(
+adminRouter.get(
   '/dashboard',
   authMiddleware,
   authorizeRole('admin'),
@@ -96,7 +88,7 @@ router.get(
  * @desc    Get revenue by day for last 7 days
  * @access  Private (Admin only)
  */
-router.get(
+adminRouter.get(
   '/revenue-by-day',
   authMiddleware,
   authorizeRole('admin'),
@@ -108,7 +100,7 @@ router.get(
  * @desc    Get top courses by enrollment
  * @access  Private (Admin only)
  */
-router.get(
+adminRouter.get(
   '/top-courses',
   authMiddleware,
   authorizeRole('admin'),
@@ -120,7 +112,7 @@ router.get(
  * @desc    Get payment status counts
  * @access  Private (Admin only)
  */
-router.get(
+adminRouter.get(
   '/payment-status-counts',
   authMiddleware,
   authorizeRole('admin'),
@@ -132,7 +124,7 @@ router.get(
  * @desc    Get all users (Admin only)
  * @access  Private (Admin only)
  */
-router.get(
+adminRouter.get(
   '/users',
   authMiddleware,
   authorizeRole('admin'),
@@ -144,7 +136,7 @@ router.get(
  * @desc    Create a new user (Admin only)
  * @access  Private (Admin only)
  */
-router.post(
+adminRouter.post(
   '/users',
   authMiddleware,
   authorizeRole('admin'),
@@ -153,11 +145,23 @@ router.post(
 );
 
 /**
+ * @route   GET /api/admin/users/export-csv
+ * @desc    Export users to CSV
+ * @access  Private (Admin only)
+ */
+adminRouter.get(
+  '/users/export-csv',
+  authMiddleware,
+  authorizeRole('admin'),
+  adminController.exportUsersCSV
+);
+
+/**
  * @route   PUT /api/admin/users/:id
  * @desc    Update a user (Admin only)
  * @access  Private (Admin only)
  */
-router.put(
+adminRouter.put(
   '/users/:id',
   authMiddleware,
   authorizeRole('admin'),
@@ -170,7 +174,7 @@ router.put(
  * @desc    Delete a user (Admin only)
  * @access  Private (Admin only)
  */
-router.delete(
+adminRouter.delete(
   '/users/:id',
   authMiddleware,
   authorizeRole('admin'),
@@ -179,11 +183,35 @@ router.delete(
 );
 
 /**
+ * @route   GET /api/admin/teachers/:id/kpis
+ * @desc    Get teacher KPIs (performance metrics)
+ * @access  Private (Admin only)
+ */
+adminRouter.get(
+  '/teachers/:id/kpis',
+  authMiddleware,
+  authorizeRole('admin'),
+  adminController.getTeacherKPIs
+);
+
+/**
+ * @route   GET /api/admin/audit-logs
+ * @desc    Get audit logs (admin activity history)
+ * @access  Private (Admin only)
+ */
+adminRouter.get(
+  '/audit-logs',
+  authMiddleware,
+  authorizeRole('admin'),
+  adminController.getAuditLogs
+);
+
+/**
  * @route   GET /api/admin/payments
  * @desc    Get payments (Admin only)
  * @access  Private (Admin only)
  */
-router.get(
+adminRouter.get(
   '/payments',
   authMiddleware,
   authorizeRole('admin'),
@@ -196,7 +224,7 @@ router.get(
  * @desc    Enroll any user to a course (Admin only)
  * @access  Private (Admin only)
  */
-router.post(
+adminRouter.post(
   '/enrollments',
   authMiddleware,
   authorizeRole('admin'),
@@ -209,7 +237,7 @@ router.post(
  * @desc    Unenroll any user from a course (Admin only)
  * @access  Private (Admin only)
  */
-router.delete(
+adminRouter.delete(
   '/enrollments',
   authMiddleware,
   authorizeRole('admin'),
@@ -222,7 +250,7 @@ router.delete(
  * @desc    Get all enrollments for a course
  * @access  Private (Admin only)
  */
-router.get(
+adminRouter.get(
   '/courses/:courseId/enrollments-admin',
   authMiddleware,
   authorizeRole('admin'),
@@ -235,7 +263,7 @@ router.get(
  * @desc    Get all enrollments for a user
  * @access  Private (Admin only)
  */
-router.get(
+adminRouter.get(
   '/users/:userId/enrollments',
   authMiddleware,
   authorizeRole('admin'),
@@ -244,24 +272,11 @@ router.get(
 );
 
 /**
- * @route   GET /api/admin/reviews
- * @desc    Get reviews (optionally by course)
- * @access  Private (Admin only)
- */
-router.get(
-  '/reviews',
-  authMiddleware,
-  authorizeRole('admin'),
-  getReviewsValidation,
-  adminController.getReviews
-);
-
-/**
  * @route   DELETE /api/admin/reviews/:id
  * @desc    Delete a review
  * @access  Private (Admin only)
  */
-router.delete(
+adminRouter.delete(
   '/reviews/:id',
   authMiddleware,
   authorizeRole('admin'),
@@ -274,7 +289,7 @@ router.delete(
  * @desc    Get all categories (Admin only)
  * @access  Private (Admin only)
  */
-router.get(
+adminRouter.get(
   '/categories',
   authMiddleware,
   authorizeRole('admin'),
@@ -286,7 +301,7 @@ router.get(
  * @desc    Create a new category (Admin only)
  * @access  Private (Admin only)
  */
-router.post(
+adminRouter.post(
   '/categories',
   authMiddleware,
   authorizeRole('admin'),
@@ -299,7 +314,7 @@ router.post(
  * @desc    Update a category (Admin only)
  * @access  Private (Admin only)
  */
-router.put(
+adminRouter.put(
   '/categories/:id',
   authMiddleware,
   authorizeRole('admin'),
@@ -312,7 +327,7 @@ router.put(
  * @desc    Delete a category (Admin only)
  * @access  Private (Admin only)
  */
-router.delete(
+adminRouter.delete(
   '/categories/:id',
   authMiddleware,
   authorizeRole('admin'),
@@ -330,7 +345,7 @@ const { adminReviewValidation } = require('../modules/course/course.validation')
  * @desc    Get all courses pending review
  * @access  Private (Admin only)
  */
-router.get(
+adminRouter.get(
   '/courses/pending-review',
   authMiddleware,
   authorizeRole('admin'),
@@ -342,7 +357,7 @@ router.get(
  * @desc    Admin approve or reject a course
  * @access  Private (Admin only)
  */
-router.post(
+adminRouter.post(
   '/courses/:id/review',
   authMiddleware,
   authorizeRole('admin'),
@@ -355,7 +370,7 @@ router.post(
  * @desc    Toggle course publish status (admin only)
  * @access  Private (Admin only)
  */
-router.patch(
+adminRouter.patch(
   '/courses/:id/toggle-publish',
   authMiddleware,
   authorizeRole('admin'),
@@ -367,7 +382,7 @@ router.patch(
  * @desc    Get teacher's courses
  * @access  Private (Teacher & Admin)
  */
-router.get(
+teacherRouter.get(
   '/courses',
   authMiddleware,
   authorizeRole('teacher', 'admin'),
@@ -380,7 +395,7 @@ router.get(
  * @desc    Create a new course
  * @access  Private (Teacher & Admin)
  */
-router.post(
+teacherRouter.post(
   '/courses',
   authMiddleware,
   authorizeRole('teacher', 'admin'),
@@ -404,7 +419,7 @@ const {
  * @desc    Get all students progress for a course
  * @access  Private (Teacher)
  */
-router.get(
+teacherRouter.get(
   '/courses/:courseId/progress',
   authMiddleware,
   authorizeRole('teacher'),
@@ -417,7 +432,7 @@ router.get(
  * @desc    Get specific student progress detail
  * @access  Private (Teacher)
  */
-router.get(
+teacherRouter.get(
   '/courses/:courseId/students/:studentId/progress',
   authMiddleware,
   authorizeRole('teacher'),
@@ -430,7 +445,7 @@ router.get(
  * @desc    Get a specific course (teacher's own or any for admin)
  * @access  Private (Teacher & Admin)
  */
-router.get(
+teacherRouter.get(
   '/courses/:id',
   authMiddleware,
   authorizeRole('teacher', 'admin'),
@@ -442,7 +457,7 @@ router.get(
  * @desc    Update a specific course
  * @access  Private (Teacher & Admin)
  */
-router.put(
+teacherRouter.put(
   '/courses/:id',
   authMiddleware,
   authorizeRole('teacher', 'admin'),
@@ -455,7 +470,7 @@ router.put(
  * @desc    Publish or unpublish a course - CHỈ ADMIN
  * @access  Private (Admin only)
  */
-router.put(
+teacherRouter.put(
   '/courses/:id/publish',
   authMiddleware,
   authorizeRole('admin'),
@@ -468,7 +483,7 @@ router.put(
  * @desc    Submit course for admin review
  * @access  Private (Teacher & Admin)
  */
-router.post(
+teacherRouter.post(
   '/courses/:id/submit-review',
   authMiddleware,
   authorizeRole('teacher', 'admin'),
@@ -481,7 +496,7 @@ router.post(
  * @desc    Delete a specific course
  * @access  Private (Teacher & Admin)
  */
-router.delete(
+teacherRouter.delete(
   '/courses/:id',
   authMiddleware,
   authorizeRole('teacher', 'admin'),
@@ -493,84 +508,20 @@ router.delete(
  * @desc    Get course content (chapters + lectures)
  * @access  Private (Teacher & Admin)
  */
-router.get(
+teacherRouter.get(
   '/courses/:courseId/chapters',
   authMiddleware,
   authorizeRole('teacher', 'admin'),
   courseController.getCourseContentForOwner
 );
 
-/**
- * @route   GET /api/teacher/courses/:courseId/schedule-events
- * @desc    List schedule events for a course
- * @access  Private (Teacher & Admin)
- */
-router.get(
-  '/courses/:courseId/schedule-events',
-  authMiddleware,
-  authorizeRole('teacher', 'admin'),
-  listCourseScheduleEventsValidation,
-  scheduleController.listCourseScheduleEvents
-);
-
-/**
- * @route   POST /api/teacher/courses/:courseId/schedule-events
- * @desc    Create schedule event for a course
- * @access  Private (Teacher & Admin)
- */
-router.post(
-  '/courses/:courseId/schedule-events',
-  authMiddleware,
-  authorizeRole('teacher', 'admin'),
-  createScheduleEventValidation,
-  scheduleController.createCourseScheduleEvent
-);
-
-/**
- * @route   PUT /api/teacher/schedule-events/:eventId
- * @desc    Update schedule event
- * @access  Private (Teacher & Admin)
- */
-router.put(
-  '/schedule-events/:eventId',
-  authMiddleware,
-  authorizeRole('teacher', 'admin'),
-  updateScheduleEventValidation,
-  scheduleController.updateScheduleEvent
-);
-
-/**
- * @route   DELETE /api/teacher/schedule-events/:eventId
- * @desc    Delete schedule event
- * @access  Private (Teacher & Admin)
- */
-router.delete(
-  '/schedule-events/:eventId',
-  authMiddleware,
-  authorizeRole('teacher', 'admin'),
-  deleteScheduleEventValidation,
-  scheduleController.deleteScheduleEvent
-);
-
-/**
- * @route   GET /api/teacher/schedule
- * @desc    Get teacher's teaching schedule
- * @access  Private (Teacher & Admin)
- */
-router.get(
-  '/schedule',
-  authMiddleware,
-  authorizeRole('teacher', 'admin'),
-  getMyScheduleValidation,
-  scheduleController.getTeacherSchedule
-);
 
 /**
  * @route   POST /api/teacher/chapters
  * @desc    Create a chapter in a course
  * @access  Private (Teacher & Admin)
  */
-router.post(
+teacherRouter.post(
   '/chapters',
   authMiddleware,
   authorizeRole('teacher', 'admin'),
@@ -583,7 +534,7 @@ router.post(
  * @desc    Update a chapter
  * @access  Private (Teacher & Admin)
  */
-router.put(
+teacherRouter.put(
   '/chapters/:id',
   authMiddleware,
   authorizeRole('teacher', 'admin'),
@@ -596,7 +547,7 @@ router.put(
  * @desc    Delete a chapter (and its lectures)
  * @access  Private (Teacher & Admin)
  */
-router.delete(
+teacherRouter.delete(
   '/chapters/:id',
   authMiddleware,
   authorizeRole('teacher', 'admin'),
@@ -609,7 +560,7 @@ router.delete(
  * @desc    Create a lecture in a chapter
  * @access  Private (Teacher & Admin)
  */
-router.post(
+teacherRouter.post(
   '/chapters/:chapterId/lectures',
   authMiddleware,
   authorizeRole('teacher', 'admin'),
@@ -624,7 +575,7 @@ router.post(
  * @desc    Update a lecture
  * @access  Private (Teacher & Admin)
  */
-router.put(
+teacherRouter.put(
   '/lectures/:id',
   authMiddleware,
   authorizeRole('teacher', 'admin'),
@@ -639,7 +590,7 @@ router.put(
  * @desc    Delete a lecture
  * @access  Private (Teacher & Admin)
  */
-router.delete(
+teacherRouter.delete(
   '/lectures/:id',
   authMiddleware,
   authorizeRole('teacher', 'admin'),
@@ -652,7 +603,7 @@ router.delete(
  * @desc    Get lecture detail for teacher (own courses) or admin (all courses)
  * @access  Private (Teacher & Admin)
  */
-router.get(
+teacherRouter.get(
   '/lectures/:id',
   authMiddleware,
   authorizeRole('teacher', 'admin'),
@@ -665,7 +616,7 @@ router.get(
  * @desc    Get enrollments for a course (teacher's own or any for admin)
  * @access  Private (Teacher & Admin)
  */
-router.get(
+teacherRouter.get(
   '/courses/:courseId/enrollments',
   authMiddleware,
   authorizeRole('teacher', 'admin'),
@@ -680,7 +631,7 @@ router.get(
  * @desc    Enroll in a course
  * @access  Private (Student)
  */
-router.post(
+studentRouter.post(
   '/enroll/:courseId',
   authMiddleware,
   authorizeRole('student'),
@@ -693,7 +644,7 @@ router.post(
  * @desc    Unenroll from a course
  * @access  Private (Student)
  */
-router.delete(
+studentRouter.delete(
   '/enroll/:courseId',
   authMiddleware,
   authorizeRole('student'),
@@ -706,7 +657,7 @@ router.delete(
  * @desc    Get enrollment detail for one course (progress, etc.)
  * @access  Private (Student)
  */
-router.get(
+studentRouter.get(
   '/enrollments/course/:courseId',
   authMiddleware,
   authorizeRole('student'),
@@ -715,11 +666,24 @@ router.get(
 );
 
 /**
+ * @route   GET /api/student/enrolled-courses/:courseId/content
+ * @desc    Get full course content for enrolled students (with video URLs)
+ * @access  Private (Student - must be enrolled)
+ */
+studentRouter.get(
+  '/enrolled-courses/:courseId/content',
+  authMiddleware,
+  authorizeRole('student'),
+  getCourseEnrollmentsValidation,
+  courseController.getEnrolledCourseContent
+);
+
+/**
  * @route   GET /api/student/enrollments
  * @desc    Get student's enrollments (list all enrolled courses)
  * @access  Private (Student)
  */
-router.get(
+studentRouter.get(
   '/enrollments',
   authMiddleware,
   authorizeRole('student'),
@@ -727,28 +691,39 @@ router.get(
 );
 
 /**
- * @route   GET /api/student/learning-schedule
- * @desc    Get student's learning schedule
+ * @route   GET /api/student/enrollments/expiring
+ * @desc    Get enrollments expiring soon (renewal reminders)
  * @access  Private (Student)
  */
-router.get(
-  '/learning-schedule',
+studentRouter.get(
+  '/enrollments/expiring',
   authMiddleware,
   authorizeRole('student'),
-  getMyScheduleValidation,
-  scheduleController.getMySchedule
+  enrollmentController.getExpiringEnrollments
 );
 
 /**
- * @route   GET /api/student/learning-schedule/next
- * @desc    Get student's next upcoming schedule event
+ * @route   GET /api/student/enrollments/:id/renewal-price
+ * @desc    Get renewal price for an enrollment
  * @access  Private (Student)
  */
-router.get(
-  '/learning-schedule/next',
+studentRouter.get(
+  '/enrollments/:id/renewal-price',
   authMiddleware,
   authorizeRole('student'),
-  scheduleController.getNextScheduleEvent
+  enrollmentController.getRenewalPrice
+);
+
+/**
+ * @route   POST /api/student/enrollments/:id/renew
+ * @desc    Renew enrollment for a course
+ * @access  Private (Student)
+ */
+studentRouter.post(
+  '/enrollments/:id/renew',
+  authMiddleware,
+  authorizeRole('student'),
+  enrollmentController.renewEnrollment
 );
 
 /**
@@ -756,7 +731,7 @@ router.get(
  * @desc    Update progress percent for a course (0-100)
  * @access  Private (Student)
  */
-router.put(
+studentRouter.put(
   '/progress/:courseId',
   authMiddleware,
   authorizeRole('student'),
@@ -771,7 +746,7 @@ router.put(
  * @desc    Update lecture progress when watching video
  * @access  Private (Student)
  */
-router.put(
+studentRouter.put(
   '/lectures/:lectureId/progress',
   authMiddleware,
   authorizeRole('student'),
@@ -784,7 +759,7 @@ router.put(
  * @desc    Update lecture progress (for sendBeacon on page close)
  * @access  Private (Student)
  */
-router.post(
+studentRouter.post(
   '/lectures/:lectureId/progress',
   authMiddleware,
   authorizeRole('student'),
@@ -792,14 +767,13 @@ router.post(
   progressController.updateLectureProgress
 );
 
-console.log('[Routes] Student progress routes defined');
 
 /**
  * @route   GET /api/student/dashboard
  * @desc    Get student dashboard summary (enrollments, progress, quizzes, next event, streak)
  * @access  Private (Student)
  */
-router.get(
+studentRouter.get(
   '/dashboard',
   authMiddleware,
   authorizeRole('student'),
@@ -811,7 +785,7 @@ router.get(
  * @desc    Get last accessed lecture for a course (Continue Learning)
  * @access  Private (Student)
  */
-router.get(
+studentRouter.get(
   '/courses/:courseId/continue',
   authMiddleware,
   authorizeRole('student'),
@@ -824,7 +798,7 @@ router.get(
  * @desc    Get certificate eligibility for a course (100% completion required)
  * @access  Private (Student)
  */
-router.get(
+studentRouter.get(
   '/courses/:courseId/certificate',
   authMiddleware,
   authorizeRole('student'),
@@ -839,7 +813,7 @@ router.get(
  * @desc    Create payment for a course
  * @access  Private (Student)
  */
-router.post(
+studentRouter.post(
   '/courses/:courseId/payment',
   authMiddleware,
   authorizeRole('student'),
@@ -848,24 +822,11 @@ router.post(
 );
 
 /**
- * @route   POST /api/student/payments/process
- * @desc    Process payment callback (success/failure)
- * @access  Private (Student)
- */
-router.post(
-  '/payments/process',
-  authMiddleware,
-  authorizeRole('student'),
-  processPaymentValidation,
-  paymentController.processPayment
-);
-
-/**
  * @route   GET /api/student/payments
- * @desc    Get payment history
+ * @desc    Get payment history (deprecated alias to /api/student/payments/history)
  * @access  Private (Student)
  */
-router.get(
+studentRouter.get(
   '/payments',
   authMiddleware,
   authorizeRole('student'),
@@ -873,27 +834,22 @@ router.get(
   paymentController.getPaymentHistory
 );
 
-/**
- * @route   GET /api/student/payments/:id
- * @desc    Get payment detail
- * @access  Private (Student)
- */
-router.get(
-  '/payments/:id',
-  authMiddleware,
-  authorizeRole('student'),
-  getPaymentDetailValidation,
-  paymentController.getPaymentDetail
-);
-
 // ==========================================
 // TRACKING ANALYTICS (Real Implementation)
 // ==========================================
-router.get(
+adminRouter.get(
   '/tracking/analytics',
   authMiddleware,
   authorizeRole('admin'),
-  trackingController.getAnalytics
+  (req, res, next) => {
+    res.setHeader('Deprecation', 'true');
+    res.setHeader('Link', '</api/tracking/analytics>; rel="canonical"');
+    return trackingController.getAnalytics(req, res, next);
+  }
 );
 
-module.exports = router;
+module.exports = {
+  adminRouter,
+  teacherRouter,
+  studentRouter,
+};

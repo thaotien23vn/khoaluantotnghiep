@@ -42,6 +42,7 @@ router.delete('/student/schedule/notes/:noteId',
 );
 
 router.get('/student/schedule/next-event', authMiddleware, authorizeRole('student'), scheduleController.getNextScheduleEvent);
+router.get('/student/learning-schedule/next', authMiddleware, authorizeRole('student'), scheduleController.getNextScheduleEvent);
 
 // Teacher routes
 router.get('/teacher/schedule', authMiddleware, authorizeRole('teacher', 'admin'), scheduleController.getTeacherSchedule);

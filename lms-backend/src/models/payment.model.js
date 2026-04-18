@@ -23,7 +23,7 @@ module.exports = (sequelize) => {
     },
     currency: {
       type: DataTypes.STRING(3),
-      defaultValue: 'USD',
+      defaultValue: 'VND',
     },
     provider: {
       type: DataTypes.ENUM('stripe', 'paypal', 'bank_transfer', 'mock', 'vnpay'),

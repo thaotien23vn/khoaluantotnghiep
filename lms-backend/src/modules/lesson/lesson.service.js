@@ -284,6 +284,15 @@ class LessonService {
         await lessonChat.destroy({ transaction });
       }
 
+      // Best-effort media cleanup for Supabase-backed URLs.
+      if (lecture.contentUrl) {
+        try {
+          await mediaService.deleteMediaByUrl(lecture.contentUrl);
+        } catch (mediaErr) {
+          console.error('Delete lecture media (silent) error:', mediaErr);
+        }
+      }
+
       await lecture.destroy({ transaction });
 
       await transaction.commit();

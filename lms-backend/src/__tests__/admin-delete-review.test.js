@@ -36,7 +36,7 @@ describe('Admin delete review (test-created only)', () => {
     // Ensure published even if create endpoint ignores `published`
     await request(app)
       .put(`/api/teacher/courses/${courseId}/publish`)
-      .set('Authorization', `Bearer ${teacherToken}`)
+      .set('Authorization', `Bearer ${adminToken}`)
       .send({ published: true });
 
     // ensure enrolled (student self-enroll)

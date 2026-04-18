@@ -9,8 +9,20 @@ class CertificateController {
       const { id: userId } = req.user;
       const { courseId } = req.params;
 
-      await certificateService.generateCertificate(userId, courseId, res);
-      // NOTE: We don't send typical res.json() here because we are piping a PDF buffer stream directly
+      const doc = await certificateService.generateCertificate(userId, courseId);
+      
+      res.setHeader('Content-Type', 'application/pdf');
+      res.setHeader('Content-Disposition', `attachment; filename=Certificate_${courseId}.pdf`);
+
+      doc.on('error', (err) => {
+        console.error('Certificate PDF Stream Error:', err);
+        if (!res.headersSent) {
+          res.status(500).send('Error generating PDF');
+        }
+      });
+
+      doc.pipe(res);
+      doc.end();
     } catch (error) {
       console.error('Lỗi cấp chứng chỉ:', error);
       if (!res.headersSent) {

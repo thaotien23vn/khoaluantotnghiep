@@ -63,8 +63,30 @@ const deleteMedia = async (publicId) => {
   return { success: true };
 };
 
+const extractPublicIdFromUrl = (url) => {
+  if (!url || typeof url !== 'string') return null;
+  if (!supabaseConfig.url) return null;
+
+  const base = `${supabaseConfig.url}/storage/v1/object/public/${supabaseConfig.bucket}/`;
+  const idx = url.indexOf(base);
+  if (idx < 0) return null;
+
+  const raw = url.slice(idx + base.length);
+  if (!raw) return null;
+  const clean = raw.split('?')[0].split('#')[0];
+  return clean || null;
+};
+
+const deleteMediaByUrl = async (url) => {
+  const publicId = extractPublicIdFromUrl(url);
+  if (!publicId) return { success: false, skipped: true };
+  return deleteMedia(publicId);
+};
+
 module.exports = {
   uploadLectureMedia,
   deleteMedia,
+  deleteMediaByUrl,
+  extractPublicIdFromUrl,
 };
 

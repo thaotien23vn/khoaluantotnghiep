@@ -1,5 +1,6 @@
 const cron = require('node-cron');
 const NotificationScheduler = require('./notification.scheduler');
+const { EnrollmentScheduler } = require('../enrollment/enrollment.scheduler');
 const courseChatService = require('../chat/courseChat.service');
 
 class NotificationCron {
@@ -53,8 +54,43 @@ class NotificationCron {
 
     this.jobs.push(escalationCheckJob);
 
+    // Run enrollment status updates every 5 minutes
+    const enrollmentStatusJob = cron.schedule('*/5 * * * *', async () => {
+      if (process.env.NODE_ENV !== 'test') {
+        console.log('[Cron] Running enrollment status update...');
+      }
+      try {
+        const result = await EnrollmentScheduler.updateEnrollmentStatuses();
+        if (process.env.NODE_ENV !== 'test') {
+          console.log('[Cron] Enrollment status updated:', result);
+        }
+      } catch (error) {
+        console.error('[Cron] Enrollment status update failed:', error.message);
+      }
+    });
+
+    this.jobs.push(enrollmentStatusJob);
+
+    // Run expiration reminders daily at 8 AM
+    const expirationReminderJob = cron.schedule('0 8 * * *', async () => {
+      if (process.env.NODE_ENV !== 'test') {
+        console.log('[Cron] Running expiration reminder scheduler...');
+      }
+      try {
+        const result = await EnrollmentScheduler.scheduleExpirationReminders();
+        if (process.env.NODE_ENV !== 'test') {
+          console.log('[Cron] Expiration reminders scheduled:', result);
+        }
+      } catch (error) {
+        console.error('[Cron] Expiration reminder scheduler failed:', error.message);
+      }
+    });
+
+    this.jobs.push(expirationReminderJob);
+
     if (process.env.NODE_ENV !== 'test') {
       console.log('[Cron] Notification scheduler started');
+      console.log('[Cron] Enrollment scheduler started');
     }
   }
 

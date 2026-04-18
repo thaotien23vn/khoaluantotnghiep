@@ -51,13 +51,21 @@ app.use(
 );
 
 // Body parsing middleware
-app.use(express.json({ limit: process.env.JSON_BODY_LIMIT || "1mb" }));
-app.use(
-  express.urlencoded({
+// IMPORTANT: Stripe webhook requires raw body for signature verification.
+const STRIPE_WEBHOOK_PATH = "/api/student/payments/stripe/webhook";
+
+app.use((req, res, next) => {
+  if (req.originalUrl === STRIPE_WEBHOOK_PATH) return next();
+  return express.json({ limit: process.env.JSON_BODY_LIMIT || "1mb" })(req, res, next);
+});
+
+app.use((req, res, next) => {
+  if (req.originalUrl === STRIPE_WEBHOOK_PATH) return next();
+  return express.urlencoded({
     extended: true,
     limit: process.env.URLENCODED_BODY_LIMIT || "1mb",
-  }),
-);
+  })(req, res, next);
+});
 
 // Request correlation ID
 app.use((req, res, next) => {
@@ -182,29 +190,13 @@ app.use("/api/cart", cartRoutes);
 
 // Tracking routes (mixed public and protected)
 app.use("/api/tracking", trackingRoutes);
-console.log('[Routes] Mounted /api/tracking routes');
 
 // Protected routes (require authentication and authorization)
 app.use("/api/certificate", certificateRoutes);
 app.use("/api/progress", progressRoutes);
-app.use("/api/admin", protectedRoutes);
-app.use("/api/teacher", protectedRoutes);
-app.use("/api/student", protectedRoutes);
-
-console.log('[Routes] Mounted /api/progress routes');
-
-// Debug: list all registered routes
-console.log('[Routes] Protected routes mounted at /api/student');
-
-// Test route for progress tracking
-app.put('/api/test/lectures/:lectureId/progress', (req, res) => {
-  console.log('[Test] PUT /api/test/lectures/:lectureId/progress hit');
-  res.json({ success: true, message: 'Test PUT route works' });
-});
-app.post('/api/test/lectures/:lectureId/progress', (req, res) => {
-  console.log('[Test] POST /api/test/lectures/:lectureId/progress hit');
-  res.json({ success: true, message: 'Test POST route works' });
-});
+app.use("/api/admin", protectedRoutes.adminRouter);
+app.use("/api/teacher", protectedRoutes.teacherRouter);
+app.use("/api/student", protectedRoutes.studentRouter);
 
 // 404 handler
 app.use((req, res) => {

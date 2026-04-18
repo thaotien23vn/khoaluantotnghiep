@@ -1,6 +1,7 @@
 const request = require('supertest');
 const app = require('../app');
 const { seedCore, TEST_PREFIX } = require('./jest.teardown');
+const { loginByRole } = require('./testAuth');
 
 async function loginTeacher() {
   const res = await request(app)
@@ -47,11 +48,11 @@ describe('Teacher course management', () => {
 
   it('PUT /api/teacher/courses/:id/publish should set published=false then true', async () => {
     const seeded = await seedCore();
-    const token = await loginTeacher();
+    const adminToken = await loginByRole('admin');
 
     const res1 = await request(app)
       .put(`/api/teacher/courses/${seeded.course.id}/publish`)
-      .set('Authorization', `Bearer ${token}`)
+      .set('Authorization', `Bearer ${adminToken}`)
       .send({ published: false });
 
     expect(res1.statusCode).toBe(200);
@@ -59,7 +60,7 @@ describe('Teacher course management', () => {
 
     const res2 = await request(app)
       .put(`/api/teacher/courses/${seeded.course.id}/publish`)
-      .set('Authorization', `Bearer ${token}`)
+      .set('Authorization', `Bearer ${adminToken}`)
       .send({ published: true });
 
     expect(res2.statusCode).toBe(200);

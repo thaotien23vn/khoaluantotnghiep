@@ -8,12 +8,13 @@ const http = require('http');
 const { initSocket } = require('./socket');
 const notificationCron = require('./modules/notification/notification.cron');
 const placementQuestionCron = require('./modules/placement/placementQuestion.cron');
+const logger = require('./utils/logger');
 require('./modules/notification/notification.worker');
 require('./services/courseGeneration.worker'); // Khởi động course generation worker
 
 const PORT = process.env.PORT || 5000;
 
-console.log('Starting server...');
+logger.info('SERVER_STARTING');
 
 const requireEnv = (name) => {
   const v = process.env[name];
@@ -37,12 +38,12 @@ const validateEnv = () => {
   if (isProd) {
     requireEnv('JWT_SECRET');
   } else if (!process.env.JWT_SECRET) {
-    console.warn('⚠️  JWT_SECRET is not set. Using default insecure secret (development only).');
+    logger.warn('JWT_SECRET_MISSING_DEV_DEFAULT');
   }
 
   // Optional but recommended
   if (!process.env.ALLOWED_ORIGINS) {
-    console.warn('⚠️  ALLOWED_ORIGINS is not set. Using default localhost origins.');
+    logger.warn('ALLOWED_ORIGINS_MISSING_USING_DEFAULTS');
   }
 };
 
@@ -55,37 +56,36 @@ const validateEnv = () => {
 
     // Auto-sync database cho production (Render free tier)
     if (process.env.NODE_ENV === 'production') {
-      console.log('🔄 Auto-syncing database...');
+      logger.info('DATABASE_AUTO_SYNC_STARTED');
       try {
         await sequelize.sync();
-        console.log('✅ Database sync completed');
+        logger.info('DATABASE_AUTO_SYNC_COMPLETED');
       } catch (syncErr) {
-        console.error('❌ Database sync failed:', syncErr.message);
+        logger.error('DATABASE_AUTO_SYNC_FAILED', { error: syncErr.message });
         // Không exit, vẫn tiếp tục chạy
       }
     }
 
     // Tự động tạo admin nếu chưa có (không cần biến env)
-    console.log('🌱 Kiểm tra và tạo admin user nếu cần...');
+    logger.info('AUTO_SEED_STARTED');
     try {
       await autoSeed();
-      console.log('✅ Auto seed hoàn tất\n');
+      logger.info('AUTO_SEED_COMPLETED');
     } catch (seedErr) {
-      console.error('⚠️  Auto seed thất bại nhưng vẫn tiếp tục khởi động:', seedErr.message);
+      logger.warn('AUTO_SEED_FAILED_CONTINUE_STARTUP', { error: seedErr.message });
     }
 
     // Kiểm tra kết nối email
     const emailConnected = await emailService.verifyEmailConnection();
     if (!emailConnected) {
-      console.warn('⚠️  Email service not properly configured. Some features may not work.');
+      logger.warn('EMAIL_SERVICE_NOT_CONFIGURED');
     }
 
     const server = http.createServer(app);
     initSocket(server);
 
     server.listen(PORT, '0.0.0.0', () => {
-      console.log(`✓ Server chạy trên port ${PORT}`);
-      console.log(`✓ API: http://localhost:${PORT}/api`);
+      logger.info('SERVER_LISTENING', { port: PORT, apiBaseUrl: `http://localhost:${PORT}/api` });
       
       // Start notification scheduler cron jobs
       notificationCron.start();
@@ -94,7 +94,7 @@ const validateEnv = () => {
       placementQuestionCron.start();
     });
   } catch (error) {
-    console.error('✗ Lỗi khởi động server:', error.message);
+    logger.error('SERVER_STARTUP_FAILED', { error: error.message });
     process.exit(1);
   }
 })();

@@ -1,5 +1,6 @@
 const { validationResult } = require('express-validator');
 const adminService = require('./admin.service');
+const logger = require('../../utils/logger');
 
 /**
  * Handle validation errors
@@ -101,11 +102,13 @@ class AdminController {
   }
 
   /**
-   * Get all users
+   * Get all users with optional role filter
+   * Query: ?role=student|teacher|admin
    */
   async getUsers(req, res) {
     try {
-      const result = await adminService.getUsers();
+      const { role } = req.query;
+      const result = await adminService.getUsers(role || null);
       res.json({
         success: true,
         data: result,
@@ -123,7 +126,7 @@ class AdminController {
       const validationError = handleValidationErrors(req, res);
       if (validationError) return;
 
-      const result = await adminService.createUser(req.body);
+      const result = await adminService.createUser(req.body, req.user.id);
       res.status(201).json({
         success: true,
         data: result,
@@ -158,10 +161,57 @@ class AdminController {
   async deleteUser(req, res) {
     try {
       const { id } = req.params;
-      const result = await adminService.deleteUser(id);
+      const result = await adminService.deleteUser(id, req.user.id);
       res.json({
         success: true,
         message: result.message,
+        deletedUser: result.deletedUser,
+      });
+    } catch (error) {
+      handleServiceError(error, res);
+    }
+  }
+
+  /**
+   * Get audit logs - Lịch sử hoạt động admin
+   */
+  async getAuditLogs(req, res) {
+    try {
+      const { page, limit, action, targetType, adminId } = req.query;
+      logger.debug('ADMIN_AUDIT_LOGS_REQUEST', { query: req.query, requesterId: req.user?.id });
+      const result = await adminService.getAuditLogs(
+        { action, targetType, adminId },
+        { page, limit }
+      );
+      const response = {
+        success: true,
+        data: result.logs,
+        pagination: result.pagination,
+      };
+      logger.info('ADMIN_AUDIT_LOGS_RESPONSE', {
+        requesterId: req.user?.id,
+        returnedCount: Array.isArray(result.logs) ? result.logs.length : 0,
+        page: result.pagination?.page,
+      });
+      res.json(response);
+    } catch (error) {
+      logger.error('ADMIN_AUDIT_LOGS_ERROR', { error: error.message, stack: error.stack });
+      handleServiceError(error, res);
+    }
+  }
+
+  /**
+   * Get Teacher KPIs - Hiệu suất giảng viên
+   * Query params: period=all|month|quarter|year
+   */
+  async getTeacherKPIs(req, res) {
+    try {
+      const { id } = req.params;
+      const { period = 'all', year, month } = req.query;
+      const result = await adminService.getTeacherKPIs(id, { period, year, month });
+      res.json({
+        success: true,
+        data: result,
       });
     } catch (error) {
       handleServiceError(error, res);
@@ -178,6 +228,22 @@ class AdminController {
         success: true,
         data: result,
       });
+    } catch (error) {
+      handleServiceError(error, res);
+    }
+  }
+
+  /**
+   * Export users to CSV
+   */
+  async exportUsersCSV(req, res) {
+    try {
+      const { role } = req.query;
+      const csvData = await adminService.exportUsersToCSV(role);
+      
+      res.setHeader('Content-Type', 'text/csv');
+      res.setHeader('Content-Disposition', 'attachment; filename="users.csv"');
+      res.send(csvData);
     } catch (error) {
       handleServiceError(error, res);
     }

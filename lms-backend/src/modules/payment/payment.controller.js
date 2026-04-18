@@ -2,6 +2,7 @@ const { validationResult } = require('express-validator');
 const paymentService = require('./payment.service');
 const stripeService = require('../../services/stripe.service');
 const db = require('../../models');
+const logger = require('../../utils/logger');
 const { Payment, Course, User } = db.models;
 /**
  * Handle validation errors
@@ -29,7 +30,7 @@ const handleServiceError = (error, res) => {
       error: error.message,
     });
   }
-  console.error('Lỗi thanh toán:', error);
+  logger.error('PAYMENT_CONTROLLER_ERROR', { error: error.message, stack: error.stack });
   return res.status(500).json({
     success: false,
     message: 'Lỗi máy chủ',
@@ -50,13 +51,22 @@ class PaymentController {
       const validationError = handleValidationErrors(req, res);
       if (validationError) return;
 
-      const { courseId, provider } = req.body;
+      const { courseId, provider, type, renewalPrice, enrollmentId, renewalMonths } = req.body;
       const { id: userId } = req.user;
+      const isRenewal = type === 'renewal';
 
       let result;
       if (provider === 'vnpay') {
         const ipAddr = req.ip || req.headers['x-forwarded-for'] || req.connection.remoteAddress;
-        result = await paymentService.createVNPayPayment(userId, courseId, ipAddr);
+        result = await paymentService.createVNPayPayment(
+          userId,
+          courseId,
+          ipAddr,
+          isRenewal,
+          renewalPrice,
+          enrollmentId,
+          renewalMonths
+        );
         return res.status(201).json({
           success: true,
           message: 'Tạo URL thanh toán VNPay thành công',
@@ -261,9 +271,19 @@ class PaymentController {
 
       const { courseId } = req.params;
       const { id: userId } = req.user;
+      const { type, renewalPrice, enrollmentId, renewalMonths } = req.body || {};
+      const isRenewal = type === 'renewal';
       const ipAddr = req.ip || req.headers['x-forwarded-for'] || req.connection.remoteAddress;
 
-      const result = await paymentService.createVNPayPayment(userId, courseId, ipAddr);
+      const result = await paymentService.createVNPayPayment(
+        userId,
+        courseId,
+        ipAddr,
+        isRenewal,
+        renewalPrice,
+        enrollmentId,
+        renewalMonths
+      );
       
       res.status(201).json({
         success: true,
@@ -307,22 +327,24 @@ class PaymentController {
   async handleStripeSuccess(req, res) {
     try {
       const { session_id: sessionId } = req.query;
-      console.log('Stripe success callback - sessionId:', sessionId);
+      logger.info('STRIPE_SUCCESS_CALLBACK_RECEIVED', { sessionId });
       
       // Retrieve session from Stripe
       const stripe = require('stripe')(process.env.STRIPE_SECRET_KEY);
       const session = await stripe.checkout.sessions.retrieve(sessionId);
-      console.log('Stripe session retrieved:', { 
-        id: session.id, 
-        payment_status: session.payment_status,
-        metadata: session.metadata 
+      logger.debug('STRIPE_SESSION_RETRIEVED', {
+        sessionId: session.id,
+        paymentStatus: session.payment_status,
       });
       
       if (session.payment_status === 'paid') {
-        console.log('Payment is paid, calling handleCheckoutCompleted...');
+        logger.info('STRIPE_SESSION_PAID_PROCESSING', { sessionId: session.id });
         // Process completed payment
         const result = await stripeService.handleCheckoutCompleted(session);
-        console.log('handleCheckoutCompleted result:', result);
+        logger.info('STRIPE_CHECKOUT_COMPLETED_PROCESSED', {
+          sessionId: session.id,
+          success: result?.success,
+        });
         
         res.json({
           success: true,
@@ -334,7 +356,7 @@ class PaymentController {
           },
         });
       } else {
-        console.log('Payment not paid, status:', session.payment_status);
+        logger.warn('STRIPE_SESSION_NOT_PAID', { sessionId: session.id, paymentStatus: session.payment_status });
         res.status(400).json({
           success: false,
           message: 'Thanh toán chưa hoàn tất',
@@ -342,7 +364,7 @@ class PaymentController {
         });
       }
     } catch (error) {
-      console.error('Stripe success handler error:', error);
+      logger.error('STRIPE_SUCCESS_HANDLER_ERROR', { error: error.message, stack: error.stack });
       res.status(500).json({
         success: false,
         message: 'Lỗi xử lý thanh toán',
@@ -360,22 +382,21 @@ class PaymentController {
       if (validationError) return;
 
       const { sessionId } = req.body;
-      console.log('Manual Stripe verify - sessionId:', sessionId);
+      logger.info('STRIPE_MANUAL_VERIFY_REQUESTED', { sessionId, userId: req.user?.id });
 
       // Retrieve session from Stripe
       const stripe = require('stripe')(process.env.STRIPE_SECRET_KEY);
       const session = await stripe.checkout.sessions.retrieve(sessionId);
-      console.log('Stripe session retrieved:', {
-        id: session.id,
-        payment_status: session.payment_status,
-        metadata: session.metadata
+      logger.debug('STRIPE_VERIFY_SESSION_RETRIEVED', {
+        sessionId: session.id,
+        paymentStatus: session.payment_status,
       });
 
       if (session.payment_status === 'paid') {
-        console.log('Payment is paid, calling handleCheckoutCompleted...');
+        logger.info('STRIPE_VERIFY_SESSION_PAID_PROCESSING', { sessionId: session.id });
         // Process completed payment
         const result = await stripeService.handleCheckoutCompleted(session);
-        console.log('handleCheckoutCompleted result:', result);
+        logger.info('STRIPE_VERIFY_COMPLETED', { sessionId: session.id, success: result?.success });
 
         res.json({
           success: true,
@@ -388,7 +409,7 @@ class PaymentController {
           },
         });
       } else {
-        console.log('Payment not paid, status:', session.payment_status);
+        logger.warn('STRIPE_VERIFY_NOT_PAID', { sessionId: session.id, paymentStatus: session.payment_status });
         res.status(400).json({
           success: false,
           message: 'Thanh toán chưa hoàn tất',
@@ -396,7 +417,7 @@ class PaymentController {
         });
       }
     } catch (error) {
-      console.error('Stripe verify error:', error);
+      logger.error('STRIPE_VERIFY_ERROR', { error: error.message, stack: error.stack });
       res.status(500).json({
         success: false,
         message: 'Lỗi xác minh thanh toán',
@@ -420,7 +441,7 @@ class PaymentController {
       }
 
       // Find payment by providerTxn (Stripe session ID)
-      console.log('Looking for payment with providerTxn:', session_id);
+      logger.debug('PAYMENT_LOOKUP_BY_SESSION', { sessionId: session_id, userId: req.user?.id });
       const payment = await Payment.findOne({
         where: { providerTxn: session_id },
         include: [
@@ -429,7 +450,7 @@ class PaymentController {
         ],
       });
 
-      console.log('Payment found:', payment ? 'yes' : 'no');
+      logger.debug('PAYMENT_LOOKUP_RESULT', { sessionId: session_id, found: !!payment });
 
       if (!payment) {
         // Try to find any payment with similar providerTxn
@@ -438,7 +459,10 @@ class PaymentController {
           limit: 5,
           order: [['createdAt', 'DESC']],
         });
-        console.log('Recent Stripe payments:', allPayments.map(p => ({ id: p.id, providerTxn: p.providerTxn })));
+        logger.warn('PAYMENT_NOT_FOUND_FOR_SESSION', {
+          sessionId: session_id,
+          recentPaymentCount: allPayments.length,
+        });
         
         return res.status(404).json({
           success: false,
@@ -446,18 +470,24 @@ class PaymentController {
         });
       }
 
+      // Ownership check: user can only access their own payment status
+      if (Number(payment.userId) !== Number(req.user?.id)) {
+        return res.status(403).json({
+          success: false,
+          message: 'Bạn không có quyền xem giao dịch này',
+        });
+      }
+
       // Check if this is a cart checkout (check paymentDetails for cart type)
-      console.log('Payment details:', payment.paymentDetails);
       const paymentDetails = payment.paymentDetails || {};
       const isCartCheckout = paymentDetails.type === 'checkout_session_cart';
-      console.log('Is cart checkout:', isCartCheckout);
 
       let courses = [];
       let totalAmount = 0;
 
       if (isCartCheckout) {
         // Find all payments with the same session (cart checkout creates multiple payments)
-        console.log('Finding related payments for user:', payment.userId, 'session:', session_id);
+        logger.debug('PAYMENT_LOOKUP_RELATED_CART_PAYMENTS', { userId: payment.userId, sessionId: session_id });
         const relatedPayments = await Payment.findAll({
           where: { 
             providerTxn: session_id,
@@ -468,7 +498,7 @@ class PaymentController {
           ],
           order: [['created_at', 'ASC']],
         });
-        console.log('Found related payments:', relatedPayments.length);
+        logger.debug('PAYMENT_RELATED_CART_PAYMENTS_FOUND', { sessionId: session_id, count: relatedPayments.length });
 
         courses = relatedPayments.map(p => ({
           id: p.course ? p.course.id : p.courseId,
@@ -504,7 +534,7 @@ class PaymentController {
         },
       });
     } catch (error) {
-      console.error('Get payment by session error:', error);
+      logger.error('GET_PAYMENT_BY_SESSION_ERROR', { error: error.message, stack: error.stack });
       res.status(500).json({
         success: false,
         message: 'Lỗi lấy thông tin giao dịch',
@@ -581,10 +611,38 @@ class PaymentController {
       const validationError = handleValidationErrors(req, res);
       if (validationError) return;
 
-      const { courseId, successUrl, cancelUrl } = req.body;
+      const { courseId, successUrl, cancelUrl, type, renewalPrice, enrollmentId, renewalMonths } = req.body;
       const { id: userId } = req.user;
+      const isRenewal = type === 'renewal';
+      
+      // Use default URLs with session_id placeholder if not provided
+      const defaultSuccessUrl = `${process.env.FRONTEND_URL || 'http://localhost:5173'}/payment/success?session_id={CHECKOUT_SESSION_ID}`;
+      const defaultCancelUrl = `${process.env.FRONTEND_URL || 'http://localhost:5173'}/payment?courseId=${courseId}${isRenewal ? `&type=renewal` : ''}`;
+      
+      const finalSuccessUrl = successUrl || defaultSuccessUrl;
+      const finalCancelUrl = cancelUrl || defaultCancelUrl;
+      
+      logger.info('STRIPE_CHECKOUT_CREATE_REQUEST', {
+        userId,
+        courseId,
+        type,
+        isRenewal,
+        renewalPrice,
+        enrollmentId,
+        renewalMonths,
+        finalSuccessUrl,
+      });
 
-      const result = await stripeService.createCheckoutSession(userId, courseId, successUrl, cancelUrl);
+      const result = await stripeService.createCheckoutSession(
+        userId,
+        courseId,
+        finalSuccessUrl,
+        finalCancelUrl,
+        isRenewal,
+        renewalPrice,
+        enrollmentId,
+        renewalMonths
+      );
       
       res.status(201).json({
         success: true,
@@ -608,10 +666,11 @@ class PaymentController {
       const validationError = handleValidationErrors(req, res);
       if (validationError) return;
 
-      const { courseId } = req.body;
+      const { courseId, type } = req.body;
       const { id: userId } = req.user;
+      const isRenewal = type === 'renewal';
 
-      const result = await stripeService.createPaymentIntent(userId, courseId);
+      const result = await stripeService.createPaymentIntent(userId, courseId, isRenewal);
       
       res.status(result.isNew ? 201 : 200).json({
         success: true,
@@ -662,7 +721,10 @@ class PaymentController {
     try {
       const signature = req.headers['stripe-signature'];
       
+      logger.info('STRIPE_WEBHOOK_RECEIVED', { headerCount: Object.keys(req.headers).length });
+      
       if (!signature) {
+        logger.warn('STRIPE_WEBHOOK_MISSING_SIGNATURE');
         return res.status(400).json({
           success: false,
           message: 'Thiếu Stripe signature',
@@ -671,12 +733,14 @@ class PaymentController {
 
       const result = await stripeService.handleWebhook(req.body, signature);
       
+      logger.info('STRIPE_WEBHOOK_HANDLED', { event: result.event });
+      
       res.status(200).json({
         received: true,
         event: result.event,
       });
     } catch (error) {
-      console.error('Stripe webhook error:', error);
+      logger.error('STRIPE_WEBHOOK_ERROR', { error: error.message, stack: error.stack });
       res.status(400).json({
         success: false,
         message: 'Webhook error',
@@ -705,6 +769,62 @@ class PaymentController {
         message: 'Thanh toán xác nhận thành công',
         data: result,
       });
+    } catch (error) {
+      handleServiceError(error, res);
+    }
+  }
+
+  /**
+   * Repair old renewal payments (admin only)
+   * POST /api/payments/admin/repair-renewals
+   */
+  async repairRenewalPayments(req, res) {
+    try {
+      // Only admin can run this
+      if (req.user.role !== 'admin') {
+        return res.status(403).json({
+          success: false,
+          message: 'Chỉ admin có quyền chạy repair',
+        });
+      }
+
+      const { dryRun = false } = req.body || {};
+      const { PaymentRepairService } = require('./payment.repair');
+
+      const result = await PaymentRepairService.repairRenewalPayments(dryRun);
+
+      res.json({
+        success: true,
+        message: dryRun ? 'Scan hoàn tất (dry run)' : 'Repair hoàn tất',
+        data: result,
+      });
+    } catch (error) {
+      handleServiceError(error, res);
+    }
+  }
+
+  /**
+   * Download payment invoice as PDF
+   */
+  async downloadInvoice(req, res) {
+    try {
+      const { id } = req.params;
+      const { id: userId } = req.user;
+      
+      const doc = await paymentService.generateInvoicePDF(id, userId);
+      
+      res.setHeader('Content-Type', 'application/pdf');
+      res.setHeader('Content-Disposition', `attachment; filename=Invoice_${id}.pdf`);
+      
+      doc.on('error', (err) => {
+        console.error('PDF Stream Error:', err);
+        if (!res.headersSent) {
+          res.status(500).send('Error generating PDF');
+        }
+      });
+
+      doc.pipe(res);
+      doc.end();
     } catch (error) {
       handleServiceError(error, res);
     }
