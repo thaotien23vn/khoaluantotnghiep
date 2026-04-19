@@ -80,6 +80,18 @@ class ProgressService {
       },
     });
 
+    // 🛡️ FIX E5: Rate limiting - không cho phép cập nhật quá nhanh (tối thiểu 3 giây)
+    const MIN_UPDATE_INTERVAL = 3; // seconds
+    if (!created && lecture.type === 'video' && process.env.NODE_ENV !== 'test') {
+      const now = new Date();
+      const prevLastAccessedAt = progress.lastAccessedAt ? new Date(progress.lastAccessedAt) : null;
+      const elapsedSeconds = prevLastAccessedAt ? Math.max(0, (now - prevLastAccessedAt) / 1000) : null;
+      
+      if (elapsedSeconds !== null && elapsedSeconds < MIN_UPDATE_INTERVAL) {
+        throw { status: 429, message: 'Cập nhật tiến độ quá nhanh. Vui lòng chờ một chút.' };
+      }
+    }
+
     // Anti-cheat (safe timestamps): do not rely on createdAt (LectureProgress timestamps:false).
     // Use previous lastAccessedAt for incremental progress jumps.
     if (!created && lecture.type === 'video' && Number(lecture.duration || 0) > 0 && process.env.NODE_ENV !== 'test') {
@@ -142,7 +154,8 @@ class ProgressService {
    */
   async getStudentCourseProgress(userId, courseId) {
     const access = await EnrollmentAccess.checkAccess(userId, courseId);
-    if (!access.hasAccess) {
+    // Cho phép xem tiến độ (read-only) kể cả khi đã hết hạn để lấy chứng chỉ
+    if (!access.hasAccess && access.reason !== 'expired') {
       throw { status: 403, message: access.message || 'Bạn chưa đăng ký khóa học này' };
     }
     const enrollment = access.enrollment;

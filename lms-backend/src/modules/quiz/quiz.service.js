@@ -27,7 +27,8 @@ class QuizService {
       throw { status: 404, message: 'Không tìm thấy khóa học' };
     }
 
-    if (course.createdBy !== userId && userRole !== 'admin') {
+    // 🛡️ Fix: Use Number() for consistent comparison
+    if (Number(course.createdBy) !== Number(userId) && userRole !== 'admin') {
       throw { status: 403, message: 'Bạn không có quyền tạo quiz cho khóa học này' };
     }
 
@@ -57,7 +58,8 @@ class QuizService {
       throw { status: 404, message: 'Không tìm thấy khóa học' };
     }
 
-    if (course.createdBy !== userId && userRole !== 'admin') {
+    // 🛡️ Fix: Use Number() for consistent comparison
+    if (Number(course.createdBy) !== Number(userId) && userRole !== 'admin') {
       throw { status: 403, message: 'Bạn không có quyền xem quiz của khóa học này' };
     }
 
@@ -90,7 +92,8 @@ class QuizService {
       throw { status: 404, message: 'Không tìm thấy quiz' };
     }
 
-    if (quiz.course.createdBy !== userId && userRole !== 'admin') {
+    // 🛡️ Fix: Use Number() for consistent comparison
+    if (Number(quiz.course.createdBy) !== Number(userId) && userRole !== 'admin') {
       const access = await EnrollmentAccess.checkAccess(userId, quiz.courseId);
       if (!access.hasAccess) {
         throw { status: 403, message: access.message || 'Bạn không có quyền xem quiz này' };
@@ -112,7 +115,8 @@ class QuizService {
       throw { status: 404, message: 'Không tìm thấy quiz' };
     }
 
-    if (quiz.course.createdBy !== userId && userRole !== 'admin') {
+    // 🛡️ Fix: Use Number() for consistent comparison
+    if (Number(quiz.course.createdBy) !== Number(userId) && userRole !== 'admin') {
       throw { status: 403, message: 'Bạn không có quyền cập nhật quiz này' };
     }
 
@@ -132,7 +136,8 @@ class QuizService {
       throw { status: 404, message: 'Không tìm thấy quiz' };
     }
 
-    if (quiz.course.createdBy !== userId && userRole !== 'admin') {
+    // 🛡️ Fix: Use Number() for consistent comparison
+    if (Number(quiz.course.createdBy) !== Number(userId) && userRole !== 'admin') {
       throw { status: 403, message: 'Bạn không có quyền xóa quiz này' };
     }
 
@@ -154,7 +159,8 @@ class QuizService {
       throw { status: 404, message: 'Không tìm thấy quiz' };
     }
 
-    if (quiz.course.createdBy !== userId && userRole !== 'admin') {
+    // 🛡️ Fix: Use Number() for consistent comparison
+    if (Number(quiz.course.createdBy) !== Number(userId) && userRole !== 'admin') {
       throw { status: 403, message: 'Bạn không có quyền thêm câu hỏi cho quiz này' };
     }
 
@@ -168,7 +174,24 @@ class QuizService {
       explanation,
     });
 
+    // 🛡️ FIX: Auto-sync maxScore with total question points
+    await this._syncQuizMaxScore(quizId);
+
     return { question };
+  }
+
+  /**
+   * Helper: Sync quiz maxScore with total question points
+   * @private
+   */
+  async _syncQuizMaxScore(quizId) {
+    try {
+      const totalPoints = await Question.sum('points', { where: { quizId } });
+      const newMaxScore = totalPoints || 100; // Default to 100 if no questions
+      await Quiz.update({ maxScore: newMaxScore }, { where: { id: quizId } });
+    } catch (error) {
+      console.error(`[QuizService] Failed to sync maxScore for quiz ${quizId}:`, error.message);
+    }
   }
 
   /**
@@ -189,11 +212,18 @@ class QuizService {
       throw { status: 404, message: 'Không tìm thấy câu hỏi' };
     }
 
-    if (question.quiz.course.createdBy !== userId && userRole !== 'admin') {
+    // 🛡️ Fix: Use Number() for consistent comparison
+    if (Number(question.quiz.course.createdBy) !== Number(userId) && userRole !== 'admin') {
       throw { status: 403, message: 'Bạn không có quyền cập nhật câu hỏi này' };
     }
 
     await question.update(updateData);
+    
+    // 🛡️ FIX: Auto-sync maxScore if points changed
+    if (updateData.points !== undefined) {
+      await this._syncQuizMaxScore(question.quizId);
+    }
+    
     return { question };
   }
 
@@ -215,11 +245,17 @@ class QuizService {
       throw { status: 404, message: 'Không tìm thấy câu hỏi' };
     }
 
-    if (question.quiz.course.createdBy !== userId && userRole !== 'admin') {
+    // 🛡️ Fix: Use Number() for consistent comparison
+    if (Number(question.quiz.course.createdBy) !== Number(userId) && userRole !== 'admin') {
       throw { status: 403, message: 'Bạn không có quyền xóa câu hỏi này' };
     }
 
+    const quizId = question.quizId;
     await question.destroy();
+    
+    // 🛡️ FIX: Auto-sync maxScore after deletion
+    await this._syncQuizMaxScore(quizId);
+    
     return { message: 'Xóa câu hỏi thành công' };
   }
 

@@ -65,7 +65,9 @@ async function autoSubmitExpiredAttempt(attempt, quiz) {
     totalScore += pointsEarned;
   }
 
-  const percentageScore = maxScore > 0 ? (totalScore / maxScore) * 100 : 0;
+  // 🛡️ FIX: Calculate percentage based on actual sum of question points
+  const effectiveMaxScore = maxScore > 0 ? maxScore : 100;
+  const percentageScore = effectiveMaxScore > 0 ? (totalScore / effectiveMaxScore) * 100 : 0;
   let passed = percentageScore >= quiz.passingScore;
   if (!passed && manualCount > 0) passed = null;
 
@@ -225,22 +227,72 @@ class AttemptService {
 
   /**
    * Submit quiz attempt — uses shared gradeAnswer helper
+   * 🔒 FIXED: Added transaction with row-level lock to prevent race condition
    */
   async submitAttempt(attemptId, userId, userRole, answers) {
-    const attempt = await Attempt.findByPk(attemptId, {
-      include: [{
-        model: Quiz,
-        as: 'quiz',
-        attributes: ['id', 'title', 'description', 'passingScore', 'showResults', 'timeLimit'],
-        include: [{ model: Question, as: 'questions' }],
-      }],
-    });
+    // 🛡️ FIX: Use transaction with row-level lock to prevent double submission
+    return await db.sequelize.transaction(async (t) => {
+      // 🛡️ FIX: Re-fetch and lock attempt with status check
+      const attempt = await Attempt.findOne({
+        where: { 
+          id: attemptId, 
+          userId: Number(userId),
+          completedAt: null  // Chỉ lấy nếu chưa completed
+        },
+        include: [{
+          model: Quiz,
+          as: 'quiz',
+          attributes: ['id', 'title', 'description', 'passingScore', 'showResults', 'timeLimit', 'courseId'],
+          include: [{ model: Question, as: 'questions' }],
+        }],
+        lock: t.LOCK.UPDATE,
+        transaction: t,
+      });
 
-    if (!attempt) throw { status: 404, message: 'Không tìm thấy lần làm bài' };
-    if (attempt.userId !== userId && userRole !== 'admin') {
-      throw { status: 403, message: 'Bạn không có quyền nộp bài này' };
-    }
-    if (attempt.completedAt) throw { status: 400, message: 'Lần làm bài này đã được nộp' };
+      if (!attempt) {
+        // Check if already submitted by another thread
+        const existingAttempt = await Attempt.findByPk(attemptId, {
+          include: [{
+            model: Quiz,
+            as: 'quiz',
+            attributes: ['id', 'title', 'description', 'passingScore', 'showResults', 'timeLimit', 'courseId'],
+            include: [{ model: Question, as: 'questions' }],
+          }],
+        });
+        
+        if (!existingAttempt) {
+          throw { status: 404, message: 'Không tìm thấy lần làm bài' };
+        }
+        
+        // 🛡️ Fix: Use Number() for consistent comparison
+        if (Number(existingAttempt.userId) !== Number(userId) && userRole !== 'admin') {
+          throw { status: 403, message: 'Bạn không có quyền nộp bài này' };
+        }
+        
+        if (existingAttempt.completedAt) {
+          throw { status: 409, message: 'Lần làm bài này đã được nộp' };
+        }
+        
+        // Trả về attempt nếu đã được xử lý
+        return {
+          attempt: {
+            id: existingAttempt.id,
+            score: existingAttempt.score,
+            percentageScore: existingAttempt.percentageScore,
+            passed: existingAttempt.passed,
+            completedAt: existingAttempt.completedAt,
+            summary: { totalQuestions: existingAttempt.quiz.questions.length, correctCount: 0, incorrectCount: 0, manualGradingCount: 0 },
+          },
+          quiz: { id: existingAttempt.quiz.id, title: existingAttempt.quiz.title },
+          results: [],
+          alreadySubmitted: true,
+        };
+      }
+
+      // Admin override - if admin is submitting for another user, check ownership
+      if (Number(attempt.userId) !== Number(userId) && userRole !== 'admin') {
+        throw { status: 403, message: 'Bạn không có quyền nộp bài này' };
+      }
 
     // Check time limit — reject if too much time has passed (with 30s grace)
     if (attempt.quiz.timeLimit) {
@@ -274,62 +326,86 @@ class AttemptService {
       }
     }
 
-    let totalScore = 0;
-    let maxScore = 0;
-    let correctCount = 0;
-    let incorrectCount = 0;
-    let manualGradingCount = 0;
-    const results = [];
+      let totalScore = 0;
+      let maxScore = 0;
+      let correctCount = 0;
+      let incorrectCount = 0;
+      let manualGradingCount = 0;
+      const results = [];
 
-    for (const question of attempt.quiz.questions) {
-      maxScore += question.points;
-      const userAnswer = answers[question.id];
-      const { isCorrect, pointsEarned, isManual } = gradeAnswer(question, userAnswer);
+      for (const question of attempt.quiz.questions) {
+        maxScore += question.points;
+        const userAnswer = answers[question.id];
+        const { isCorrect, pointsEarned, isManual } = gradeAnswer(question, userAnswer);
 
-      if (isManual) { manualGradingCount++; }
-      else if (isCorrect) { correctCount++; }
-      else { incorrectCount++; }
+        if (isManual) { manualGradingCount++; }
+        else if (isCorrect) { correctCount++; }
+        else { incorrectCount++; }
 
-      totalScore += pointsEarned;
+        totalScore += pointsEarned;
 
-      results.push({
-        questionId: question.id,
-        userAnswer,
-        correctAnswer: attempt.quiz.showResults ? question.correctAnswer : undefined,
-        isCorrect: isManual ? undefined : isCorrect,
-        pointsEarned,
-        maxPoints: question.points,
-        explanation: attempt.quiz.showResults ? question.explanation : undefined,
-      });
-    }
+        results.push({
+          questionId: question.id,
+          userAnswer,
+          correctAnswer: attempt.quiz.showResults ? question.correctAnswer : undefined,
+          isCorrect: isManual ? undefined : isCorrect,
+          pointsEarned,
+          maxPoints: question.points,
+          explanation: attempt.quiz.showResults ? question.explanation : undefined,
+        });
+      }
 
-    const percentageScore = maxScore > 0 ? (totalScore / maxScore) * 100 : 0;
-    let passed = percentageScore >= attempt.quiz.passingScore;
-    if (!passed && manualGradingCount > 0) passed = null;
+      // 🛡️ FIX: Calculate percentage based on actual sum of question points
+      const effectiveMaxScore = maxScore > 0 ? maxScore : 100;
+      const percentageScore = effectiveMaxScore > 0 ? (totalScore / effectiveMaxScore) * 100 : 0;
+      let passed = percentageScore >= attempt.quiz.passingScore;
+      if (!passed && manualGradingCount > 0) passed = null;
 
-    await attempt.update({ answers, score: totalScore, percentageScore, passed, completedAt: new Date() });
+      // 🛡️ FIX: Update within transaction
+      await attempt.update({ 
+        answers, 
+        score: totalScore, 
+        percentageScore, 
+        passed, 
+        completedAt: new Date() 
+      }, { transaction: t });
 
-    // Tự động đồng bộ với tiến độ khóa học ngay sau khi nộp
-    try {
-      const progressService = require('../progress/progress.service');
-      await progressService.getStudentCourseProgress(userId, attempt.quiz.courseId);
-    } catch (e) {
-      console.error('[Quiz] Lỗi đồng bộ tiến độ khóa học sau khi nộp bài:', e);
-    }
-
-    return {
-      attempt: {
-        id: attempt.id,
+      return {
+        attemptId: attempt.id,
         score: totalScore,
         percentageScore,
         maxScore,
         passed,
-        completedAt: attempt.completedAt,
+        completedAt: new Date(),
         summary: { totalQuestions: attempt.quiz.questions.length, correctCount, incorrectCount, manualGradingCount },
-      },
-      quiz: { id: attempt.quiz.id, title: attempt.quiz.title, description: attempt.quiz.description },
-      results,
-    };
+        quizId: attempt.quiz.id,
+        quizTitle: attempt.quiz.title,
+        courseId: attempt.quiz.courseId,
+        results,
+      };
+    }).then(async (result) => {
+      // Non-critical: sync progress outside transaction
+      try {
+        const progressService = require('../progress/progress.service');
+        await progressService.getStudentCourseProgress(userId, result.courseId);
+      } catch (e) {
+        console.error('[Quiz] Lỗi đồng bộ tiến độ khóa học sau khi nộp bài:', e);
+      }
+
+      return {
+        attempt: {
+          id: result.attemptId,
+          score: result.score,
+          percentageScore: result.percentageScore,
+          maxScore: result.maxScore,
+          passed: result.passed,
+          completedAt: result.completedAt,
+          summary: result.summary,
+        },
+        quiz: { id: result.quizId, title: result.quizTitle },
+        results: result.results,
+      };
+    });
   }
 
   /**
@@ -375,7 +451,8 @@ class AttemptService {
     });
 
     if (!attempt) throw { status: 404, message: 'Không tìm thấy lần làm bài' };
-    if (attempt.userId !== userId && userRole !== 'admin') {
+    // 🛡️ Fix: Use Number() for consistent comparison
+    if (Number(attempt.userId) !== Number(userId) && userRole !== 'admin') {
       throw { status: 403, message: 'Bạn không có quyền xem lần làm bài này' };
     }
 
@@ -501,7 +578,8 @@ class AttemptService {
     });
 
     if (!attempt) throw { status: 404, message: 'Không tìm thấy lần làm bài' };
-    const isOwner = attempt.quiz?.course?.createdBy === userId;
+    // 🛡️ Fix: Use Number() for consistent comparison
+    const isOwner = Number(attempt.quiz?.course?.createdBy) === Number(userId);
     if (!isOwner && userRole !== 'admin') throw { status: 403, message: 'Bạn không có quyền xem bài làm này' };
 
     let userAnswers = attempt.answers || {};
@@ -548,7 +626,8 @@ class AttemptService {
       include: [{ model: Quiz, as: 'quiz', include: [{ model: Course, as: 'course' }] }],
     });
     if (!attempt) throw { status: 404, message: 'Không tìm thấy bài nộp' };
-    const isOwner = attempt.quiz?.course?.createdBy === userId;
+    // 🛡️ Fix: Use Number() for consistent comparison
+    const isOwner = Number(attempt.quiz?.course?.createdBy) === Number(userId);
     if (!isOwner && userRole !== 'admin') throw { status: 403, message: 'Bạn không có quyền xóa bài nộp này' };
     await attempt.destroy();
     return { message: 'Đã xóa bài nộp thành công. Học viên có thể thực hiện lại bài thi.' };

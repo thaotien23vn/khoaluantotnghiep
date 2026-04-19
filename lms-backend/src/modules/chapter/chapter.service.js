@@ -20,7 +20,8 @@ class ChapterService {
       throw { status: 404, message: 'Không tìm thấy khóa học' };
     }
 
-    if (role === 'teacher' && course.createdBy !== userId) {
+    // 🛡️ Fix: Use Number() for consistent comparison
+    if (role === 'teacher' && Number(course.createdBy) !== Number(userId)) {
       throw { status: 403, message: 'Bạn không có quyền chỉnh sửa khóa học này' };
     }
 
@@ -51,7 +52,8 @@ class ChapterService {
       throw { status: 404, message: 'Không tìm thấy khóa học của chương này' };
     }
 
-    if (role === 'teacher' && course.createdBy !== userId) {
+    // 🛡️ Fix: Use Number() for consistent comparison
+    if (role === 'teacher' && Number(course.createdBy) !== Number(userId)) {
       throw { status: 403, message: 'Bạn không có quyền chỉnh sửa chương này' };
     }
 
@@ -83,23 +85,48 @@ class ChapterService {
       throw { status: 404, message: 'Không tìm thấy khóa học của chương này' };
     }
 
-    if (role === 'teacher' && course.createdBy !== userId) {
+    // 🛡️ Fix: Use Number() for consistent comparison
+    if (role === 'teacher' && Number(course.createdBy) !== Number(userId)) {
       throw { status: 403, message: 'Bạn không có quyền xóa chương này' };
     }
 
+    // 🛡️ Lưu URLs để xóa sau khi transaction thành công
     const lectures = await Lecture.findAll({ where: { chapterId: chapter.id } });
-    for (const lecture of lectures) {
-      if (!lecture.contentUrl) continue;
+    const mediaUrlsToDelete = lectures
+      .filter((lecture) => lecture.contentUrl)
+      .map((lecture) => lecture.contentUrl);
+
+    // 🛡️ Fix: Sử dụng transaction để đảm bảo tính toàn vẹn dữ liệu
+    const transaction = await db.sequelize.transaction();
+    try {
+      // 🛡️ FIX E7: Cleanup LectureProgress trước khi xóa lectures
+      const lectureIds = lectures.map((lecture) => lecture.id);
+      if (lectureIds.length > 0) {
+        await LectureProgress.destroy({ 
+          where: { lectureId: { [Op.in]: lectureIds } }, 
+          transaction 
+        });
+      }
+      
+      // Delete lectures first to avoid foreign key issues
+      await Lecture.destroy({ where: { chapterId: chapter.id }, transaction });
+      await chapter.destroy({ transaction });
+
+      await transaction.commit();
+    } catch (error) {
+      await transaction.rollback();
+      throw error;
+    }
+
+    // 🛡️ Fix: Delete media AFTER transaction commits successfully
+    // This prevents data loss if transaction fails
+    for (const contentUrl of mediaUrlsToDelete) {
       try {
-        await mediaService.deleteMediaByUrl(lecture.contentUrl);
+        await mediaService.deleteMediaByUrl(contentUrl);
       } catch (mediaErr) {
         console.error('Delete chapter lecture media (silent) error:', mediaErr);
       }
     }
-
-    // Delete lectures first to avoid foreign key issues
-    await Lecture.destroy({ where: { chapterId: chapter.id } });
-    await chapter.destroy();
 
     try {
       await courseAggregatesService.recomputeCourseTotalLessons(course.id);

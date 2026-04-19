@@ -2,7 +2,11 @@
  * Stripe Service - Payment integration with Stripe
  */
 
+const { Sequelize } = require('sequelize');
 const db = require('../models');
+
+// Defensive: Sequelize.LOCK may not be available in all environments (e.g., SQLite tests)
+const LOCK_UPDATE = (Sequelize && Sequelize.LOCK && Sequelize.LOCK.UPDATE) ? Sequelize.LOCK.UPDATE : undefined;
 const cartService = require('../modules/cart/cart.service');
 const courseAggregatesService = require('./courseAggregates.service');
 const logger = require('../utils/logger');
@@ -59,7 +63,7 @@ class StripeService {
     return result;
   }
 
-  async _renewEnrollmentAfterPayment(userId, courseId, renewalMonths, enrollmentId = null) {
+  async _renewEnrollmentAfterPayment(userId, courseId, renewalMonths, enrollmentId = null, transaction = null) {
     const uid = parseInt(userId, 10);
     const cid = parseInt(courseId, 10);
     const months = Number(renewalMonths);
@@ -69,17 +73,27 @@ class StripeService {
       ? { id: Number(enrollmentId), userId: uid, courseId: cid }
       : { userId: uid, courseId: cid };
 
+    // 🛡️ FIX: Add row-level lock
     const enrollment = await Enrollment.findOne({
       where,
       include: [{ model: Course, as: 'Course', attributes: ['id', 'gracePeriodDays'] }],
+      lock: (transaction && LOCK_UPDATE) ? LOCK_UPDATE : undefined,
+      transaction,
     });
     if (!enrollment) {
       throw { status: 404, message: 'Không tìm thấy ghi danh để gia hạn' };
     }
 
+    // 🛡️ FIX: Validate enrollment status
+    if (!['active', 'grace_period', 'expired'].includes(enrollment.enrollmentStatus)) {
+      throw { status: 400, message: 'Không thể gia hạn ghi danh này - trạng thái không hợp lệ' };
+    }
+
+    // 🛡️ FIX: Correct date calculation
     let startFrom = new Date();
-    if (enrollment.expiresAt && enrollment.expiresAt > startFrom) {
-      startFrom = enrollment.expiresAt;
+    const graceEnd = enrollment.gracePeriodEndsAt || enrollment.expiresAt;
+    if (graceEnd) {
+      startFrom = new Date(Math.max(startFrom.getTime(), new Date(graceEnd).getTime()));
     }
 
     const newExpiresAt = this._calculateExpiryDate(startFrom, months, 'months');
@@ -91,28 +105,32 @@ class StripeService {
     enrollment.renewalCount = Number(enrollment.renewalCount || 0) + 1;
     enrollment.lastRenewedAt = new Date();
     enrollment.enrollmentStatus = 'active';
-    await enrollment.save();
+    await enrollment.save({ transaction });
 
     return enrollment;
   }
 
-  async _ensureEnrollment(userId, courseId) {
+  async _ensureEnrollment(userId, courseId, transaction = null) {
     const uid = parseInt(userId, 10);
     const cid = parseInt(courseId, 10);
 
-    const existing = await Enrollment.findOne({ where: { userId: uid, courseId: cid } });
-    if (existing) return existing;
+    const enrollment = await Enrollment.findOne({
+      where: { userId: uid, courseId: cid },
+      transaction,
+    });
+    if (enrollment) return enrollment;
 
     try {
       return await Enrollment.create({
-        userId: uid,
-        courseId: cid,
-        status: 'enrolled',
-        progressPercent: 0,
-      });
+      userId: uid,
+      courseId: cid,
+      status: 'enrolled',
+      enrollmentStatus: 'active',
+      progressPercent: 0,
+    }, { transaction });
     } catch (err) {
       if (err?.name === 'SequelizeUniqueConstraintError') {
-        const afterRace = await Enrollment.findOne({ where: { userId: uid, courseId: cid } });
+        const afterRace = await Enrollment.findOne({ where: { userId: uid, courseId: cid }, transaction });
         if (afterRace) return afterRace;
       }
       throw err;
@@ -280,55 +298,64 @@ class StripeService {
   /**
    * Process successful payment
    * @private
+   * 🔒 FIXED: Added transaction wrapper with row-level lock
    */
   async _handlePaymentSuccess(paymentIntent) {
-    const { userId, courseId } = paymentIntent.metadata;
+    // 🛡️ FIX: Use transaction with row-level lock
+    return await db.sequelize.transaction(async (t) => {
+      const { userId, courseId } = paymentIntent.metadata;
 
-    // Find and update payment
-    const payment = await Payment.findOne({
-      where: { providerTxn: paymentIntent.id },
-    });
+      // 🛡️ FIX: Re-fetch and lock payment with status check
+      const payment = await Payment.findOne({
+        where: { providerTxn: paymentIntent.id, status: 'pending' },
+        lock: LOCK_UPDATE || undefined,
+        transaction: t,
+      });
 
-    if (!payment) {
-      throw { status: 404, message: 'Không tìm thấy giao dịch' };
-    }
-
-    // Idempotency: do not re-process already completed payments
-    if (payment.status === 'completed') {
-      return { success: true, payment, event: 'payment_intent.succeeded', alreadyProcessed: true };
-    }
-
-    payment.status = 'completed';
-    payment.paymentDetails = {
-      ...payment.paymentDetails,
-      completedAt: new Date().toISOString(),
-      receiptUrl: paymentIntent.charges?.data?.[0]?.receipt_url,
-    };
-    await payment.save();
-
-    // Create enrollment (unique-safe / race-safe)
-    try {
-      await this._ensureEnrollment(userId, courseId);
-    } catch (err) {
-      if (err?.name !== 'SequelizeUniqueConstraintError') {
-        throw err;
+      if (!payment) {
+        // Already processed by another thread
+        const existingPayment = await Payment.findOne({
+          where: { providerTxn: paymentIntent.id },
+        });
+        return { success: true, payment: existingPayment, event: 'payment_intent.succeeded', alreadyProcessed: true };
       }
-    }
 
-    try {
-      await courseAggregatesService.recomputeCourseStudents(parseInt(courseId, 10));
-    } catch (aggErr) {
-      logger.warn('RECOMPUTE_COURSE_STUDENTS_AFTER_STRIPE_WEBHOOK_FAILED', { error: aggErr.message });
-    }
+      payment.status = 'completed';
+      payment.paymentDetails = {
+        ...payment.paymentDetails,
+        completedAt: new Date().toISOString(),
+        receiptUrl: paymentIntent.charges?.data?.[0]?.receipt_url,
+      };
+      await payment.save({ transaction: t });
 
-    // Remove from cart
-    await cartService.removeCourseFromCart(parseInt(userId), parseInt(courseId));
+      // Create enrollment (unique-safe / race-safe) within transaction
+      try {
+        await this._ensureEnrollment(userId, courseId, t);
+      } catch (err) {
+        if (err?.name !== 'SequelizeUniqueConstraintError') {
+          throw err;
+        }
+      }
 
-    return {
-      success: true,
-      payment,
-      event: 'payment_intent.succeeded',
-    };
+      // Commit transaction before non-critical operations
+      return { success: true, payment, userId, courseId, event: 'payment_intent.succeeded' };
+    }).then(async (result) => {
+      // Non-critical operations after transaction
+      try {
+        await courseAggregatesService.recomputeCourseStudents(parseInt(result.courseId, 10));
+      } catch (aggErr) {
+        logger.warn('RECOMPUTE_COURSE_STUDENTS_AFTER_STRIPE_WEBHOOK_FAILED', { error: aggErr.message });
+      }
+
+      // Remove from cart
+      await cartService.removeCourseFromCart(parseInt(result.userId), parseInt(result.courseId));
+
+      return {
+        success: true,
+        payment: result.payment,
+        event: 'payment_intent.succeeded',
+      };
+    });
   }
 
   /**
@@ -543,14 +570,26 @@ class StripeService {
    * @param {Object} session - Checkout session object
    */
   async handleCheckoutCompleted(session) {
-    logger.info('STRIPE_CHECKOUT_COMPLETED_HANDLER_CALLED', {
+    logger.info('STRIPE_CHECKOUT_SUCCESS_PROCESSING', { sessionId: session.id });
+
+    // SECURITY: Use transaction for the entire checkout completion process
+    return await db.sequelize.transaction(async (t) => {
+      return this._handlePaymentSuccess(session, t);
+    });
+  }
+
+  async _handlePaymentSuccess(session, transaction = null) {
+    // Handle both checkout session (payment_status) and payment intent (status)
+    const paymentStatus = session.payment_status || session.status;
+    logger.info('STRIPE_PAYMENT_SUCCESS_HANDLER_CALLED', {
       sessionId: session.id,
-      paymentStatus: session.payment_status,
+      paymentStatus,
     });
 
-    // Verify payment status
-    if (session.payment_status !== 'paid') {
-      throw { status: 400, message: `Payment not completed. Status: ${session.payment_status}` };
+    // Verify payment status - accepts 'paid' (checkout) or 'succeeded' (payment intent)
+    const isPaid = paymentStatus === 'paid' || paymentStatus === 'succeeded';
+    if (!paymentStatus || !isPaid) {
+      throw { status: 400, message: `Payment not completed. Status: ${paymentStatus || 'unknown'}` };
     }
 
     const { userId, courseId, courseIds, isRenewal, enrollmentId, renewalMonths } = session.metadata;
@@ -563,55 +602,69 @@ class StripeService {
       renewalMonths,
     });
 
+    // 🛡️ FIX: Validate metadata userId matches
+    const metadataUserId = parseInt(userId, 10);
+    if (!Number.isFinite(metadataUserId)) {
+      throw { status: 400, message: 'Invalid userId in session metadata' };
+    }
+
     // Handle cart payment (multiple courses)
     if (courseIds) {
       const courseIdList = JSON.parse(courseIds);
       logger.info('STRIPE_CART_CHECKOUT_PROCESSING', { sessionId: session.id, itemCount: courseIdList.length });
       
-      // Find all payments with this session ID
+      // 🛡️ FIX: Find and lock all payments with this session ID
       const payments = await Payment.findAll({
         where: { providerTxn: session.id },
+        lock: (transaction && LOCK_UPDATE) ? LOCK_UPDATE : undefined,
+        transaction,
       });
       
       logger.debug('STRIPE_CART_PAYMENTS_FOUND', { sessionId: session.id, count: payments.length });
       
       for (const payment of payments) {
+        // 🛡️ FIX: Validate payment userId matches metadata
+        if (payment.userId !== metadataUserId) {
+          logger.error('STRIPE_CART_USER_MISMATCH', { 
+            paymentId: payment.id, 
+            paymentUserId: payment.userId, 
+            metadataUserId 
+          });
+          throw { status: 403, message: 'User mismatch in payment metadata' };
+        }
+        
         if (payment.status === 'completed') {
           continue;
         }
+        
+        // Update payment status
         payment.status = 'completed';
         payment.paymentDetails = {
           ...payment.paymentDetails,
           completedAt: new Date().toISOString(),
           receiptUrl: session.receipt_url,
         };
-        await payment.save();
+        await payment.save({ transaction });
         
         // Create enrollment (unique-safe / race-safe)
         try {
-          await this._ensureEnrollment(userId, payment.courseId);
+          await this._ensureEnrollment(userId, payment.courseId, transaction);
         } catch (err) {
           if (err?.name !== 'SequelizeUniqueConstraintError') {
             throw err;
           }
         }
-        try {
-          await courseAggregatesService.recomputeCourseStudents(payment.courseId);
-        } catch (aggErr) {
-          logger.warn('RECOMPUTE_COURSE_STUDENTS_AFTER_STRIPE_CART_CHECKOUT_FAILED', { error: aggErr.message });
-        }
-        
-        // Remove from cart
-        await cartService.removeCourseFromCart(parseInt(userId), payment.courseId);
       }
       
-      return { success: true, payments };
+      return { success: true, payments, userId: metadataUserId, courseIds: courseIdList };
     }
 
     // Handle single course payment
-    // Find payment by session ID
+    // 🛡️ FIX: Find and lock payment by session ID with status check
     const payment = await Payment.findOne({
       where: { providerTxn: session.id },
+      lock: (transaction && LOCK_UPDATE) ? LOCK_UPDATE : undefined,
+      transaction,
     });
 
     logger.debug('STRIPE_SINGLE_PAYMENT_FOUND', {
@@ -623,6 +676,16 @@ class StripeService {
 
     if (!payment) {
       throw { status: 404, message: 'Không tìm thấy giao dịch với session ID: ' + session.id };
+    }
+
+    // 🛡️ FIX: Validate payment userId matches metadata
+    if (payment.userId !== metadataUserId) {
+      logger.error('STRIPE_SINGLE_USER_MISMATCH', { 
+        paymentId: payment.id, 
+        paymentUserId: payment.userId, 
+        metadataUserId 
+      });
+      throw { status: 403, message: 'User mismatch in payment metadata' };
     }
 
     // For renewal checkout, extend enrollment validity. Otherwise enroll new learner.
@@ -640,23 +703,24 @@ class StripeService {
 
     // Idempotency for payment state.
     if (payment.status !== 'completed') {
+      // Update payment status atomically
       payment.status = 'completed';
       payment.paymentDetails = {
         ...payment.paymentDetails,
         completedAt: new Date().toISOString(),
         receiptUrl: session.receipt_url,
       };
-      await payment.save();
+      await payment.save({ transaction });
       logger.info('STRIPE_PAYMENT_MARKED_COMPLETED', { paymentId: payment.id, sessionId: session.id });
     }
 
     // Idempotency for access application (renew/enroll).
     if (!accessAppliedAt) {
       if (renewalMode && Number.isFinite(resolvedMonths) && resolvedMonths > 0) {
-        await this._renewEnrollmentAfterPayment(userId, courseId, resolvedMonths, resolvedEnrollmentId);
+        await this._renewEnrollmentAfterPayment(userId, courseId, resolvedMonths, resolvedEnrollmentId, transaction);
       } else {
         try {
-          await this._ensureEnrollment(userId, courseId);
+          await this._ensureEnrollment(userId, courseId, transaction);
         } catch (err) {
           if (err?.name !== 'SequelizeUniqueConstraintError') {
             throw err;
@@ -667,7 +731,7 @@ class StripeService {
         ...payment.paymentDetails,
         accessAppliedAt: new Date().toISOString(),
       };
-      await payment.save();
+      await payment.save({ transaction });
     }
     try {
       await courseAggregatesService.recomputeCourseStudents(parseInt(courseId, 10));

@@ -145,7 +145,7 @@ class AdminController {
       if (validationError) return;
 
       const { id } = req.params;
-      const result = await adminService.updateUser(id, req.body);
+      const result = await adminService.updateUser(id, req.body, req.user.id);
       res.json({
         success: true,
         data: result,

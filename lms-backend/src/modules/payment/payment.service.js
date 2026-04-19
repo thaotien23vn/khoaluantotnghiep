@@ -1,9 +1,22 @@
+const { Sequelize } = require('sequelize');
 const db = require('../../models');
 const cartService = require('../cart/cart.service');
 const courseAggregatesService = require('../../services/courseAggregates.service');
+const notificationService = require('../notification/notification.service');
 const vnpayService = require('../../services/vnpay.service');
 
-const { Payment, Course, User, Enrollment, LectureProgress } = db.models;
+// Defensive: Sequelize.LOCK may not be available in all environments (e.g., SQLite tests)
+const LOCK_UPDATE = (Sequelize && Sequelize.LOCK && Sequelize.LOCK.UPDATE) ? Sequelize.LOCK.UPDATE : undefined;
+
+const {
+  Payment,
+  Course,
+  Enrollment,
+  LectureProgress,
+  User,
+  Attempt,
+  Quiz,
+} = db.models;
 
 /**
  * Generate unique provider transaction ID
@@ -106,7 +119,7 @@ class PaymentService {
     return result;
   }
 
-  async _renewEnrollmentAfterPayment(userId, courseId, renewalMonths, enrollmentId = null) {
+  async _renewEnrollmentAfterPayment(userId, courseId, renewalMonths, enrollmentId = null, transaction = null) {
     const months = Number(renewalMonths);
     if (!Number.isFinite(months) || months <= 0) {
       return null;
@@ -116,18 +129,28 @@ class PaymentService {
       ? { id: Number(enrollmentId), userId: Number(userId), courseId: Number(courseId) }
       : { userId: Number(userId), courseId: Number(courseId) };
 
+    // 🛡️ FIX: Add row-level lock and check status
     const enrollment = await Enrollment.findOne({
       where,
       include: [{ model: Course, as: 'Course', attributes: ['id', 'gracePeriodDays'] }],
+      lock: (transaction && LOCK_UPDATE) ? LOCK_UPDATE : undefined,
+      transaction,
     });
 
     if (!enrollment) {
       throw { status: 404, message: 'Không tìm thấy ghi danh để gia hạn' };
     }
 
+    // 🛡️ FIX: Validate enrollment status before renewal
+    if (!['active', 'grace_period', 'expired'].includes(enrollment.enrollmentStatus)) {
+      throw { status: 400, message: 'Không thể gia hạn ghi danh này - trạng thái không hợp lệ' };
+    }
+
+    // 🛡️ FIX: Correct date calculation
     let startFrom = new Date();
-    if (enrollment.expiresAt && enrollment.expiresAt > startFrom) {
-      startFrom = enrollment.expiresAt;
+    const graceEnd = enrollment.gracePeriodEndsAt || enrollment.expiresAt;
+    if (graceEnd) {
+      startFrom = new Date(Math.max(startFrom.getTime(), new Date(graceEnd).getTime()));
     }
 
     const newExpiresAt = this._calculateExpiryDate(startFrom, months, 'months');
@@ -139,7 +162,20 @@ class PaymentService {
     enrollment.renewalCount = Number(enrollment.renewalCount || 0) + 1;
     enrollment.lastRenewedAt = new Date();
     enrollment.enrollmentStatus = 'active';
-    await enrollment.save();
+    await enrollment.save({ transaction });
+
+    // 🔔 Send renewal notification (outside transaction to avoid blocking)
+    try {
+      await notificationService.createNotification({
+        userId,
+        title: '🔄 Gia hạn khóa học thành công',
+        message: `Bạn đã gia hạn khóa học "${enrollment.Course?.title || 'Khóa học'}" thêm ${months} tháng. Hết hạn mới: ${newExpiresAt.toLocaleDateString('vi-VN')}`,
+        type: 'enrollment_renewal',
+        payload: { courseId, enrollmentId: enrollment.id, renewalMonths: months },
+      });
+    } catch (notifyErr) {
+      console.error('Create renewal notification (silent) error:', notifyErr);
+    }
 
     return enrollment;
   }
@@ -297,7 +333,10 @@ class PaymentService {
    * Also handles creating payment if courseId is provided (for backward compatibility)
    */
   async processPayment(userId, processData) {
-    const { paymentId, courseId, status = 'completed', providerTxn, provider = 'mock', cartCheckout = false } = processData;
+    const { paymentId, courseId, providerTxn, provider = 'mock', cartCheckout = false } = processData;
+    // SECURITY: Status must never be trusted from the client request body.
+    // Defaulting to 'pending' if it's a new payment creation, otherwise we fetch from DB.
+    let status = 'pending'; 
 
     // If cart checkout, process all pending payments for user
     if (cartCheckout) {
@@ -335,7 +374,8 @@ class PaymentService {
       }
       const providerTxnNew = generateProviderTxn(provider);
 
-      // Create payment with completed status for mock provider
+      // TODO: SECURITY_DEBT - This "backward compatibility" branch allows creating payments on the fly.
+      // In a real production environment, this should be disabled in favor of strict provider webhooks.
       payment = await Payment.create({
         userId,
         courseId,
@@ -343,26 +383,17 @@ class PaymentService {
         currency: 'USD',
         provider,
         providerTxn: providerTxn || providerTxnNew,
-        status: status,
+        status: 'pending', // SECURITY: Force pending for manual creation attempt
         paymentDetails: {
           initiatedAt: new Date().toISOString(),
-          processedAt: new Date().toISOString(),
-          finalStatus: status,
           source: 'direct',
         },
       });
 
-      // If payment successful, auto-enroll user
-      let enrollment = null;
-      if (status === 'completed') {
-        enrollment = await this._enrollAfterPayment(userId, courseId);
-        // Remove from cart if exists
-        await cartService.removeCourseFromCart(userId, courseId);
-      }
-
+      // We do NOT auto-enroll here anymore because status is forced to 'pending'
       return { 
         payment,
-        enrollment,
+        enrollment: null,
         isNew: true,
       };
     } else {
@@ -376,37 +407,61 @@ class PaymentService {
       };
     }
 
-    // Process with mock payment processor
-    const processResult = await mockProcessor.process({
-      amount: payment.amount,
-      currency: payment.currency,
-      providerTxn: payment.providerTxn,
+    // 🛡️ FIX: Process with transaction for atomicity
+    const result = await db.sequelize.transaction(async (t) => {
+      // Re-fetch and lock payment
+      const paymentLocked = await Payment.findOne({
+        where: { id: payment.id, status: 'pending' },
+        lock: LOCK_UPDATE || undefined,
+        transaction: t,
+      });
+
+      if (!paymentLocked) {
+        throw { status: 409, message: 'Giao dịch đã được xử lý hoặc không hợp lệ' };
+      }
+
+      // Process with mock payment processor
+      const processResult = await mockProcessor.process({
+        amount: paymentLocked.amount,
+        currency: paymentLocked.currency,
+        providerTxn: paymentLocked.providerTxn,
+      });
+
+      // Update payment status
+      paymentLocked.status = processResult.status;
+      paymentLocked.paymentDetails = {
+        ...paymentLocked.paymentDetails,
+        ...processResult.mockDetails,
+        processedAt: processResult.processedAt,
+        processorResponse: processResult,
+      };
+
+      await paymentLocked.save({ transaction: t });
+
+      // If payment successful, auto-enroll user within transaction
+      let enrollment = null;
+      if (paymentLocked.status === 'completed') {
+        enrollment = await this._enrollAfterPayment(userId, paymentLocked.courseId, t);
+      }
+
+      return { 
+        payment: paymentLocked,
+        enrollment,
+        processorResult: processResult,
+        courseId: paymentLocked.courseId,
+      };
     });
 
-    // Update payment status
-    payment.status = processResult.status;
-    payment.paymentDetails = {
-      ...payment.paymentDetails,
-      ...processResult.mockDetails,
-      processedAt: processResult.processedAt,
-      processorResponse: processResult,
-    };
-
-    await payment.save();
-
-    // If payment successful, auto-enroll user
-    let enrollment = null;
-    if (payment.status === 'completed') {
-      enrollment = await this._enrollAfterPayment(userId, payment.courseId);
-      // Remove from cart if it was from cart
-      await cartService.removeCourseFromCart(userId, payment.courseId);
+    // Remove from cart outside transaction (non-critical)
+    if (result.enrollment) {
+      await cartService.removeCourseFromCart(userId, result.courseId);
     }
 
     return { 
-      payment,
-      enrollment,
+      payment: result.payment,
+      enrollment: result.enrollment,
       isNew: false,
-      processorResult: processResult,
+      processorResult: result.processorResult,
     };
   }
 
@@ -705,56 +760,68 @@ class PaymentService {
 
   /**
    * Process refund for a payment
+   * 🔒 FIXED: Added transaction wrapper for atomicity
    */
   async processRefund(userId, paymentId, reason) {
-    const payment = await Payment.findOne({
-      where: { id: paymentId, userId },
-      include: [
-        {
-          model: Course,
-          as: 'course',
-        },
-      ],
-    });
+    // 🛡️ FIX: Use transaction for atomic refund process
+    const result = await db.sequelize.transaction(async (t) => {
+      // Lock payment row
+      const payment = await Payment.findOne({
+        where: { id: Number(paymentId), userId: Number(userId) },
+        include: [
+          {
+            model: Course,
+            as: 'course',
+          },
+        ],
+        lock: LOCK_UPDATE || undefined,
+        transaction: t,
+      });
 
-    if (!payment) {
-      throw { status: 404, message: 'Không tìm thấy giao dịch' };
-    }
+      if (!payment) {
+        throw { status: 404, message: 'Không tìm thấy giao dịch' };
+      }
 
-    if (payment.status !== 'completed') {
-      throw { status: 400, message: 'Chỉ có thể hoàn tiền cho giao dịch đã hoàn thành' };
-    }
+      if (payment.status !== 'completed') {
+        throw { status: 400, message: 'Chỉ có thể hoàn tiền cho giao dịch đã hoàn thành' };
+      }
 
-    // Check if user is enrolled
-    const enrollment = await Enrollment.findOne({
-      where: { userId, courseId: payment.courseId },
-    });
+      // Check if user is enrolled - lock enrollment row
+      const enrollment = await Enrollment.findOne({
+        where: { userId: Number(userId), courseId: Number(payment.courseId) },
+        lock: LOCK_UPDATE || undefined,
+        transaction: t,
+      });
 
-    if (!enrollment) {
-      throw { status: 400, message: 'Bạn chưa đăng ký khóa học này' };
-    }
+      if (!enrollment) {
+        throw { status: 400, message: 'Bạn chưa đăng ký khóa học này' };
+      }
 
-    // FIXED: Anti-abuse for refunds (Don't allow if > 30% complete)
-    if (enrollment.progressPercent > 30) {
-      throw { status: 400, message: `Bạn đã học được ${enrollment.progressPercent}% khóa học. Chỉ có thể hoàn tiền khi tiến độ dưới 30% để đảm bảo tính công bằng.` };
-    }
+      // FIXED: Anti-abuse for refunds (Don't allow if > 30% complete)
+      if (enrollment.progressPercent > 30) {
+        throw { status: 400, message: `Bạn đã học được ${enrollment.progressPercent}% khóa học. Chỉ có thể hoàn tiền khi tiến độ dưới 30% để đảm bảo tính công bằng.` };
+      }
 
-    // Check if can refund (e.g., within 30 days, not completed too much)
-    const daysSincePurchase = Math.floor(
-      (Date.now() - new Date(payment.createdAt).getTime()) / (1000 * 60 * 60 * 24)
-    );
+      // Check if can refund (e.g., within 30 days, not completed too much)
+      const daysSincePurchase = Math.floor(
+        (Date.now() - new Date(payment.createdAt).getTime()) / (1000 * 60 * 60 * 24)
+      );
 
-    if (daysSincePurchase > 30) {
-      throw { status: 400, message: 'Đã quá thời hạn giải quyết hoàn tiền (30 ngày)' };
-    }
+      if (daysSincePurchase > 30) {
+        throw { status: 400, message: 'Đã quá thời hạn giải quyết hoàn tiền (30 ngày)' };
+      }
 
-    // Process refund with mock processor
-    const refundResult = await mockProcessor.refund({
-      providerTxn: payment.providerTxn,
-      amount: payment.amount,
-    });
+      // Process refund with mock processor (outside transaction as it's external call)
+      const refundResult = await mockProcessor.refund({
+        providerTxn: payment.providerTxn,
+        amount: payment.amount,
+      });
 
-    if (refundResult.success) {
+      if (!refundResult.success) {
+        throw { status: 400, message: 'Hoàn tiền thất bại từ nhà cung cấp thanh toán' };
+      }
+
+      // Update payment status within transaction
       payment.status = 'refunded';
       payment.paymentDetails = {
         ...payment.paymentDetails,
@@ -762,46 +829,68 @@ class PaymentService {
         refundTxn: refundResult.refundTxn,
         refundedAt: refundResult.processedAt,
       };
-      await payment.save();
+      await payment.save({ transaction: t });
 
       // FIXED: Destroy enrollment so student loses course access after refund
-      if (enrollment) {
-        await enrollment.destroy();
-      }
+      await enrollment.destroy({ transaction: t });
 
       // Cleanup per-course lecture progress after refund unenroll
-      try {
-        await LectureProgress.destroy({ where: { userId, courseId: Number(payment.courseId) } });
-      } catch (e) {
-        console.error('Cleanup lecture progress after refund (silent) error:', e);
+      await LectureProgress.destroy({ 
+        where: { userId: Number(userId), courseId: Number(payment.courseId) },
+        transaction: t 
+      });
+
+      // 🛡️ FIX E4: Cleanup active quiz attempts after refund unenroll
+      // Get all quizzes in this course and delete incomplete attempts
+      const courseQuizzes = await Quiz.findAll({
+        where: { courseId: Number(payment.courseId) },
+        attributes: ['id'],
+        transaction: t,
+      });
+      const quizIds = courseQuizzes.map(q => q.id);
+      if (quizIds.length > 0) {
+        await Attempt.destroy({
+          where: {
+            userId: Number(userId),
+            quizId: { [db.Sequelize.Op.in]: quizIds },
+            completedAt: null,  // Chỉ xóa attempt đang làm (chưa completed)
+          },
+          transaction: t,
+        });
       }
 
-      // Update course student count
-      try {
-        await courseAggregatesService.recomputeCourseStudents(payment.courseId);
-      } catch (aggErr) {
-        console.error('Recompute course students after refund (silent):', aggErr);
-      }
+      return { payment, refund: refundResult, courseId: payment.courseId };
+    });
+
+    // Non-critical operations after transaction
+    try {
+      await courseAggregatesService.recomputeCourseStudents(result.courseId);
+    } catch (aggErr) {
+      console.error('Recompute course students after refund (silent):', aggErr);
     }
 
     return {
-      payment,
-      refund: refundResult,
+      payment: result.payment,
+      refund: result.refund,
     };
   }
 
   /**
    * Internal: Enroll user after successful payment
    */
-  async _enrollAfterPayment(userId, courseId) {
+  async _enrollAfterPayment(userId, courseId, transaction = null) {
     // Check if already enrolled
     const existing = await Enrollment.findOne({
       where: { userId, courseId },
+      transaction,
     });
 
     if (existing) {
       return existing;
     }
+
+    // Get course info for notification
+    const course = await Course.findByPk(courseId, { transaction });
 
     // Create enrollment
     let enrollment;
@@ -812,10 +901,10 @@ class PaymentService {
         status: 'enrolled',
         enrollmentStatus: 'active',
         progressPercent: 0,
-      });
+      }, { transaction });
     } catch (err) {
       if (err?.name === 'SequelizeUniqueConstraintError') {
-        const existingAfterRace = await Enrollment.findOne({ where: { userId, courseId } });
+        const existingAfterRace = await Enrollment.findOne({ where: { userId, courseId }, transaction });
         if (existingAfterRace) return existingAfterRace;
       }
       throw err;
@@ -826,6 +915,19 @@ class PaymentService {
       await courseAggregatesService.recomputeCourseStudents(courseId);
     } catch (aggErr) {
       console.error('Recompute course students (silent) error:', aggErr);
+    }
+
+    // 🔔 Send enrollment notification (outside transaction)
+    try {
+      await notificationService.createNotification({
+        userId,
+        title: '🎉 Đăng ký khóa học thành công',
+        message: `Chúc mừng! Bạn đã đăng ký thành công khóa học "${course?.title || 'Khóa học'}". Bắt đầu học ngay hôm nay!`,
+        type: 'enrollment_success',
+        payload: { courseId, courseTitle: course?.title },
+      });
+    } catch (notifyErr) {
+      console.error('Create enrollment notification (silent) error:', notifyErr);
     }
 
     return enrollment;
@@ -957,50 +1059,75 @@ class PaymentService {
       };
     }
 
-    // Update payment status
-    payment.status = 'completed';
-    payment.paymentDetails = {
-      ...payment.paymentDetails,
-      processedAt: new Date().toISOString(),
-      bankCode: result.bankCode,
-      bankTranNo: result.bankTranNo,
-      cardType: result.cardType,
-      payDate: result.payDate,
-      transactionNo: result.transactionNo,
-      responseCode: result.responseCode,
-    };
-    await payment.save();
+    // SECURITY: Wrapped in transaction to ensure atomicity between Payment status and Enrollment access
+    const result_final = await db.sequelize.transaction(async (t) => {
+      // 🛡️ FIX: Re-fetch and lock payment row to prevent double processing
+      const paymentLocked = await Payment.findOne({
+        where: { id: payment.id, status: 'pending' },
+        lock: LOCK_UPDATE || undefined,
+        transaction: t,
+      });
+      
+      if (!paymentLocked) {
+        // Payment already processed by another thread
+        const existingEnrollment = await Enrollment.findOne({
+          where: { userId: payment.userId, courseId: payment.courseId },
+        });
+        return {
+          success: true,
+          message: 'Thanh toán đã được xử lý',
+          payment,
+          enrollment: existingEnrollment,
+          course: payment.course,
+          alreadyProcessed: true,
+        };
+      }
 
-    const isRenewal = Boolean(payment.paymentDetails?.isRenewal);
-    const renewalMonths = Number(payment.paymentDetails?.renewalMonths);
-    const renewalEnrollmentId = payment.paymentDetails?.enrollmentId;
+      // Update payment status
+      paymentLocked.status = 'completed';
+      paymentLocked.paymentDetails = {
+        ...paymentLocked.paymentDetails,
+        processedAt: new Date().toISOString(),
+        bankCode: result.bankCode,
+        bankTranNo: result.bankTranNo,
+        cardType: result.cardType,
+        payDate: result.payDate,
+        transactionNo: result.transactionNo,
+        responseCode: result.responseCode,
+      };
+      await paymentLocked.save({ transaction: t });
 
-    // Enroll user or renew existing enrollment
-    let enrollment = null;
-    try {
+      const isRenewal = Boolean(paymentLocked.paymentDetails?.isRenewal);
+      const renewalMonths = Number(paymentLocked.paymentDetails?.renewalMonths);
+      const renewalEnrollmentId = paymentLocked.paymentDetails?.enrollmentId;
+
+      // Enroll user or renew existing enrollment
+      let enrollment = null;
       if (isRenewal && Number.isFinite(renewalMonths) && renewalMonths > 0) {
         enrollment = await this._renewEnrollmentAfterPayment(
-          payment.userId,
-          payment.courseId,
+          paymentLocked.userId,
+          paymentLocked.courseId,
           renewalMonths,
-          renewalEnrollmentId
+          renewalEnrollmentId,
+          t // Pass transaction to internal renew method
         );
       } else {
-        enrollment = await this._enrollAfterPayment(payment.userId, payment.courseId);
+        enrollment = await this._enrollAfterPayment(paymentLocked.userId, paymentLocked.courseId, t);
       }
+      
       // Remove from cart if exists
-      await cartService.removeCourseFromCart(payment.userId, payment.courseId);
-    } catch (err) {
-      console.error('Auto enrollment error:', err);
-    }
+      await cartService.removeCourseFromCart(paymentLocked.userId, paymentLocked.courseId, { transaction: t });
 
-    return {
-      success: true,
-      message: 'Thanh toán thành công',
-      payment,
-      enrollment,
-      course: payment.course,
-    };
+      return {
+        success: true,
+        message: 'Thanh toán thành công',
+        payment: paymentLocked,
+        enrollment,
+        course: payment.course,
+      };
+    });
+
+    return result_final;
   }
 
   /**
@@ -1014,37 +1141,55 @@ class PaymentService {
     if (result.RspCode === '00') {
       // Payment successful, update and enroll
       try {
+        // 🛡️ FIX: Find payment by txnRef first (outside transaction)
         const payment = await Payment.findOne({
           where: { providerTxn: result.txnRef },
         });
         
         if (payment && payment.status === 'pending') {
-          payment.status = 'completed';
-          payment.paymentDetails = {
-            ...payment.paymentDetails,
-            processedAt: new Date().toISOString(),
-            bankCode: result.bankCode,
-            transactionNo: result.transactionNo,
-            ipnProcessed: true,
-          };
-          await payment.save();
+          // SECURITY: Wrapped in transaction for IPN processing with row-level lock
+          await db.sequelize.transaction(async (t) => {
+            // 🛡️ FIX: Re-fetch and lock payment to prevent double processing
+            const paymentLocked = await Payment.findOne({
+              where: { id: payment.id, status: 'pending' },
+              lock: LOCK_UPDATE || undefined,
+              transaction: t,
+            });
+            
+            if (!paymentLocked) {
+              // Already processed by another thread
+              console.log('[VNPay IPN] Payment already processed, skipping');
+              return;
+            }
+            
+            paymentLocked.status = 'completed';
+            paymentLocked.paymentDetails = {
+              ...paymentLocked.paymentDetails,
+              processedAt: new Date().toISOString(),
+              bankCode: result.bankCode,
+              transactionNo: result.transactionNo,
+              ipnProcessed: true,
+            };
+            await paymentLocked.save({ transaction: t });
 
-          const isRenewal = Boolean(payment.paymentDetails?.isRenewal);
-          const renewalMonths = Number(payment.paymentDetails?.renewalMonths);
-          const renewalEnrollmentId = payment.paymentDetails?.enrollmentId;
+            const isRenewal = Boolean(paymentLocked.paymentDetails?.isRenewal);
+            const renewalMonths = Number(paymentLocked.paymentDetails?.renewalMonths);
+            const renewalEnrollmentId = paymentLocked.paymentDetails?.enrollmentId;
 
-          // Auto enroll or renew
-          if (isRenewal && Number.isFinite(renewalMonths) && renewalMonths > 0) {
-            await this._renewEnrollmentAfterPayment(
-              payment.userId,
-              payment.courseId,
-              renewalMonths,
-              renewalEnrollmentId
-            );
-          } else {
-            await this._enrollAfterPayment(payment.userId, payment.courseId);
-          }
-          await cartService.removeCourseFromCart(payment.userId, payment.courseId);
+            // Auto enroll or renew
+            if (isRenewal && Number.isFinite(renewalMonths) && renewalMonths > 0) {
+              await this._renewEnrollmentAfterPayment(
+                paymentLocked.userId,
+                paymentLocked.courseId,
+                renewalMonths,
+                renewalEnrollmentId,
+                t
+              );
+            } else {
+              await this._enrollAfterPayment(paymentLocked.userId, paymentLocked.courseId, t);
+            }
+            await cartService.removeCourseFromCart(paymentLocked.userId, paymentLocked.courseId, { transaction: t });
+          });
         }
       } catch (err) {
         console.error('IPN enrollment error:', err);

@@ -36,6 +36,17 @@ class EnrollmentAccess {
     // Primary check: enrollmentStatus
     switch (effectiveStatus) {
       case 'active':
+        // SECURITY: Even if marked 'active', we must check if it has actually expired.
+        // This closes the bypass for legacy records with missing enrollmentStatus.
+        if (enrollment.expiresAt && new Date(enrollment.expiresAt) < new Date()) {
+          return {
+            hasAccess: false,
+            reason: 'expired',
+            message: 'Khóa học đã hết hạn',
+            enrollment,
+            expiresAt: enrollment.expiresAt,
+          };
+        }
         return {
           hasAccess: true,
           reason: 'active',

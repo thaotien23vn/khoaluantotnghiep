@@ -85,7 +85,7 @@ class ForumService {
       attributes: ['userId', [db.sequelize.fn('COUNT', db.sequelize.col('ForumPost.id')), 'postCount']],
       include: [{ model: User, as: 'author', attributes: ['id', 'name', 'avatar', 'role'] }],
       group: ['userId', 'author.id'],
-      order: [[db.sequelize.literal('postCount'), 'DESC']],
+      order: [[db.sequelize.literal('"postCount"'), 'DESC']],
       limit: limitNum,
       subQuery: false,
     });

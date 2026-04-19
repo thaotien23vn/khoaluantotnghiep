@@ -388,8 +388,13 @@ class AdminService {
   /**
    * Update user
    */
-  async updateUser(userId, updateData) {
+  async updateUser(userId, updateData, currentAdminId) {
     const { role, isActive, newPassword } = updateData;
+
+    // 🛡️ Security: Prevent self-modification through admin API
+    if (String(userId) === String(currentAdminId)) {
+      throw { status: 400, message: 'Không thể tự cập nhật thông tin của chính mình qua API này. Vui lòng sử dụng API cập nhật profile cá nhân.' };
+    }
 
     const user = await User.findByPk(userId);
     if (!user) {
@@ -397,7 +402,7 @@ class AdminService {
     }
 
     if (user.role === 'admin') {
-      throw { status: 400, message: 'Không thể thay đổi role của tài khoản admin.' };
+      throw { status: 400, message: 'Không thể thay đổi thông tin tài khoản admin khác.' };
     }
 
     if (role) {
@@ -435,13 +440,18 @@ class AdminService {
    */
   async deleteUser(userId, adminId) {
     return await db.sequelize.transaction(async (t) => {
+      // 🛡️ Security: Prevent self-deletion
+      if (String(userId) === String(adminId)) {
+        throw { status: 400, message: 'Không thể tự xóa tài khoản của chính mình.' };
+      }
+
       const user = await User.findByPk(userId, { transaction: t });
       if (!user) {
         throw { status: 404, message: 'Không tìm thấy người dùng' };
       }
 
       if (user.role === 'admin') {
-        throw { status: 400, message: 'Không thể xóa tài khoản admin.' };
+        throw { status: 400, message: 'Không thể xóa tài khoản admin khác.' };
       }
 
       // Lưu thông tin trước khi xóa

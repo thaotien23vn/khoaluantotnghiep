@@ -305,9 +305,10 @@ class EnrollmentService {
 
   /**
    * Calculate renewal price for an enrollment
+   * 🔒 FIXED: Use Math.floor to prevent float precision issues
    */
   async getRenewalPrice(enrollmentId, renewalMonths) {
-    const enrollment = await Enrollment.findByPk(enrollmentId, {
+    const enrollment = await Enrollment.findByPk(Number(enrollmentId), {
       include: [{ model: Course, as: 'Course' }],
     });
 
@@ -329,10 +330,11 @@ class EnrollmentService {
       courseDurationMonths = courseDurationValue / 30;
     }
     
+    // 🛡️ FIX: Prevent float precision issues with Math.floor
     // Calculate price per month based on course price and duration
-    // (e.g., if course is 1 month = 100k, then monthly price = 100k)
-    // (e.g., if course is 3 months = 300k, then monthly price = 100k)
-    const monthlyPrice = courseDurationMonths > 0 ? basePrice / courseDurationMonths : basePrice;
+    const monthlyPrice = courseDurationMonths > 0 
+      ? Math.floor(basePrice / courseDurationMonths) 
+      : basePrice;
     
     // Calculate renewal original price (without discount)
     const originalPrice = Math.floor(monthlyPrice * renewalMonths);
@@ -364,48 +366,104 @@ class EnrollmentService {
 
   /**
    * Renew enrollment for a course
+   * 🔒 FIXED: Added transaction wrapper with row-level lock to prevent race conditions
    */
   async renewEnrollment(userId, enrollmentId, renewalMonths, paymentId = null) {
-    const enrollment = await Enrollment.findOne({
-      where: { id: enrollmentId, userId },
-      include: [{ model: Course, as: 'Course' }],
+    // 🛡️ FIX: Enforce paymentId mandatory - removed SECURITY_DEBT bypass
+    if (!paymentId) {
+      throw { status: 400, message: 'Yêu cầu paymentId để gia hạn' };
+    }
+
+    // 🛡️ FIX: Use transaction with row-level lock to prevent race conditions
+    const result = await db.sequelize.transaction(async (t) => {
+      // Lock enrollment row to prevent concurrent updates
+      const enrollment = await Enrollment.findOne({
+        where: { id: Number(enrollmentId), userId: Number(userId) },
+        include: [{ model: Course, as: 'Course' }],
+        lock: t.LOCK.UPDATE,
+        transaction: t,
+      });
+
+      if (!enrollment) throw { status: 404, message: 'Không tìm thấy ghi danh' };
+
+      // Allow renewal for active, grace_period, or expired enrollments
+      if (!['active', 'grace_period', 'expired'].includes(enrollment.enrollmentStatus)) {
+        throw { status: 400, message: 'Không thể gia hạn ghi danh này' };
+      }
+
+      const course = enrollment.Course;
+
+      // 🛡️ FIX: Lock payment row to prevent double-spending
+      const payment = await db.models.Payment.findOne({
+        where: { id: Number(paymentId), userId: Number(userId) },
+        lock: t.LOCK.UPDATE,
+        transaction: t,
+      });
+
+      if (!payment) {
+        throw { status: 404, message: 'Giao dịch thanh toán không hợp lệ hoặc không thuộc về bạn' };
+      }
+
+      if (payment.status !== 'completed') {
+        throw { status: 400, message: 'Giao dịch thanh toán chưa hoàn thành' };
+      }
+
+      if (Number(payment.courseId) !== Number(enrollment.courseId)) {
+        throw { status: 400, message: 'Giao dịch thanh toán không khớp với khóa học này' };
+      }
+
+      // 🛡️ FIX: Validate enrollmentId matches payment enrollmentId
+      if (payment.paymentDetails?.enrollmentId && 
+          Number(payment.paymentDetails.enrollmentId) !== Number(enrollmentId)) {
+        throw { status: 400, message: 'Giao dịch thanh toán không khớp với ghi danh này' };
+      }
+
+      // Check if payment already "applied" to prevent reuse (Replay Attack Defense)
+      if (payment.paymentDetails?.appliedAt) {
+        throw { status: 400, message: 'Giao dịch thanh toán này đã được sử dụng để gia hạn' };
+      }
+
+      // Mark payment as used atomically
+      payment.paymentDetails = {
+        ...payment.paymentDetails,
+        appliedAt: new Date().toISOString(),
+        targetEnrollmentId: enrollment.id,
+      };
+      await payment.save({ transaction: t });
+
+      // 🛡️ FIX: Correct date calculation - always extend from max(now, gracePeriodEndsAt)
+      let startFrom = new Date();
+      const graceEnd = enrollment.gracePeriodEndsAt || enrollment.expiresAt;
+      if (graceEnd) {
+        startFrom = new Date(Math.max(startFrom.getTime(), new Date(graceEnd).getTime()));
+      }
+      
+      const newExpiresAt = this.calculateExpiryDate(startFrom, renewalMonths, 'months');
+      const newGracePeriodEndsAt = this.addDays(newExpiresAt, course.gracePeriodDays || 7);
+
+      // Update enrollment
+      enrollment.expiresAt = newExpiresAt;
+      enrollment.gracePeriodEndsAt = newGracePeriodEndsAt;
+      enrollment.renewalCount = Number(enrollment.renewalCount || 0) + 1;
+      enrollment.lastRenewedAt = new Date();
+      enrollment.enrollmentStatus = 'active';
+      
+      await enrollment.save({ transaction: t });
+
+      return { enrollment, newExpiresAt, newGracePeriodEndsAt, renewalMonths };
     });
 
-    if (!enrollment) throw { status: 404, message: 'Không tìm thấy ghi danh' };
+    // Destructure result after transaction (renewalMonths not needed - uses parameter)
+    const { enrollment, newExpiresAt, newGracePeriodEndsAt } = result;
 
-    // Allow renewal for active, grace_period, or expired enrollments
-    if (!['active', 'grace_period', 'expired'].includes(enrollment.enrollmentStatus)) {
-      throw { status: 400, message: 'Không thể gia hạn ghi danh này' };
-    }
-
-    const course = enrollment.Course;
-    
-    // Calculate new expiration date
-    let startFrom = new Date();
-    if (enrollment.expiresAt && enrollment.expiresAt > startFrom) {
-      // If not yet expired, extend from current expiry
-      startFrom = enrollment.expiresAt;
-    }
-    const newExpiresAt = this.calculateExpiryDate(startFrom, renewalMonths, 'months');
-    const newGracePeriodEndsAt = this.addDays(newExpiresAt, course.gracePeriodDays || 7);
-
-    // Update enrollment
-    enrollment.expiresAt = newExpiresAt;
-    enrollment.gracePeriodEndsAt = newGracePeriodEndsAt;
-    enrollment.renewalCount += 1;
-    enrollment.lastRenewedAt = new Date();
-    enrollment.enrollmentStatus = 'active';
-    
-    await enrollment.save();
-
-    // Send renewal notification
+    // Send renewal notification (outside transaction)
     try {
       await notificationService.createNotification({
         userId,
         title: 'Gia hạn khóa học thành công',
-        message: `Bạn đã gia hạn khóa học "${course.title}" thêm ${renewalMonths} tháng. Hết hạn mới: ${newExpiresAt.toLocaleDateString('vi-VN')}`,
+        message: `Bạn đã gia hạn khóa học "${enrollment.Course.title}" thêm ${renewalMonths} tháng. Hết hạn mới: ${newExpiresAt.toLocaleDateString('vi-VN')}`,
         type: 'enrollment_renewal',
-        relatedId: course.id,
+        relatedId: enrollment.courseId,
         relatedType: 'course',
       });
     } catch (notifyErr) {
@@ -413,7 +471,7 @@ class EnrollmentService {
     }
 
     return {
-      enrollment,
+      enrollment: result.enrollment,
       renewalMonths,
       newExpiresAt,
       newGracePeriodEndsAt,

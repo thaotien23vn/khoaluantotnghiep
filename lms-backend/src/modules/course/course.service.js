@@ -34,20 +34,14 @@ const generateSlugFromTitle = (title) => {
     .replace(/-+/g, '-');
 };
 
-// Ensure slug is unique by appending -1, -2, ...
+// Ensure slug is unique by appending timestamp + random
+// 🛡️ Fix: Prevent race condition when creating courses with same title simultaneously
 const generateUniqueSlug = async (title) => {
   const baseSlug = generateSlugFromTitle(title) || 'course';
-  let slug = baseSlug;
-  let suffix = 1;
-
-  while (true) {
-    const existing = await Course.findOne({ where: { slug } });
-    if (!existing) {
-      return slug;
-    }
-    slug = `${baseSlug}-${suffix}`;
-    suffix += 1;
-  }
+  // Add timestamp + random suffix to ensure uniqueness even with concurrent requests
+  const timestamp = Date.now().toString(36);
+  const random = Math.random().toString(36).substring(2, 6);
+  return `${baseSlug}-${timestamp}${random}`;
 };
 
 // Format course for public listing
@@ -453,6 +447,11 @@ class CourseService {
 
     const slug = await generateUniqueSlug(title);
 
+    // 🛡️ Validate price
+    if (price != null && (isNaN(price) || price < 0)) {
+      throw { status: 400, message: 'Giá khóa học không hợp lệ. Giá phải là số không âm.' };
+    }
+
     const canSetPublished = userRole === 'admin';
     const course = await Course.create({
       title,
@@ -518,7 +517,8 @@ class CourseService {
       throw { status: 404, message: 'Không tìm thấy khóa học' };
     }
 
-    if (role === 'teacher' && course.createdBy !== userId) {
+    // 🛡️ Fix: Use Number() for consistent comparison (createdBy and userId may have different types)
+    if (role === 'teacher' && Number(course.createdBy) !== Number(userId)) {
       throw { status: 403, message: 'Bạn không có quyền truy cập khóa học này' };
     }
 
@@ -535,7 +535,8 @@ class CourseService {
       throw { status: 404, message: 'Không tìm thấy khóa học' };
     }
 
-    if (role === 'teacher' && course.createdBy !== userId) {
+    // 🛡️ Fix: Use Number() for consistent comparison
+    if (role === 'teacher' && Number(course.createdBy) !== Number(userId)) {
       throw { status: 403, message: 'Bạn không có quyền cập nhật khóa học này' };
     }
 
@@ -613,35 +614,30 @@ class CourseService {
       throw { status: 404, message: 'Không tìm thấy khóa học' };
     }
 
-    if (role === 'teacher' && course.createdBy !== userId) {
+    // 🛡️ Fix: Use Number() for consistent comparison
+    if (role === 'teacher' && Number(course.createdBy) !== Number(userId)) {
       throw { status: 403, message: 'Bạn không có quyền xóa khóa học này' };
     }
 
+    // 🛡️ Fix: Collect media URLs before transaction, delete after transaction commits
+    const chapters = await Chapter.findAll({
+      where: { courseId: course.id },
+      attributes: ['id'],
+    });
+    const chapterIds = chapters.map((chapter) => chapter.id);
+
+    const lectures = await Lecture.findAll({
+      where: chapterIds.length > 0 ? { chapterId: { [Op.in]: chapterIds } } : { id: null },
+      attributes: ['id', 'contentUrl'],
+    });
+    const lectureIds = lectures.map((lecture) => lecture.id);
+    // Collect media URLs to delete after transaction
+    const mediaUrlsToDelete = lectures
+      .filter((lecture) => lecture.contentUrl)
+      .map((lecture) => lecture.contentUrl);
+
     const transaction = await db.sequelize.transaction();
     try {
-      const chapters = await Chapter.findAll({
-        where: { courseId: course.id },
-        attributes: ['id'],
-        transaction,
-      });
-      const chapterIds = chapters.map((chapter) => chapter.id);
-
-      const lectures = await Lecture.findAll({
-        where: chapterIds.length > 0 ? { chapterId: { [Op.in]: chapterIds } } : { id: null },
-        attributes: ['id', 'contentUrl'],
-        transaction,
-      });
-      const lectureIds = lectures.map((lecture) => lecture.id);
-
-      for (const lecture of lectures) {
-        if (!lecture.contentUrl) continue;
-        try {
-          await mediaService.deleteMediaByUrl(lecture.contentUrl);
-        } catch (mediaErr) {
-          console.error('Delete course lecture media (silent) error:', mediaErr);
-        }
-      }
-
       await LectureProgress.destroy({ where: { courseId: course.id }, transaction });
       await Payment.destroy({ where: { courseId: course.id }, transaction });
       await Review.destroy({ where: { courseId: course.id }, transaction });
@@ -678,6 +674,16 @@ class CourseService {
     } catch (err) {
       await transaction.rollback();
       throw err;
+    }
+
+    // 🛡️ Fix: Delete media files AFTER transaction commits successfully
+    // This prevents data loss if transaction fails
+    for (const contentUrl of mediaUrlsToDelete) {
+      try {
+        await mediaService.deleteMediaByUrl(contentUrl);
+      } catch (mediaErr) {
+        console.error('Delete course lecture media (silent) error:', mediaErr);
+      }
     }
 
     return { message: 'Xóa khóa học thành công' };

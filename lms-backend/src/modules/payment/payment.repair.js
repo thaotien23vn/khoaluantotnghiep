@@ -64,21 +64,23 @@ class PaymentRepairService {
           continue;
         }
 
-        // Apply renewal
+        // 🛡️ FIX: Check if already applied (additional safety)
+        if (payment.paymentDetails?.accessAppliedAt) {
+          results.failed.push({
+            paymentId: payment.id,
+            reason: 'Payment already marked as applied',
+          });
+          continue;
+        }
+
+        // Apply renewal with transaction
         const enrollment = await PaymentRepairService._applyRenewal(
           userId,
           courseId,
           months,
-          enrollmentId
+          enrollmentId,
+          payment // Pass payment to mark inside transaction
         );
-
-        // Mark as repaired
-        payment.paymentDetails = {
-          ...payment.paymentDetails,
-          accessAppliedAt: new Date().toISOString(),
-          repairedAt: new Date().toISOString(),
-        };
-        await payment.save();
 
         results.repaired.push({
           paymentId: payment.id,
@@ -104,40 +106,63 @@ class PaymentRepairService {
 
   /**
    * Apply renewal to enrollment
+   * 🔒 FIXED: Added transaction wrapper and status validation
    */
-  static async _applyRenewal(userId, courseId, months, enrollmentId) {
+  static async _applyRenewal(userId, courseId, months, enrollmentId, payment = null) {
     const { Enrollment, Course } = db.models;
 
-    const where = enrollmentId
-      ? { id: Number(enrollmentId), userId: Number(userId), courseId: Number(courseId) }
-      : { userId: Number(userId), courseId: Number(courseId) };
+    // 🛡️ FIX: Use transaction with row-level lock
+    return await db.sequelize.transaction(async (t) => {
+      const where = enrollmentId
+        ? { id: Number(enrollmentId), userId: Number(userId), courseId: Number(courseId) }
+        : { userId: Number(userId), courseId: Number(courseId) };
 
-    const enrollment = await Enrollment.findOne({
-      where,
-      include: [{ model: Course, as: 'Course', attributes: ['id', 'gracePeriodDays'] }],
+      const enrollment = await Enrollment.findOne({
+        where,
+        include: [{ model: Course, as: 'Course', attributes: ['id', 'gracePeriodDays'] }],
+        lock: t.LOCK.UPDATE,
+        transaction: t,
+      });
+
+      if (!enrollment) {
+        throw new Error('Không tìm thấy ghi danh để gia hạn');
+      }
+
+      // 🛡️ FIX: Validate enrollment status
+      if (!['active', 'grace_period', 'expired'].includes(enrollment.enrollmentStatus)) {
+        throw new Error('Không thể gia hạn ghi danh này - trạng thái không hợp lệ');
+      }
+
+      // 🛡️ FIX: Correct date calculation
+      let startFrom = new Date();
+      const graceEnd = enrollment.gracePeriodEndsAt || enrollment.expiresAt;
+      if (graceEnd) {
+        startFrom = new Date(Math.max(startFrom.getTime(), new Date(graceEnd).getTime()));
+      }
+
+      const newExpiresAt = PaymentRepairService._calculateExpiryDate(startFrom, months, 'months');
+      const graceDays = Number(enrollment.Course?.gracePeriodDays || 7);
+      const newGracePeriodEndsAt = PaymentRepairService._addDays(newExpiresAt, graceDays);
+
+      enrollment.expiresAt = newExpiresAt;
+      enrollment.gracePeriodEndsAt = newGracePeriodEndsAt;
+      enrollment.renewalCount = Number(enrollment.renewalCount || 0) + 1;
+      enrollment.lastRenewedAt = new Date();
+      enrollment.enrollmentStatus = 'active';
+      await enrollment.save({ transaction: t });
+
+      // 🛡️ FIX: Mark payment as repaired if provided
+      if (payment) {
+        payment.paymentDetails = {
+          ...payment.paymentDetails,
+          accessAppliedAt: new Date().toISOString(),
+          repairedAt: new Date().toISOString(),
+        };
+        await payment.save({ transaction: t });
+      }
+
+      return enrollment;
     });
-
-    if (!enrollment) {
-      throw new Error('Không tìm thấy ghi danh để gia hạn');
-    }
-
-    let startFrom = new Date();
-    if (enrollment.expiresAt && enrollment.expiresAt > startFrom) {
-      startFrom = enrollment.expiresAt;
-    }
-
-    const newExpiresAt = PaymentRepairService._calculateExpiryDate(startFrom, months, 'months');
-    const graceDays = Number(enrollment.Course?.gracePeriodDays || 7);
-    const newGracePeriodEndsAt = PaymentRepairService._addDays(newExpiresAt, graceDays);
-
-    enrollment.expiresAt = newExpiresAt;
-    enrollment.gracePeriodEndsAt = newGracePeriodEndsAt;
-    enrollment.renewalCount = Number(enrollment.renewalCount || 0) + 1;
-    enrollment.lastRenewedAt = new Date();
-    enrollment.enrollmentStatus = 'active';
-    await enrollment.save();
-
-    return enrollment;
   }
 
   /**

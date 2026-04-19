@@ -56,8 +56,8 @@ const addQuestionValidation = [
     .withMessage('Nội dung câu hỏi không được để trống'),
   body('points')
     .optional()
-    .isNumeric()
-    .withMessage('Điểm phải là số'),
+    .isFloat({ min: 0.5, max: 100 })
+    .withMessage('Điểm mỗi câu phải từ 0.5-100'),
   body('options')
     .if(body('type').equals('multiple_choice'))
     .isArray({ min: 2 })
@@ -82,8 +82,8 @@ const updateQuestionValidation = [
     .withMessage('Nội dung câu hỏi không được để trống'),
   body('points')
     .optional()
-    .isNumeric()
-    .withMessage('Điểm phải là số'),
+    .isFloat({ min: 0.5, max: 100 })
+    .withMessage('Điểm mỗi câu phải từ 0.5-100'),
   body('options')
     .if(body('type').equals('multiple_choice'))
     .isArray({ min: 2 })

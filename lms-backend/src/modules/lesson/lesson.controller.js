@@ -121,6 +121,7 @@ class LessonController {
         message: result.message,
       });
     } catch (error) {
+      console.error('[DELETE LECTURE ERROR]', error?.message || error);
       handleServiceError(error, res);
     }
   }

@@ -151,13 +151,15 @@ class CartService {
   /**
    * Remove specific course from cart
    */
-  async removeCourseFromCart(userId, courseId) {
+  async removeCourseFromCart(userId, courseId, options = {}) {
+    const { transaction } = options;
     const cartItem = await Cart.findOne({
       where: { userId, courseId },
+      transaction,
     });
 
     if (cartItem) {
-      await cartItem.destroy();
+      await cartItem.destroy({ transaction });
     }
 
     return { success: true };
@@ -302,12 +304,16 @@ class CartService {
   /**
    * Remove paid items from cart after successful payment
    */
-  async removePaidItemsFromCart(userId, courseIds) {
+  async removePaidItemsFromCart(userId, courseIds, options = {}) {
+    const { transaction } = options;
     await Cart.destroy({
       where: {
         userId,
-        courseId: courseIds,
+        courseId: {
+          [db.Sequelize.Op.in]: courseIds,
+        },
       },
+      transaction,
     });
     return { success: true };
   }

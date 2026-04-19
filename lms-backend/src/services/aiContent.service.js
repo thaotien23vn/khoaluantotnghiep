@@ -824,7 +824,7 @@ Trả về danh sách các câu hỏi trong format JSON array.`;
         };
       }
 
-      if (quiz.createdBy !== userId) {
+      if (Number(quiz.createdBy) !== Number(userId)) {
         throw {
           status: 403,
           message: 'Bạn không có quyền publish quiz này',

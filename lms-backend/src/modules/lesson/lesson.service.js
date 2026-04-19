@@ -2,7 +2,7 @@ const db = require('../../models');
 const courseAggregatesService = require('../../services/courseAggregates.service');
 const mediaService = require('../../services/media.service');
 
-const { Lecture, Chapter, Course, LessonChat, ChatEscalation } = db.models;
+const { Lecture, Chapter, Course, LessonChat, ChatEscalation, LectureProgress } = db.models;
 
 /**
  * Parse attachments safely
@@ -53,23 +53,28 @@ class LessonService {
       throw { status: 404, message: 'Không tìm thấy khóa học của chương này' };
     }
 
-    if (role === 'teacher' && course.createdBy !== userId) {
+    // 🛡️ Fix: Use Number() for consistent comparison
+    if (role === 'teacher' && Number(course.createdBy) !== Number(userId)) {
       throw { status: 403, message: 'Bạn không có quyền thêm bài giảng cho chương này' };
     }
 
     let finalContentUrl = contentUrl || null;
+    let uploadedMediaUrl = null; // 🛡️ Track for cleanup if create fails
 
     if (file) {
       try {
         const uploadResult = await mediaService.uploadLectureMedia(file);
         finalContentUrl = uploadResult.url;
+        uploadedMediaUrl = uploadResult.url; // 🛡️ Save for potential cleanup
       } catch (uploadError) {
         console.error('Lỗi upload media lên Supabase:', uploadError);
         throw { status: 500, message: 'Lỗi upload media lên Supabase. Vui lòng thử lại sau' };
       }
     }
 
-    const lecture = await Lecture.create({
+    let lecture;
+    try {
+      lecture = await Lecture.create({
       title,
       type,
       contentUrl: finalContentUrl,
@@ -83,6 +88,18 @@ class LessonService {
       order: order != null ? order : 0,
       chapterId: chapter.id,
     });
+    } catch (createError) {
+      // 🛡️ Cleanup uploaded media if lecture creation fails
+      if (uploadedMediaUrl) {
+        try {
+          await mediaService.deleteMediaByUrl(uploadedMediaUrl);
+          console.log('Cleaned up uploaded media after failed lecture creation:', uploadedMediaUrl);
+        } catch (cleanupErr) {
+          console.error('Failed to cleanup media after failed lecture creation:', cleanupErr);
+        }
+      }
+      throw createError;
+    }
 
     try {
       await courseAggregatesService.recomputeCourseTotalLessons(course.id);
@@ -126,9 +143,13 @@ class LessonService {
       throw { status: 404, message: 'Không tìm thấy khóa học của chương này' };
     }
 
-    if (role === 'teacher' && course.createdBy !== userId) {
+    // 🛡️ Fix: Use Number() for consistent comparison
+    if (role === 'teacher' && Number(course.createdBy) !== Number(userId)) {
       throw { status: 403, message: 'Bạn không có quyền chỉnh sửa bài giảng này' };
     }
+
+    // 🛡️ Lưu URL cũ để xóa sau khi update thành công
+    const oldContentUrl = lecture.contentUrl;
 
     let finalContentUrl =
       contentUrl !== undefined ? contentUrl : lecture.contentUrl;
@@ -180,6 +201,15 @@ class LessonService {
 
     await lecture.save();
 
+    // 🛡️ Fix: Delete old media file after successful update (if new file uploaded)
+    if (file && oldContentUrl && oldContentUrl !== finalContentUrl) {
+      try {
+        await mediaService.deleteMediaByUrl(oldContentUrl);
+      } catch (mediaErr) {
+        console.error('Delete old lecture media (silent) error:', mediaErr);
+      }
+    }
+
     return { lecture };
   }
 
@@ -215,7 +245,8 @@ class LessonService {
     }
 
     // Teacher can only access their own courses, admin can access all
-    if (role === 'teacher' && course.createdBy !== userId) {
+    // 🛡️ Fix: Use Number() for consistent comparison
+    if (role === 'teacher' && Number(course.createdBy) !== Number(userId)) {
       throw { status: 403, message: 'Bạn không có quyền xem bài giảng này. Bài giảng thuộc khóa học của giáo viên khác.' };
     }
 
@@ -244,70 +275,87 @@ class LessonService {
    * Delete a lesson
    */
   async deleteLesson(lessonId, userId, role) {
+    const lecture = await Lecture.findByPk(lessonId);
+
+    if (!lecture) {
+      throw { status: 404, message: 'Không tìm thấy bài giảng' };
+    }
+
+    const chapter = await Chapter.findByPk(lecture.chapterId);
+
+    if (!chapter) {
+      throw { status: 404, message: 'Không tìm thấy chương của bài giảng này' };
+    }
+
+    const course = await Course.findByPk(chapter.courseId);
+
+    if (!course) {
+      throw { status: 404, message: 'Không tìm thấy khóa học của chương này' };
+    }
+
+    // 🛡️ Fix: Use Number() for consistent comparison
+    if (role === 'teacher' && Number(course.createdBy) !== Number(userId)) {
+      throw { status: 403, message: 'Bạn không có quyền xóa bài giảng này' };
+    }
+
+    // 🛡️ Lưu URL để xóa sau khi transaction thành công
+    const contentUrlToDelete = lecture.contentUrl;
+
     const transaction = await db.sequelize.transaction();
     try {
-      const lecture = await Lecture.findByPk(lessonId, { transaction });
-
-      if (!lecture) {
-        throw { status: 404, message: 'Không tìm thấy bài giảng' };
-      }
-
-      const chapter = await Chapter.findByPk(lecture.chapterId, { transaction });
-
-      if (!chapter) {
-        throw { status: 404, message: 'Không tìm thấy chương của bài giảng này' };
-      }
-
-      const course = await Course.findByPk(chapter.courseId, { transaction });
-
-      if (!course) {
-        throw { status: 404, message: 'Không tìm thấy khóa học của chương này' };
-      }
-
-      if (role === 'teacher' && course.createdBy !== userId) {
-        throw { status: 403, message: 'Bạn không có quyền xóa bài giảng này' };
-      }
-
-      // Xóa lesson chat và các bảng phụ thuộc (theo thứ tự)
-      const lessonChat = await LessonChat.findOne({
-        where: { lessonId: lecture.id },
+      // 🛡️ FIX E7: Cleanup LectureProgress trước khi xóa lecture
+      await LectureProgress.destroy({
+        where: { lectureId: lecture.id },
         transaction,
       });
 
-      if (lessonChat) {
-        // Xóa chat_escalations trước
-        await ChatEscalation.destroy({
-          where: { chatId: lessonChat.id },
+      // Xóa lesson chat và các bảng phụ thuộc (theo thứ tự)
+      try {
+        const lessonChat = await LessonChat.findOne({
+          where: { lessonId: lecture.id },
           transaction,
         });
-        // Xóa lesson chat
-        await lessonChat.destroy({ transaction });
-      }
 
-      // Best-effort media cleanup for Supabase-backed URLs.
-      if (lecture.contentUrl) {
-        try {
-          await mediaService.deleteMediaByUrl(lecture.contentUrl);
-        } catch (mediaErr) {
-          console.error('Delete lecture media (silent) error:', mediaErr);
+        if (lessonChat) {
+          // Xóa chat_escalations trước
+          await ChatEscalation.destroy({
+            where: { chatId: lessonChat.id },
+            transaction,
+          });
+          // Xóa lesson chat
+          await lessonChat.destroy({ transaction });
         }
+      } catch (chatError) {
+        // If chat tables don't exist or have issues, log but continue
+        console.error('Delete lecture chat cleanup (non-critical) error:', chatError.message);
       }
 
       await lecture.destroy({ transaction });
 
       await transaction.commit();
-
-      try {
-        await courseAggregatesService.recomputeCourseTotalLessons(course.id);
-      } catch (aggErr) {
-        console.error('Recompute course totalLessons (silent) error:', aggErr);
-      }
-
-      return { message: 'Xóa bài giảng thành công' };
     } catch (error) {
       await transaction.rollback();
-      throw error;
+      console.error('Delete lecture transaction error:', error);
+      throw { status: 500, message: 'Lỗi xóa bài giảng: ' + (error.message || 'Unknown error') };
     }
+
+    // 🛡️ Fix: Delete media AFTER transaction commits successfully
+    // This prevents data loss if transaction fails
+    if (contentUrlToDelete) {
+      try {
+        await mediaService.deleteMediaByUrl(contentUrlToDelete);
+      } catch (mediaErr) {
+        console.error('Delete lecture media (silent) error:', mediaErr);
+      }
+    }
+
+    try {
+      await courseAggregatesService.recomputeCourseTotalLessons(course.id);
+    } catch (aggErr) {
+      console.error('Recompute course totalLessons (silent) error:', aggErr);
+    }
+
+    return { message: 'Xóa bài giảng thành công' };
   }
 }
 

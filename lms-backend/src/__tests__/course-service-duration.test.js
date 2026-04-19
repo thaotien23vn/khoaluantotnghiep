@@ -147,7 +147,7 @@ describe('Course Service - Duration Fields', () => {
         userId: 2,
         status: 'active',
         progressPercent: 0,
-        expiresAt: new Date('2025-12-31'),
+        expiresAt: new Date(Date.now() + 365 * 24 * 60 * 60 * 1000), // 1 year from now
         enrollmentStatus: 'active',
       };
 
