@@ -1,6 +1,7 @@
 const crypto = require('crypto');
 const db = require('../models');
 const aiGateway = require('./aiGateway.service');
+const pdfParse = require('pdf-parse');
 
 const { Course, Chapter, Lecture, AiDocument, AiChunk } = db.models;
 
@@ -44,9 +45,25 @@ function cosineSimilarity(a, b) {
   return dot / (Math.sqrt(na) * Math.sqrt(nb));
 }
 
+async function extractTextFromPdf(pdfUrl) {
+  try {
+    const response = await fetch(pdfUrl);
+    if (!response.ok) {
+      throw new Error(`Failed to fetch PDF: ${response.statusText}`);
+    }
+    const buffer = Buffer.from(await response.arrayBuffer());
+    const data = await pdfParse(buffer);
+    return data.text;
+  } catch (error) {
+    console.error('Error extracting text from PDF:', error);
+    throw new Error(`PDF extraction failed: ${error.message}`);
+  }
+}
+
 async function buildLectureSourceText(lectureId, options = {}) {
   const lecture = await Lecture.findByPk(lectureId, {
     include: [{ model: Chapter, as: 'chapter', attributes: ['id', 'title', 'courseId'], required: true }],
+    attributes: ['id', 'title', 'type', 'contentUrl', 'content', 'aiNotes', 'attachments'],
     transaction: options.transaction,
   });
   if (!lecture) return null;
@@ -61,7 +78,68 @@ async function buildLectureSourceText(lectureId, options = {}) {
   if (course?.description) parts.push(`Course description: ${course.description}`);
   parts.push(`Chapter: ${lecture.chapter.title || ''}`);
   parts.push(`Lecture: ${lecture.title || ''}`);
-  if (lecture.content) parts.push(`Content:\n${lecture.content}`);
+
+  console.log('Lecture data:', {
+    id: lecture.id,
+    title: lecture.title,
+    type: lecture.type,
+    contentUrl: lecture.contentUrl,
+    attachments: lecture.attachments,
+    content: lecture.content
+  });
+
+  // Extract text from PDF attachments FIRST (priority over content)
+  let pdfText = '';
+  let attachments = lecture.attachments;
+  // Parse attachments if it's a JSON string
+  if (typeof attachments === 'string') {
+    try {
+      attachments = JSON.parse(attachments);
+      console.log('Parsed attachments from JSON string');
+    } catch (e) {
+      console.error('Failed to parse attachments JSON:', e);
+      attachments = [];
+    }
+  }
+
+  console.log('Attachments after parsing:', attachments);
+
+  if (attachments && Array.isArray(attachments)) {
+    const pdfAttachments = attachments.filter(att => att.type === 'pdf' && att.url);
+    console.log('Found PDF attachments:', pdfAttachments.length);
+    for (const pdfAtt of pdfAttachments) {
+      try {
+        console.log('Extracting text from PDF attachment:', pdfAtt.url);
+        const attachmentText = await extractTextFromPdf(pdfAtt.url);
+        if (attachmentText) {
+          parts.push(`Attachment (${pdfAtt.title || 'PDF'}):\n${attachmentText}`);
+          pdfText = attachmentText; // Mark that we have PDF content
+          console.log('Extracted PDF text length:', attachmentText.length);
+        }
+      } catch (error) {
+        console.error(`Failed to extract PDF from attachment ${pdfAtt.id}:`, error.message);
+      }
+    }
+  }
+
+  // Extract text from PDF if lecture type is 'pdf' and has contentUrl (secondary)
+  if (!pdfText && lecture.type === 'pdf' && lecture.contentUrl) {
+    try {
+      pdfText = await extractTextFromPdf(lecture.contentUrl);
+      if (pdfText) {
+        parts.push(`PDF Content:\n${pdfText}`);
+      }
+    } catch (error) {
+      console.error('Failed to extract PDF text, falling back to content:', error.message);
+      // Fallback to content if PDF extraction fails
+    }
+  }
+
+  // Fallback to lecture content ONLY if no PDF text extracted
+  if (!pdfText && lecture.content) {
+    parts.push(`Content:\n${lecture.content}`);
+  }
+
   if (lecture.aiNotes) parts.push(`Lecture notes: ${lecture.aiNotes}`);
 
   return {
