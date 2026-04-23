@@ -94,7 +94,7 @@ class QuizService {
 
     // 🛡️ Fix: Use Number() for consistent comparison
     if (Number(quiz.course.createdBy) !== Number(userId) && userRole !== 'admin') {
-      const access = await EnrollmentAccess.checkAccess(userId, quiz.courseId);
+      const access = await EnrollmentAccess.checkAccess(userId, quiz.courseId, userRole);
       if (!access.hasAccess) {
         throw { status: 403, message: access.message || 'Bạn không có quyền xem quiz này' };
       }
@@ -269,7 +269,7 @@ class QuizService {
     }
 
     if (userRole !== 'admin') {
-      const access = await EnrollmentAccess.checkAccess(userId, courseId);
+      const access = await EnrollmentAccess.checkAccess(userId, courseId, userRole);
       if (!access.hasAccess) {
         throw { status: 403, message: access.message || 'Bạn chưa đăng ký hoặc ghi danh đã hết hạn' };
       }

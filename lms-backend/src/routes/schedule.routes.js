@@ -2,7 +2,7 @@ const express = require('express');
 const { body, param } = require('express-validator');
 const scheduleController = require('../modules/schedule/schedule.controller');
 const authMiddleware = require('../middlewares/auth');
-const authorizeRole = require('../middlewares/authorize');
+const { authorizeRole } = require('../middlewares/authorize');
 
 const router = express.Router();
 

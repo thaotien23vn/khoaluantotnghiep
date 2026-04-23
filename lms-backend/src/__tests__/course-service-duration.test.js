@@ -140,6 +140,12 @@ describe('Course Service - Duration Fields', () => {
       const courseId = 1;
       const userId = 2;
 
+      // Mock User.findByPk to prevent database query
+      jest.spyOn(User, 'findByPk').mockResolvedValue({
+        id: userId,
+        role: 'student',
+      });
+
       // Mock enrollment check
       const mockEnrollment = {
         id: 1,
@@ -215,6 +221,12 @@ describe('Course Service - Duration Fields', () => {
     test('should reject non-enrolled student', async () => {
       const courseId = 1;
       const userId = 3;
+
+      // Mock User.findByPk to prevent database query
+      jest.spyOn(User, 'findByPk').mockResolvedValue({
+        id: userId,
+        role: 'student',
+      });
 
       // Mock no enrollment found
       jest.spyOn(Enrollment, 'findOne').mockResolvedValue(null);

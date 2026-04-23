@@ -1,6 +1,7 @@
 const express = require('express');
 const paymentController = require('../modules/payment/payment.controller');
 const authMiddleware = require('../middlewares/auth');
+const { requireStudent, requireAdmin } = require('../middlewares/authorize');
 const {
   createPaymentValidation,
   processPaymentValidation,
@@ -30,20 +31,20 @@ router.post('/stripe/webhook', express.raw({ type: 'application/json' }), paymen
 // All remaining payment routes require authentication
 router.use(authMiddleware);
 
-// Create payment for single course (direct buy)
-router.post('/create', createPaymentValidation, paymentController.createPayment);
+// Create payment for single course (direct buy) - Student only
+router.post('/create', requireStudent, createPaymentValidation, paymentController.createPayment);
 
-// Create payment from cart
-router.post('/cart', paymentController.createPaymentFromCart);
+// Create payment from cart - Student only
+router.post('/cart', requireStudent, paymentController.createPaymentFromCart);
 
-// Process cart checkout
-router.post('/cart/checkout', paymentController.processCartCheckout);
+// Process cart checkout - Student only
+router.post('/cart/checkout', requireStudent, paymentController.processCartCheckout);
 
-// Process payment (verify/callback)
-router.post('/process', processPaymentValidation, paymentController.processPayment);
+// Process payment (verify/callback) - Student only
+router.post('/process', requireStudent, processPaymentValidation, paymentController.processPayment);
 
-// Verify payment (alias for process with completed status)
-router.post('/verify', processPaymentValidation, paymentController.verifyPayment);
+// Verify payment (alias for process with completed status) - Student only
+router.post('/verify', requireStudent, processPaymentValidation, paymentController.verifyPayment);
 
 // Get payment history
 router.get('/history', paymentController.getPaymentHistory);
@@ -60,30 +61,30 @@ router.post('/:paymentId/refund', processRefundValidation, paymentController.pro
 // Download invoice
 router.get('/:id/invoice', paymentController.downloadInvoice);
 
-// Admin repair endpoint (for old renewal payments)
-router.post('/admin/repair-renewals', paymentController.repairRenewalPayments);
+// Admin repair endpoint (for old renewal payments) - Admin only
+router.post('/admin/repair-renewals', requireAdmin, paymentController.repairRenewalPayments);
 
 // VNPay Routes
-// Create VNPay payment URL
-router.post('/vnpay/:courseId', createVNPayPaymentValidation, paymentController.createVNPayPayment);
+// Create VNPay payment URL - Student only
+router.post('/vnpay/:courseId', requireStudent, createVNPayPaymentValidation, paymentController.createVNPayPayment);
 
 // Stripe Routes
-// Create Stripe Checkout Session (single course - direct payment)
-router.post('/stripe/checkout', paymentController.createStripeCheckout);
+// Create Stripe Checkout Session (single course - direct payment) - Student only
+router.post('/stripe/checkout', requireStudent, paymentController.createStripeCheckout);
 
-// Create Stripe Checkout Session from cart
-router.post('/stripe/checkout/cart', paymentController.createStripeCartCheckout);
+// Create Stripe Checkout Session from cart - Student only
+router.post('/stripe/checkout/cart', requireStudent, paymentController.createStripeCartCheckout);
 
-// Stripe manual verify (frontend calls this after redirect from Stripe)
-router.post('/stripe/verify', stripeVerifyValidation, paymentController.verifyStripePayment);
+// Stripe manual verify (frontend calls this after redirect from Stripe) - Student only
+router.post('/stripe/verify', requireStudent, stripeVerifyValidation, paymentController.verifyStripePayment);
 
 // Get payment status by session ID (for frontend to check after Stripe redirect)
 router.get('/stripe/status', stripeStatusValidation, paymentController.getPaymentBySession);
 
-// Create Stripe Payment Intent
-router.post('/stripe/create', paymentController.createStripePayment);
+// Create Stripe Payment Intent - Student only
+router.post('/stripe/create', requireStudent, paymentController.createStripePayment);
 
-// Create Stripe Payment Intent from cart
-router.post('/stripe/cart', paymentController.createStripeCartPayment);
+// Create Stripe Payment Intent from cart - Student only
+router.post('/stripe/cart', requireStudent, paymentController.createStripeCartPayment);
 
 module.exports = router;

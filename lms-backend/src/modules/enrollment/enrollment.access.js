@@ -10,9 +10,77 @@ class EnrollmentAccess {
    * Check if user has access to course content
    * Returns detailed status with access decision
    */
-  static async checkAccess(userId, courseId) {
-    const { Enrollment } = db.models;
+  static async checkAccess(userId, courseId, userRole = null) {
+    const { Enrollment, Course, User } = db.models;
     const now = new Date();
+
+    // Auto-enrollment for teacher (own courses) and admin (all courses)
+    if (!userRole) {
+      const user = await User.findByPk(userId, { attributes: ['role'] });
+      userRole = user?.role || 'student';
+    }
+
+    const course = await Course.findByPk(courseId, { attributes: ['id', 'createdBy'] });
+    
+    // Teacher: auto-enroll if they own the course
+    if (userRole === 'teacher' && course && Number(course.createdBy) === Number(userId)) {
+      let enrollment = await Enrollment.findOne({
+        where: { userId, courseId },
+      });
+      
+      if (!enrollment) {
+        // Auto-enroll teacher for their own course
+        enrollment = await Enrollment.create({
+          userId,
+          courseId,
+          status: 'enrolled',
+          enrollmentStatus: 'active',
+          source: 'teacher_access',
+          payment: 'none',
+          progressPercent: 0,
+          enrolledAt: new Date(),
+          expiresAt: null, // Teacher has lifetime access to their own courses
+        });
+      }
+      
+      return {
+        hasAccess: true,
+        reason: 'teacher_owner',
+        message: 'Bạn là giảng viên của khóa học này',
+        enrollment,
+        expiresAt: null,
+      };
+    }
+
+    // Admin: auto-enroll for all courses
+    if (userRole === 'admin') {
+      let enrollment = await Enrollment.findOne({
+        where: { userId, courseId },
+      });
+      
+      if (!enrollment) {
+        // Auto-enroll admin for all courses
+        enrollment = await Enrollment.create({
+          userId,
+          courseId,
+          status: 'enrolled',
+          enrollmentStatus: 'active',
+          source: 'admin_access',
+          payment: 'none',
+          progressPercent: 0,
+          enrolledAt: new Date(),
+          expiresAt: null, // Admin has lifetime access to all courses
+        });
+      }
+      
+      return {
+        hasAccess: true,
+        reason: 'admin_access',
+        message: 'Bạn là quản trị viên',
+        enrollment,
+        expiresAt: null,
+      };
+    }
 
     const enrollment = await Enrollment.findOne({
       where: {

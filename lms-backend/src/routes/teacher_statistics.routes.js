@@ -1,6 +1,6 @@
 const express = require('express');
 const authMiddleware = require('../middlewares/auth');
-const authorizeRole = require('../middlewares/authorize');
+const { authorizeRole } = require('../middlewares/authorize');
 const teacherStatsController = require('../modules/teacher_statistics/teacher_statistics.controller');
 const {
   getTeacherStatisticsValidation,

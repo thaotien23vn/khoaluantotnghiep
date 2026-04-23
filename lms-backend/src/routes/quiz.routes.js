@@ -1,6 +1,6 @@
 const express = require("express");
 const authMiddleware = require("../middlewares/auth");
-const authorizeRole = require("../middlewares/authorize");
+const { authorizeRole } = require("../middlewares/authorize");
 const quizController = require("../modules/quiz/quiz.controller");
 const attemptController = require("../modules/attempt/attempt.controller");
 const {

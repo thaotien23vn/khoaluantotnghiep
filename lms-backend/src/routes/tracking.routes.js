@@ -2,7 +2,7 @@ const express = require('express');
 const router = express.Router();
 const trackingController = require('../modules/tracking/tracking.controller');
 const authMiddleware = require('../middlewares/auth');
-const authorizeRole = require('../middlewares/authorize');
+const { authorizeRole } = require('../middlewares/authorize');
 
 // POST /api/tracking/log - Log a tracking activity (public but auth optional)
 router.post('/log', authMiddleware, trackingController.logActivity);

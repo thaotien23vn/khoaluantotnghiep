@@ -31,7 +31,7 @@ class ForumService {
     if (query.userId && query.userRole !== 'admin') {
       const targetCourseId = courseId || (lectureId ? (await Lecture.findByPk(lectureId))?.chapter?.courseId : null);
       if (targetCourseId) {
-        const access = await EnrollmentAccess.checkAccess(query.userId, targetCourseId);
+        const access = await EnrollmentAccess.checkAccess(query.userId, targetCourseId, query.userRole);
         if (!access.hasAccess) {
           return { topics: [], meta: { total: 0, page, limit, totalPages: 0 }, message: access.message };
         }
@@ -128,7 +128,7 @@ class ForumService {
     }
 
     if (accessCourseId) {
-      const access = await EnrollmentAccess.checkAccess(userId, accessCourseId);
+      const access = await EnrollmentAccess.checkAccess(userId, accessCourseId, userRole);
       if (!access.hasAccess) {
         throw { status: 403, message: access.message || 'Bạn không có quyền tham gia diễn đàn này' };
       }
@@ -163,7 +163,7 @@ class ForumService {
 
     // Access check for course-bound topics
     if (userRole !== 'admin' && topic.type !== 'global' && topic.courseId) {
-      const access = await EnrollmentAccess.checkAccess(userId, topic.courseId);
+      const access = await EnrollmentAccess.checkAccess(userId, topic.courseId, userRole);
       if (!access.hasAccess) {
         throw { status: 403, message: access.message || 'Bạn không có quyền xem chủ đề này' };
       }
@@ -189,7 +189,7 @@ class ForumService {
 
     // Access check
     if (topic.type !== 'global' && topic.courseId) {
-      const access = await EnrollmentAccess.checkAccess(userId, topic.courseId);
+      const access = await EnrollmentAccess.checkAccess(userId, topic.courseId, userRole);
       if (!access.hasAccess) {
         throw { status: 403, message: access.message || 'Bạn đã hết hạn quyền tham gia diễn đàn của khóa học này' };
       }

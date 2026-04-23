@@ -64,4 +64,18 @@ const authorizeRole = (...allowedRoles) => {
   };
 };
 
-module.exports = authorizeRole;
+// Convenience functions for common role checks
+const requireStudent = authorizeRole('student');
+const requireTeacher = authorizeRole('teacher');
+const requireAdmin = authorizeRole('admin');
+const requireTeacherOrAdmin = authorizeRole('teacher', 'admin');
+const requireStudentOrAdmin = authorizeRole('student', 'admin');
+
+module.exports = {
+  authorizeRole,
+  requireStudent,
+  requireTeacher,
+  requireAdmin,
+  requireTeacherOrAdmin,
+  requireStudentOrAdmin,
+};

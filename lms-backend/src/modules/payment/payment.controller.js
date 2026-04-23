@@ -757,8 +757,6 @@ class PaymentController {
       if (validationError) return;
 
       const { id: userId } = req.user;
-      // SECURITY: Deprecated 'completed' status injection. 
-      // Clients must now providing proof of payment which the service validates.
       const processData = {
         ...req.body,
         // status: 'completed', // DISABLED: DO NOT HARDCODE SUCCESS

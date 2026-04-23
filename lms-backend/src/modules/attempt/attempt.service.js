@@ -117,7 +117,7 @@ class AttemptService {
 
     // Check enrollment using unified access helper
     if (userRole !== 'admin') {
-      const access = await EnrollmentAccess.checkAccess(userId, quiz.courseId);
+      const access = await EnrollmentAccess.checkAccess(userId, quiz.courseId, userRole);
       if (!access.hasAccess) {
         throw { status: 403, message: access.message || 'Bạn chưa đăng ký hoặc ghi danh đã hết hạn' };
       }
@@ -422,7 +422,7 @@ class AttemptService {
     }
 
     if (userRole !== 'admin') {
-      const access = await EnrollmentAccess.checkAccess(userId, quiz.courseId);
+      const access = await EnrollmentAccess.checkAccess(userId, quiz.courseId, userRole);
       if (!access.hasAccess) {
         throw { status: 403, message: access.message || 'Bạn chưa đăng ký hoặc ghi danh đã hết hạn' };
       }
