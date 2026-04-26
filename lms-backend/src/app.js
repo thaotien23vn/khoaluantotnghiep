@@ -34,7 +34,7 @@ app.set('trust proxy', ['127.0.0.1', '::1', '10.0.0.0/8', '172.16.0.0/12', '192.
 app.use(helmet()); // Add security headers
 const allowedOrigins = (
   process.env.ALLOWED_ORIGINS ||
-  "http://localhost:3000,http://localhost:5173,https://elearning-eduvn.vercel.app/"
+  "http://localhost:3000,http://localhost:5173,http://localhost:8080,http://localhost:55666,https://elearning-eduvn.vercel.app/"
 )
   .split(",")
   .map((o) => o.trim());
@@ -43,6 +43,10 @@ app.use(
     origin: (origin, callback) => {
       // Allow non-browser clients (Postman, curl) with no Origin header
       if (!origin) return callback(null, true);
+      // Allow any localhost origin (any port)
+      if (origin.startsWith('http://localhost:') || origin.startsWith('https://localhost:')) {
+        return callback(null, true);
+      }
       if (allowedOrigins.includes(origin)) return callback(null, true);
       return callback(new Error("Not allowed by CORS"));
     },
