@@ -233,9 +233,10 @@ class AttemptService {
     // 🛡️ FIX: Use transaction with row-level lock to prevent double submission
     return await db.sequelize.transaction(async (t) => {
       // 🛡️ FIX: Re-fetch and lock attempt with status check
+      // 🛡️ FIX: Use FOR UPDATE OF to only lock Attempt table, not joined tables (PostgreSQL limitation)
       const attempt = await Attempt.findOne({
-        where: { 
-          id: attemptId, 
+        where: {
+          id: attemptId,
           userId: Number(userId),
           completedAt: null  // Chỉ lấy nếu chưa completed
         },
@@ -245,7 +246,10 @@ class AttemptService {
           attributes: ['id', 'title', 'description', 'passingScore', 'showResults', 'timeLimit', 'courseId'],
           include: [{ model: Question, as: 'questions' }],
         }],
-        lock: t.LOCK.UPDATE,
+        lock: {
+          level: t.LOCK.UPDATE,
+          of: Attempt,  // Only lock Attempt table
+        },
         transaction: t,
       });
 
