@@ -1454,10 +1454,11 @@ class PlacementService {
       id: session.id,
       finalLevel: session.finalCefrLevel,
       confidence: session.confidenceScore,
-      accuracy: session.questionCount > 0 
-        ? (session.correctCount / session.questionCount) 
+      accuracy: session.questionCount > 0
+        ? (session.correctCount / session.questionCount)
         : 0,
       questionCount: session.questionCount,
+      correctCount: session.correctCount,
       isQuickCheck: session.isQuickCheck,
       isRetake: session.isRetake,
       retakeCount: session.retakeCount,
