@@ -161,6 +161,20 @@ class AttemptController {
       handleServiceError(error, res);
     }
   }
+
+  async gradeQuestion(req, res) {
+    try {
+      const { attemptId, questionId } = req.params;
+      const { id: userId, role } = req.user;
+      const { points, feedback } = req.body;
+
+      const result = await attemptService.gradeQuestion(attemptId, questionId, userId, role, points, feedback);
+
+      res.json(result);
+    } catch (error) {
+      handleServiceError(error, res);
+    }
+  }
 }
 
 module.exports = new AttemptController();

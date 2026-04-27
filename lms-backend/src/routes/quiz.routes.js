@@ -184,6 +184,18 @@ router.get(
   attemptController.getAttemptForTeacher,
 );
 
+/**
+ * @route   POST /api/teacher/attempts/:attemptId/questions/:questionId/grade
+ * @desc    Manual grading for essay questions
+ * @access  Private (Teacher & Admin)
+ */
+router.post(
+  "/teacher/attempts/:attemptId/questions/:questionId/grade",
+  authMiddleware,
+  authorizeRole("teacher", "admin"),
+  attemptController.gradeQuestion,
+);
+
 // ========== STUDENT ROUTES ==========
 
 /**

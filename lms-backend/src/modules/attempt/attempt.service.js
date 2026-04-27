@@ -632,6 +632,99 @@ class AttemptService {
     await attempt.destroy();
     return { message: 'Đã xóa bài nộp thành công. Học viên có thể thực hiện lại bài thi.' };
   }
+
+  /**
+   * Manual grading for essay questions
+   */
+  async gradeQuestion(attemptId, questionId, userId, userRole, points, feedback) {
+    const attempt = await Attempt.findByPk(attemptId, {
+      include: [
+        { model: User, as: 'user' },
+        {
+          model: Quiz,
+          as: 'quiz',
+          include: [
+            { model: Question, as: 'questions' },
+            { model: Course, as: 'course' },
+          ],
+        },
+      ],
+    });
+
+    if (!attempt) throw { status: 404, message: 'Không tìm thấy lần làm bài' };
+    const isOwner = Number(attempt.quiz?.course?.createdBy) === Number(userId);
+    if (!isOwner && userRole !== 'admin') throw { status: 403, message: 'Bạn không có quyền chấm điểm bài làm này' };
+
+    const question = attempt.quiz.questions.find(q => Number(q.id) === Number(questionId));
+    if (!question) throw { status: 404, message: 'Không tìm thấy câu hỏi' };
+    if (question.type !== 'essay') throw { status: 400, message: 'Chỉ có thể chấm điểm câu hỏi tự luận' };
+
+    // Store manual grade in attempt answers (add feedback and points)
+    let userAnswers = attempt.answers || {};
+    while (typeof userAnswers === 'string' && userAnswers.length > 0) {
+      try { userAnswers = JSON.parse(userAnswers); } catch (e) { break; }
+    }
+
+    if (typeof userAnswers !== 'object' || userAnswers === null) {
+      userAnswers = {};
+    }
+
+    // Add grading info to the answer
+    userAnswers[questionId] = {
+      ...(userAnswers[questionId] || {}),
+      pointsEarned: points,
+      feedback: feedback || '',
+      manuallyGraded: true,
+      manuallyGradedAt: new Date().toISOString(),
+    };
+
+    // Recalculate total score
+    let totalScore = 0;
+    let maxScore = 0;
+    let manualGradingCount = 0;
+
+    for (const q of attempt.quiz.questions) {
+      maxScore += q.points;
+      const qId = String(q.id);
+      const answer = userAnswers[qId];
+
+      if (q.type === 'essay') {
+        if (answer && answer.manuallyGraded) {
+          totalScore += answer.pointsEarned || 0;
+        } else {
+          manualGradingCount++;
+        }
+      } else {
+        const { pointsEarned } = gradeAnswer(q, answer);
+        totalScore += pointsEarned;
+      }
+    }
+
+    const effectiveMaxScore = maxScore > 0 ? maxScore : 100;
+    const percentageScore = effectiveMaxScore > 0 ? (totalScore / effectiveMaxScore) * 100 : 0;
+    let passed = percentageScore >= attempt.quiz.passingScore;
+    if (!passed && manualGradingCount > 0) passed = null;
+
+    await attempt.update({
+      answers: JSON.stringify(userAnswers),
+      score: totalScore,
+      percentageScore,
+      passed,
+    });
+
+    return {
+      success: true,
+      message: 'Đã chấm điểm thành công',
+      data: {
+        questionId,
+        pointsEarned: points,
+        feedback,
+        totalScore,
+        percentageScore,
+        passed,
+      },
+    };
+  }
 }
 
 module.exports = new AttemptService();
