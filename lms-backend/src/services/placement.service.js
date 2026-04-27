@@ -659,14 +659,14 @@ class PlacementService {
       const response = (session.responses || []).find(r => r.questionId === q.id);
       return {
         questionId: q.id,
-        type: q.type,
+        type: q.questionType,
         content: q.content,
         options: q.options,
         correctAnswer: q.correctAnswer,
-        userAnswer: response ? response.userAnswer : null,
+        userAnswer: response ? response.answer : null,
         isCorrect: response ? response.isCorrect : null,
         cefrLevel: q.cefrLevel,
-        skill: q.skill,
+        skill: q.skillType,
         explanation: q.explanation || null
       };
     });
