@@ -15,6 +15,7 @@ const {
   Course,
   PlacementQuestionBank,
   User,
+  Enrollment,
 } = db.models;
 
 // CEFR levels in order
@@ -52,7 +53,7 @@ const MAX_QUESTIONS = 20;     // Max questions per test
 const QUICK_CHECK_QUESTIONS = 10;  // Quick check has max 10 questions
 const MIN_QUESTIONS = 8;      // Min questions before early stop
 const CONFIDENCE_THRESHOLD = 0.85; // Stop when confident enough
-const RETAKE_COOLDOWN_DAYS = 1;   // Days before can retake
+const RETAKE_COOLDOWN_DAYS = 30;   // Days before can retake
 
 const MIN_TIME_PER_QUESTION = 5; // Minimum 5 seconds per question
 
@@ -139,381 +140,404 @@ class PlacementService {
    * Get next question (hybrid: DB cache first, AI generate if not exists)
    */
   async getNextQuestion(sessionId) {
-    const session = await PlacementSession.findByPk(sessionId, {
-      include: [
-        { model: PlacementQuestion, as: 'questions' },
-        { model: PlacementResponse, as: 'responses' },
-      ],
-    });
-
-    if (!session || session.status !== 'in_progress') {
-      throw { status: 404, message: 'Session not found or not in progress' };
-    }
-
-    // Check if test should stop
-    if (this.shouldStopTest(session)) {
-      const result = await this.completeSession(sessionId);
-      return { completed: true, result };
-    }
-
-    // CRITICAL FIX: Check if there's a current question that hasn't been answered yet
-    // This happens when user refreshes or re-enters the test
-    const existingQuestions = session.questions || [];
-    const existingResponses = session.responses || [];
-    
-    logger.info('PLACEMENT_GET_NEXT_QUESTION_DEBUG', {
-      sessionId,
-      questionCount: session.questionCount,
-      existingQuestionsCount: existingQuestions.length,
-      existingResponsesCount: existingResponses.length,
-      questions: existingQuestions.map(q => ({ id: q.id, questionIndex: q.questionIndex })),
-      responses: existingResponses.map(r => ({ questionId: r.questionId, isCorrect: r.isCorrect })),
-    });
-    
-    // Find the most recent question that doesn't have a response
-    const answeredQuestionIds = new Set(existingResponses.map(r => r.questionId));
-    logger.info('PLACEMENT_ANSWERED_QUESTION_IDS', { sessionId, answeredQuestionIds: Array.from(answeredQuestionIds) });
-    
-    const sortedQuestions = existingQuestions.sort((a, b) => b.questionIndex - a.questionIndex);
-    logger.info('PLACEMENT_SORTED_QUESTIONS', { 
-      sessionId, 
-      sorted: sortedQuestions.map(q => ({ id: q.id, questionIndex: q.questionIndex })) 
-    });
-    
-    const unansweredQuestion = sortedQuestions.find(q => !answeredQuestionIds.has(q.id));
-    
-    logger.info('PLACEMENT_UNANSWERED_QUESTION_FOUND', { 
-      sessionId, 
-      unansweredQuestion: unansweredQuestion ? { id: unansweredQuestion.id, questionIndex: unansweredQuestion.questionIndex } : null 
-    });
-    
-    if (unansweredQuestion) {
-      logger.info('PLACEMENT_RETURNING_EXISTING_QUESTION', {
-        sessionId,
-        questionId: unansweredQuestion.id,
-        questionIndex: unansweredQuestion.questionIndex,
+    // Use transaction with row-level lock to prevent race conditions
+    return await sequelize.transaction(async (t) => {
+      const session = await PlacementSession.findByPk(sessionId, {
+        include: [
+          { model: PlacementQuestion, as: 'questions' },
+          { model: PlacementResponse, as: 'responses' },
+        ],
+        lock: t.LOCK.UPDATE, // Row-level lock to prevent concurrent modifications
+        transaction: t,
       });
-      
-      // Return the existing unanswered question WITHOUT creating new one or advancing counter
-      return {
-        questionId: unansweredQuestion.id,
-        questionIndex: unansweredQuestion.questionIndex,
-        cefrLevel: unansweredQuestion.cefrLevel,
-        skillType: unansweredQuestion.skillType,
-        questionType: unansweredQuestion.questionType,
-        content: unansweredQuestion.content,
-        options: unansweredQuestion.options,
-        segments: unansweredQuestion.segments,
-        audioText: unansweredQuestion.audioText,
-        hint: unansweredQuestion.hint,
-        timeLimitSeconds: unansweredQuestion.timeLimitSeconds || 60,
-        totalQuestions: MAX_QUESTIONS,
-        currentQuestion: session.questionCount, // Don't +1 since we're not advancing
-      };
-    }
 
-    // Get IDs of questions already asked in this session (from both PlacementQuestion and bank)
-    const askedBankQuestionIdsSet = new Set(
-      existingQuestions
-        .filter(q => q.aiGenerated === false || q.bankQuestionId)
-        .map(q => q.bankQuestionId)
-        .filter(id => id)
-    );
-    
-    // Get content of all questions already asked (for duplicate check)
-    const askedContents = existingQuestions.map(q => this.normalizeContent(q.content));
+      if (!session || session.status !== 'in_progress') {
+        throw { status: 404, message: 'Session not found or not in progress' };
+      }
 
-    // Ability-based adaptive: Calculate current level from ability score
-    const currentAbility = session.abilityScore || STARTING_ABILITY;
-    const targetLevel = this.getLevelFromAbility(currentAbility);
-    const skillType = this.selectSkillType(session.questionCount);
-    
-    // All question types to try in order
-    const questionTypes = ['multiple_choice', 'fill_blank', 'listening', 'sentence_ordering'];
-    
-    let question = null;
-    let selectedType = null;
-    const SIMILARITY_THRESHOLD = 0.6;
-    
-    // Try each question type until we find one from bank at the target level
-    for (const qType of questionTypes) {
-      if (question) break;
-      
-      const bankQuestions = await this.getFromQuestionBank(
-        currentAbility, 
-        skillType, 
-        qType, 
-        Array.from(askedBankQuestionIdsSet),
-        20
+      // Check if test should stop
+      if (this.shouldStopTest(session)) {
+        const testResult = await this.completeSession(sessionId);
+        return { completed: true, result: testResult };
+      }
+
+      // CRITICAL FIX: Check if there's a current question that hasn't been answered yet
+      // This happens when user refreshes or re-enters the test
+      const existingQuestions = session.questions || [];
+      const existingResponses = session.responses || [];
+
+      logger.info('PLACEMENT_GET_NEXT_QUESTION_DEBUG', {
+        sessionId,
+        questionCount: session.questionCount,
+        existingQuestionsCount: existingQuestions.length,
+        existingResponsesCount: existingResponses.length,
+        questions: existingQuestions.map(q => ({ id: q.id, questionIndex: q.questionIndex })),
+        responses: existingResponses.map(r => ({ questionId: r.questionId, isCorrect: r.isCorrect })),
+      });
+
+      // Find the most recent question that doesn't have a response
+      const answeredQuestionIds = new Set(existingResponses.map(r => r.questionId));
+      logger.info('PLACEMENT_ANSWERED_QUESTION_IDS', { sessionId, answeredQuestionIds: Array.from(answeredQuestionIds) });
+
+      const sortedQuestions = existingQuestions.sort((a, b) => b.questionIndex - a.questionIndex);
+      logger.info('PLACEMENT_SORTED_QUESTIONS', {
+        sessionId,
+        sorted: sortedQuestions.map(q => ({ id: q.id, questionIndex: q.questionIndex }))
+      });
+
+      const unansweredQuestion = sortedQuestions.find(q => !answeredQuestionIds.has(q.id));
+
+      logger.info('PLACEMENT_UNANSWERED_QUESTION_FOUND', {
+        sessionId,
+        unansweredQuestion: unansweredQuestion ? { id: unansweredQuestion.id, questionIndex: unansweredQuestion.questionIndex } : null
+      });
+
+      if (unansweredQuestion) {
+        logger.info('PLACEMENT_RETURNING_EXISTING_QUESTION', {
+          sessionId,
+          questionId: unansweredQuestion.id,
+          questionIndex: unansweredQuestion.questionIndex,
+        });
+
+        // Return the existing unanswered question WITHOUT creating new one or advancing counter
+        return {
+          questionId: unansweredQuestion.id,
+          questionIndex: unansweredQuestion.questionIndex,
+          cefrLevel: unansweredQuestion.cefrLevel,
+          skillType: unansweredQuestion.skillType,
+          questionType: unansweredQuestion.questionType,
+          content: unansweredQuestion.content,
+          options: unansweredQuestion.options,
+          segments: unansweredQuestion.segments,
+          audioText: unansweredQuestion.audioText,
+          hint: unansweredQuestion.hint,
+          timeLimitSeconds: unansweredQuestion.timeLimitSeconds || 60,
+          totalQuestions: MAX_QUESTIONS,
+          currentQuestion: session.questionCount, // Don't +1 since we're not advancing
+        };
+      }
+
+      // Get IDs of questions already asked in this session (from both PlacementQuestion and bank)
+      const askedBankQuestionIdsSet = new Set(
+        existingQuestions
+          .filter(q => q.aiGenerated === false || q.bankQuestionId)
+          .map(q => q.bankQuestionId)
+          .filter(id => id)
       );
-      
-      if (bankQuestions.length === 0) {
-        logger.info('PLACEMENT_BANK_EMPTY_FOR_TYPE', {
+
+      // Get content of all questions already asked (for duplicate check)
+      const askedContents = existingQuestions.map(q => this.normalizeContent(q.content));
+
+      // Ability-based adaptive: Calculate current level from ability score
+      const currentAbility = session.abilityScore || STARTING_ABILITY;
+      const targetLevel = this.getLevelFromAbility(currentAbility);
+      const skillType = this.selectSkillType(session.questionCount);
+
+      // All question types to try in order
+      const questionTypes = ['multiple_choice', 'fill_blank', 'listening', 'sentence_ordering'];
+
+      let question = null;
+      let selectedType = null;
+      const SIMILARITY_THRESHOLD = 0.6;
+
+      // Try each question type until we find one from bank at the target level
+      for (const qType of questionTypes) {
+        if (question) break;
+
+        const bankQuestions = await this.getFromQuestionBank(
+          currentAbility,
+          skillType,
+          qType,
+          Array.from(askedBankQuestionIdsSet),
+          20
+        );
+
+        if (bankQuestions.length === 0) {
+          logger.info('PLACEMENT_BANK_EMPTY_FOR_TYPE', {
+            sessionId: session.id,
+            cefrLevel: targetLevel,
+            skillType,
+            questionType: qType,
+          });
+          continue;
+        }
+
+        // Take top 10 closest questions and randomly pick one for variety
+        const topK = bankQuestions.slice(0, 10);
+        const shuffledTopK = this.shuffleArray(topK);
+
+        // Find first non-duplicate from shuffled top-k
+        for (const bankQuestion of shuffledTopK) {
+          const normalizedBankContent = this.normalizeContent(bankQuestion.content);
+          const isBankDuplicate = askedContents.some(askedContent =>
+            askedContent === normalizedBankContent ||
+            this.contentSimilarity(askedContent, normalizedBankContent) > SIMILARITY_THRESHOLD
+          );
+
+          if (!isBankDuplicate) {
+            question = bankQuestion;
+            selectedType = qType;
+            break;
+          } else {
+            askedBankQuestionIdsSet.add(bankQuestion.id);
+            logger.warn('PLACEMENT_BANK_DUPLICATE_DETECTED', {
+              sessionId: session.id,
+              bankQuestionId: bankQuestion.id,
+              content: bankQuestion.content?.substring(0, 100),
+            });
+          }
+        }
+      }
+
+      // If still no question found
+      if (!question) {
+        logger.error('PLACEMENT_BANK_EXHAUSTED_ALL_TYPES', {
           sessionId: session.id,
           cefrLevel: targetLevel,
           skillType,
-          questionType: qType,
+          askedCount: askedBankQuestionIdsSet.size,
         });
-        continue;
+        throw {
+          status: 500,
+          message: 'Không còn câu hỏi phù hợp trong ngân hàng câu hỏi. Vui lòng liên hệ admin để bổ sung thêm câu hỏi.',
+          code: 'BANK_EMPTY',
+        };
       }
-      
-      // Take top 10 closest questions and randomly pick one for variety
-      const topK = bankQuestions.slice(0, 10);
-      const shuffledTopK = this.shuffleArray(topK);
-      
-      // Find first non-duplicate from shuffled top-k
-      for (const bankQuestion of shuffledTopK) {
-        const normalizedBankContent = this.normalizeContent(bankQuestion.content);
-        const isBankDuplicate = askedContents.some(askedContent => 
-          askedContent === normalizedBankContent || 
-          this.contentSimilarity(askedContent, normalizedBankContent) > SIMILARITY_THRESHOLD
-        );
-        
-        if (!isBankDuplicate) {
-          question = bankQuestion;
-          selectedType = qType;
-          break;
-        } else {
-          askedBankQuestionIdsSet.add(bankQuestion.id);
-          logger.warn('PLACEMENT_BANK_DUPLICATE_DETECTED', {
-            sessionId: session.id,
-            bankQuestionId: bankQuestion.id,
-            content: bankQuestion.content?.substring(0, 100),
-          });
+
+      // Anti-gaming: Strip old prefixes, shuffle, then add new clean prefixes
+      const cleanOptions = (question.options || []).map(opt => this.stripOptionPrefix(opt));
+      const shuffledCleanOptions = this.shuffleArray(cleanOptions);
+      const formattedOptions = this.formatOptionsWithPrefixes(shuffledCleanOptions);
+
+      // Convert correctAnswer from letter (A/B/C/D) to actual text (stripping prefix)
+      let correctAnswerText = question.correctAnswer;
+      if (question.correctAnswer && question.correctAnswer.length === 1 && question.options) {
+        // It's a letter, convert to text from original options (with prefix stripped)
+        const letterIndex = question.correctAnswer.charCodeAt(0) - 'A'.charCodeAt(0);
+        if (letterIndex >= 0 && letterIndex < question.options.length) {
+          correctAnswerText = this.stripOptionPrefix(question.options[letterIndex]);
         }
+      } else if (question.correctAnswer) {
+        // Already text, just strip prefix if any
+        correctAnswerText = this.stripOptionPrefix(question.correctAnswer);
       }
-    }
-    
-    // If still no question found
-    if (!question) {
-      logger.error('PLACEMENT_BANK_EXHAUSTED_ALL_TYPES', {
+
+      // Create placement question for this session within transaction
+      const placementQuestion = await PlacementQuestion.create({
         sessionId: session.id,
+        questionIndex: session.questionCount,
         cefrLevel: targetLevel,
         skillType,
-        askedCount: askedBankQuestionIdsSet.size,
-      });
-      throw {
-        status: 500,
-        message: 'Không còn câu hỏi phù hợp trong ngân hàng câu hỏi. Vui lòng liên hệ admin để bổ sung thêm câu hỏi.',
-        code: 'BANK_EMPTY',
+        questionType: selectedType,
+        content: question.content,
+        options: formattedOptions, // Store with new prefixes A., B., C., D.
+        correctAnswer: correctAnswerText, // Store clean text without prefix
+        explanation: question.explanation,
+        aiGenerated: false, // From question bank
+        bankQuestionId: question.id, // Track which bank question this came from
+        difficultyScore: question.difficultyScore, // Store difficulty for adaptive scoring
+        timeLimitSeconds: 60,
+      }, { transaction: t });
+
+      // Update session question count within transaction
+      await session.update({
+        questionCount: session.questionCount + 1,
+        lastActivityAt: new Date(),
+      }, { transaction: t });
+
+      // Return question without correct answer
+      return {
+        questionId: placementQuestion.id,
+        questionIndex: placementQuestion.questionIndex,
+        cefrLevel: targetLevel,
+        abilityScore: session.abilityScore || STARTING_ABILITY,
+        difficultyScore: question.difficultyScore,
+        skillType,
+        questionType: selectedType,
+        content: question.content,
+        options: formattedOptions, // Return with clean prefixes A., B., C., D.
+        segments: question.segments,
+        audioText: question.audioText,
+        hint: question.hint,
+        timeLimitSeconds: 60,
+        totalQuestions: MAX_QUESTIONS,
+        currentQuestion: placementQuestion.questionIndex + 1, // Fix: use questionIndex + 1 instead of session.questionCount + 1
       };
-    }
-
-    // Anti-gaming: Strip old prefixes, shuffle, then add new clean prefixes
-    const cleanOptions = (question.options || []).map(opt => this.stripOptionPrefix(opt));
-    const shuffledCleanOptions = this.shuffleArray(cleanOptions);
-    const formattedOptions = this.formatOptionsWithPrefixes(shuffledCleanOptions);
-    
-    // Convert correctAnswer from letter (A/B/C/D) to actual text (stripping prefix)
-    let correctAnswerText = question.correctAnswer;
-    if (question.correctAnswer && question.correctAnswer.length === 1 && question.options) {
-      // It's a letter, convert to text from original options (with prefix stripped)
-      const letterIndex = question.correctAnswer.charCodeAt(0) - 'A'.charCodeAt(0);
-      if (letterIndex >= 0 && letterIndex < question.options.length) {
-        correctAnswerText = this.stripOptionPrefix(question.options[letterIndex]);
-      }
-    } else if (question.correctAnswer) {
-      // Already text, just strip prefix if any
-      correctAnswerText = this.stripOptionPrefix(question.correctAnswer);
-    }
-    
-    // Create placement question for this session
-    // Mark as from bank (aiGenerated: false) and save bankQuestionId
-    const placementQuestion = await PlacementQuestion.create({
-      sessionId: session.id,
-      questionIndex: session.questionCount,
-      cefrLevel: targetLevel,
-      skillType,
-      questionType: selectedType,
-      content: question.content,
-      options: formattedOptions, // Store with new prefixes A., B., C., D.
-      correctAnswer: correctAnswerText, // Store clean text without prefix
-      explanation: question.explanation,
-      aiGenerated: false, // From question bank
-      bankQuestionId: question.id, // Track which bank question this came from
-      difficultyScore: question.difficultyScore, // Store difficulty for adaptive scoring
-      timeLimitSeconds: 60,
     });
-
-    // Update session question count
-    await session.update({ 
-      questionCount: session.questionCount + 1,
-      lastActivityAt: new Date(),
-    });
-
-    // Return question without correct answer
-    return {
-      questionId: placementQuestion.id,
-      questionIndex: placementQuestion.questionIndex,
-      cefrLevel: targetLevel,
-      abilityScore: session.abilityScore || STARTING_ABILITY,
-      difficultyScore: question.difficultyScore,
-      skillType,
-      questionType: selectedType,
-      content: question.content,
-      options: formattedOptions, // Return with clean prefixes A., B., C., D.
-      segments: question.segments,
-      audioText: question.audioText,
-      hint: question.hint,
-      timeLimitSeconds: 60,
-      totalQuestions: MAX_QUESTIONS,
-      currentQuestion: placementQuestion.questionIndex + 1, // Fix: use questionIndex + 1 instead of session.questionCount + 1
-    };
   }
 
   /**
    * Submit answer and get next question or result
    */
   async submitAnswer(sessionId, questionId, answer, timeSpentSeconds) {
-    const session = await PlacementSession.findByPk(sessionId);
-    const question = await PlacementQuestion.findByPk(questionId);
+    // Use transaction to ensure data consistency
+    return await sequelize.transaction(async (t) => {
+      const session = await PlacementSession.findByPk(sessionId, {
+        lock: t.LOCK.UPDATE,
+        transaction: t,
+      });
+      const question = await PlacementQuestion.findByPk(questionId, {
+        transaction: t,
+      });
 
-    if (!session || !question) {
-      throw { status: 404, message: 'Session or question not found' };
-    }
+      if (!session || !question) {
+        throw { status: 404, message: 'Session or question not found' };
+      }
 
-    if (session.status !== 'in_progress') {
-      throw { status: 400, message: 'Session is not in progress' };
-    }
+      // SECURITY: Validate question ownership - question must belong to this session
+      if (question.sessionId !== sessionId) {
+        logger.warn('PLACEMENT_QUESTION_OWNSHIP_VIOLATION', {
+          sessionId,
+          questionId,
+          questionSessionId: question.sessionId,
+        });
+        throw { status: 403, message: 'Question does not belong to this session' };
+      }
 
-    // Check if already answered
-    const existingResponse = await PlacementResponse.findOne({
-      where: { sessionId, questionId },
-    });
+      if (session.status !== 'in_progress') {
+        throw { status: 400, message: 'Session is not in progress' };
+      }
 
-    if (existingResponse) {
-      throw { status: 400, message: 'Question already answered' };
-    }
+      // Check if already answered
+      const existingResponse = await PlacementResponse.findOne({
+        where: { sessionId, questionId },
+        transaction: t,
+      });
 
-    // Anti-gaming: Check minimum time per question
-    if (timeSpentSeconds < MIN_TIME_PER_QUESTION) {
-      logger.warn('PLACEMENT_TOO_FAST', {
+      if (existingResponse) {
+        throw { status: 400, message: 'Question already answered' };
+      }
+
+      // Anti-gaming: Check minimum time per question
+      if (timeSpentSeconds < MIN_TIME_PER_QUESTION) {
+        logger.warn('PLACEMENT_TOO_FAST', {
+          sessionId,
+          questionId,
+          timeSpentSeconds,
+          minRequired: MIN_TIME_PER_QUESTION,
+        });
+        throw {
+          status: 400,
+          message: `Vui lòng dành ít nhất ${MIN_TIME_PER_QUESTION} giây để đọc và trả lời câu hỏi.`,
+          code: 'TOO_FAST',
+        };
+      }
+
+      // Convert user answer from letter (A/B/C/D) to text if needed
+      let userAnswerText = answer;
+      if (answer && answer.length === 1 && question.options) {
+        // It's a letter, convert to text using shuffled options (strip prefix for comparison)
+        const letterIndex = answer.charCodeAt(0) - 'A'.charCodeAt(0);
+        if (letterIndex >= 0 && letterIndex < question.options.length) {
+          userAnswerText = this.stripOptionPrefix(question.options[letterIndex]);
+        }
+      } else if (answer) {
+        // Already text, strip prefix if any
+        userAnswerText = this.stripOptionPrefix(answer);
+      }
+
+      // Evaluate answer
+      const isCorrect = this.evaluateAnswer(userAnswerText, question.correctAnswer, question.questionType);
+
+      // Save response within transaction
+      await PlacementResponse.create({
         sessionId,
         questionId,
+        answer,
+        isCorrect,
         timeSpentSeconds,
-        minRequired: MIN_TIME_PER_QUESTION,
-      });
-      throw {
-        status: 400,
-        message: `Vui lòng dành ít nhất ${MIN_TIME_PER_QUESTION} giây để đọc và trả lời câu hỏi.`,
-        code: 'TOO_FAST',
-      };
-    }
+      }, { transaction: t });
 
-    // Convert user answer from letter (A/B/C/D) to text if needed
-    let userAnswerText = answer;
-    if (answer && answer.length === 1 && question.options) {
-      // It's a letter, convert to text using shuffled options (strip prefix for comparison)
-      const letterIndex = answer.charCodeAt(0) - 'A'.charCodeAt(0);
-      if (letterIndex >= 0 && letterIndex < question.options.length) {
-        userAnswerText = this.stripOptionPrefix(question.options[letterIndex]);
-      }
-    } else if (answer) {
-      // Already text, strip prefix if any
-      userAnswerText = this.stripOptionPrefix(answer);
-    }
+      // Ability-based adaptive logic
+      // Get current ability score (default to B1 = 3.0 if not set)
+      const currentAbility = session.abilityScore || STARTING_ABILITY;
 
-    // Evaluate answer
-    const isCorrect = this.evaluateAnswer(userAnswerText, question.correctAnswer, question.questionType);
+      // Update ability based on answer result and question difficulty
+      const newAbility = this.updateAbility(currentAbility, question.difficultyScore || 3.0, isCorrect);
 
-    // Save response
-    await PlacementResponse.create({
-      sessionId,
-      questionId,
-      answer,
-      isCorrect,
-      timeSpentSeconds,
-    });
+      // Get new level from ability score
+      const newLevel = this.getLevelFromAbility(newAbility);
 
-    // Ability-based adaptive logic
-    // Get current ability score (default to B1 = 3.0 if not set)
-    const currentAbility = session.abilityScore || STARTING_ABILITY;
-    
-    // Update ability based on answer result and question difficulty
-    const newAbility = this.updateAbility(currentAbility, question.difficultyScore || 3.0, isCorrect);
-    
-    // Get new level from ability score
-    const newLevel = this.getLevelFromAbility(newAbility);
-    
-    // Update streak for backward compatibility
-    const newStreakCorrect = isCorrect ? (session.streakCorrect || 0) + 1 : 0;
-    const newStreakWrong = isCorrect ? 0 : (session.streakWrong || 0) + 1;
+      // Update streak for backward compatibility
+      const newStreakCorrect = isCorrect ? (session.streakCorrect || 0) + 1 : 0;
+      const newStreakWrong = isCorrect ? 0 : (session.streakWrong || 0) + 1;
 
-    await session.update({
-      correctCount: isCorrect ? session.correctCount + 1 : session.correctCount,
-      streakCorrect: newStreakCorrect,
-      streakWrong: newStreakWrong,
-      currentCefrLevel: newLevel,
-      abilityScore: newAbility, // Store continuous ability score
-      lastActivityAt: new Date(),
-    });
-    // session.update() returns the updated instance, no need to reload
+      // Update session within transaction
+      await session.update({
+        correctCount: isCorrect ? session.correctCount + 1 : session.correctCount,
+        streakCorrect: newStreakCorrect,
+        streakWrong: newStreakWrong,
+        currentCefrLevel: newLevel,
+        abilityScore: newAbility, // Store continuous ability score
+        lastActivityAt: new Date(),
+      }, { transaction: t });
 
-    logger.info('PLACEMENT_ANSWER_SUBMITTED', {
-      sessionId,
-      questionId,
-      isCorrect,
-      currentLevel: newLevel,
-      abilityScore: newAbility,
-      streakCorrect: newStreakCorrect,
-      streakWrong: newStreakWrong,
-    });
-
-    // Check if test should auto-complete after this answer
-    // Pass false for userChoseToStop - only auto-complete at MAX_QUESTIONS
-    const shouldComplete = this.shouldStopTest({
-      ...session.toJSON(),
-      correctCount: isCorrect ? session.correctCount + 1 : session.correctCount,
-      streakCorrect: newStreakCorrect,
-      streakWrong: newStreakWrong,
-      currentCefrLevel: newLevel,
-      abilityScore: newAbility,
-    }, false);
-    if (shouldComplete) {
-      logger.info('PLACEMENT_AUTO_COMPLETING', {
+      logger.info('PLACEMENT_ANSWER_SUBMITTED', {
         sessionId,
-        questionCount: session.questionCount,
-        isQuickCheck: session.isQuickCheck,
+        questionId,
+        isCorrect,
+        currentLevel: newLevel,
+        abilityScore: newAbility,
+        streakCorrect: newStreakCorrect,
+        streakWrong: newStreakWrong,
       });
-      const result = await this.completeSession(sessionId);
+
+      // Check if test should auto-complete after this answer
+      // Pass false for userChoseToStop - only auto-complete at MAX_QUESTIONS
+      const shouldComplete = this.shouldStopTest({
+        ...session.toJSON(),
+        correctCount: isCorrect ? session.correctCount + 1 : session.correctCount,
+        streakCorrect: newStreakCorrect,
+        streakWrong: newStreakWrong,
+        currentCefrLevel: newLevel,
+        abilityScore: newAbility,
+      }, false);
+      if (shouldComplete) {
+        logger.info('PLACEMENT_AUTO_COMPLETING', {
+          sessionId,
+          questionCount: session.questionCount,
+          isQuickCheck: session.isQuickCheck,
+        });
+        const result = await this.completeSession(sessionId);
+        return {
+          isCorrect,
+          correctAnswer: question.correctAnswer,
+          explanation: question.explanation,
+          currentLevel: newLevel,
+          streakCorrect: newStreakCorrect,
+          streakWrong: newStreakWrong,
+          completed: true,
+          result,
+        };
+      }
+
+      // Check if student can choose to stop early (min questions + confident enough)
+      const updatedSession = {
+        ...session.toJSON(),
+        correctCount: isCorrect ? session.correctCount + 1 : session.correctCount,
+        streakCorrect: newStreakCorrect,
+        streakWrong: newStreakWrong,
+        currentCefrLevel: newLevel,
+        abilityScore: newAbility,
+      };
+      const canStopEarly = updatedSession.questionCount >= MIN_QUESTIONS &&
+                         this.calculateConfidence(updatedSession) >= CONFIDENCE_THRESHOLD;
+
+      // Return immediate feedback for ongoing test
       return {
         isCorrect,
         correctAnswer: question.correctAnswer,
         explanation: question.explanation,
         currentLevel: newLevel,
+        abilityScore: newAbility,
         streakCorrect: newStreakCorrect,
         streakWrong: newStreakWrong,
-        completed: true,
-        result,
+        canStopEarly,
+        questionCount: updatedSession.questionCount,
+        minQuestions: MIN_QUESTIONS,
+        maxQuestions: MAX_QUESTIONS,
       };
-    }
-
-    // Check if student can choose to stop early (min questions + confident enough)
-    const updatedSession = {
-      ...session.toJSON(),
-      correctCount: isCorrect ? session.correctCount + 1 : session.correctCount,
-      streakCorrect: newStreakCorrect,
-      streakWrong: newStreakWrong,
-      currentCefrLevel: newLevel,
-      abilityScore: newAbility,
-    };
-    const canStopEarly = updatedSession.questionCount >= MIN_QUESTIONS && 
-                         this.calculateConfidence(updatedSession) >= CONFIDENCE_THRESHOLD;
-
-    // Return immediate feedback for ongoing test
-    return {
-      isCorrect,
-      correctAnswer: question.correctAnswer,
-      explanation: question.explanation,
-      currentLevel: newLevel,
-      abilityScore: newAbility,
-      streakCorrect: newStreakCorrect,
-      streakWrong: newStreakWrong,
-      canStopEarly,
-      questionCount: updatedSession.questionCount,
-      minQuestions: MIN_QUESTIONS,
-      maxQuestions: MAX_QUESTIONS,
-    };
+    });
   }
 
   /**
@@ -936,16 +960,20 @@ class PlacementService {
       
       // If we have weak areas, try to find courses that cover them
       if (weakAreas.length > 0) {
-        const searchPatterns = weakAreas.map(area => area.toLowerCase());
-        
         try {
+          // Safe approach: Use Sequelize's Op.contains for JSON array matching
+          // Build OR conditions for each weak area in willLearn or tags
+          const weakAreaConditions = weakAreas.map(area => ({
+            [Op.or]: [
+              { willLearn: { [Op.contains]: [area] } },
+              { tags: { [Op.contains]: [area] } }
+            ]
+          }));
+
           const coursesWithWeakAreas = await Course.findAll({
             where: {
               ...baseWhere,
-              [Op.or]: [
-                sequelize.literal(`EXISTS (SELECT 1 FROM json_array_elements_text("willLearn") AS elem WHERE LOWER(elem) LIKE ANY(ARRAY[${searchPatterns.map(p => `'%${p}%'`).join(',')}]))`),
-                sequelize.literal(`EXISTS (SELECT 1 FROM json_array_elements_text("tags") AS elem WHERE LOWER(elem) LIKE ANY(ARRAY[${searchPatterns.map(p => `'%${p}%'`).join(',')}]))`),
-              ],
+              [Op.or]: weakAreaConditions,
             },
             attributes: ['id', 'title', 'description', 'imageUrl', 'level', 'willLearn', 'requirements', 'tags'],
             limit: 5,
@@ -1335,27 +1363,58 @@ class PlacementService {
     const now = new Date();
     const daysSinceLastTest = Math.floor((now - lastTestDate) / (1000 * 60 * 60 * 24));
     const daysRemaining = Math.max(0, RETAKE_COOLDOWN_DAYS - daysSinceLastTest);
-    const canRetake = daysRemaining === 0;
+    let canRetake = daysRemaining === 0;
+    let bypassReason = null;
 
-    const nextRetakeDate = canRetake 
-      ? null 
+    // Check if user completed any course after last test (bypass cooldown)
+    if (!canRetake) {
+      try {
+        const completedEnrollment = await Enrollment.findOne({
+          where: {
+            userId,
+            status: 'completed',
+            progressPercent: 100,
+          },
+          order: [['enrolledAt', 'DESC']],
+        });
+
+        if (completedEnrollment && completedEnrollment.enrolledAt > lastTestDate) {
+          canRetake = true;
+          bypassReason = 'completed_course';
+          logger.info('RETAKE_BYPASS_COOLDOWN', {
+            userId,
+            lastTestDate,
+            completedCourseAt: completedEnrollment.enrolledAt,
+          });
+        }
+      } catch (e) {
+        logger.warn('RETAKE_ENROLLMENT_CHECK_ERROR', { userId, error: e.message });
+        // If error checking enrollment, fail open (don't block retake)
+      }
+    }
+
+    const nextRetakeDate = canRetake
+      ? null
       : new Date(lastTestDate.getTime() + RETAKE_COOLDOWN_DAYS * 24 * 60 * 60 * 1000);
 
-    logger.info('RETAKE_ELIGIBILITY_RESULT', { userId, canRetake, daysRemaining });
-    
+    logger.info('RETAKE_ELIGIBILITY_RESULT', { userId, canRetake, daysRemaining, bypassReason });
+
     return {
       canRetake,
-      message: canRetake 
-        ? 'Bạn có thể làm lại placement test.'
-        : `Bạn cần chờ thêm ${daysRemaining} ngày nữa để làm lại test.`,
+      message: canRetake
+        ? bypassReason === 'completed_course'
+          ? 'Bạn đã hoàn thành một khóa học. Bạn có thể làm lại placement test ngay.'
+          : 'Bạn có thể làm lại placement test.'
+        : `Bạn cần chờ thêm ${daysRemaining} ngày nữa để làm lại test. Hoàn thành một khóa học để được làm lại ngay.`,
       lastTestDate,
       daysRemaining,
       nextRetakeDate,
       hasInProgressSession: false,
+      bypassReason,
       lastResult: {
         level: lastSession.finalCefrLevel,
-        accuracy: lastSession.questionCount > 0 
-          ? (lastSession.correctCount / lastSession.questionCount) 
+        accuracy: lastSession.questionCount > 0
+          ? (lastSession.correctCount / lastSession.questionCount)
           : 0,
         isQuickCheck: lastSession.isQuickCheck,
       },
@@ -1383,7 +1442,7 @@ class PlacementService {
           include: [{
             model: PlacementQuestion,
             as: 'question',
-            attributes: ['skillType', 'cefrLevel', 'questionText'],
+            attributes: ['skillType', 'cefrLevel', 'content'],
           }],
         },
       ] : [],

@@ -9,7 +9,16 @@ class PlacementController {
   async startSession(req, res, next) {
     try {
       const { targetCourseId, selfAssessedLevel } = req.body;
-      const userId = req.user?.id || null; // Can be guest
+
+      // SECURITY: Require authenticated user
+      if (!req.user || !req.user.id) {
+        return res.status(401).json({
+          success: false,
+          message: 'Bạn cần đăng nhập để làm bài kiểm tra đầu vào.',
+        });
+      }
+
+      const userId = req.user.id;
 
       const session = await placementService.startSession({
         userId,
@@ -39,6 +48,18 @@ class PlacementController {
   async getNextQuestion(req, res, next) {
     try {
       const { sessionId } = req.params;
+      const userId = req.user?.id;
+
+      // SECURITY: Validate session ownership
+      if (userId) {
+        const session = await PlacementSession.findByPk(sessionId);
+        if (!session || session.userId !== userId) {
+          return res.status(403).json({
+            success: false,
+            message: 'Bạn không có quyền truy cập bài kiểm tra này.',
+          });
+        }
+      }
 
       const result = await placementService.getNextQuestion(sessionId);
 
@@ -57,9 +78,9 @@ class PlacementController {
         data: result,
       });
     } catch (err) {
-      logger.error('PLACEMENT_GET_QUESTION_ERROR', { 
+      logger.error('PLACEMENT_GET_QUESTION_ERROR', {
         sessionId: req.params.sessionId,
-        error: err.message 
+        error: err.message
       });
       next(err);
     }
@@ -73,6 +94,18 @@ class PlacementController {
     try {
       const { sessionId } = req.params;
       const { questionId, answer, timeSpentSeconds } = req.body;
+      const userId = req.user?.id;
+
+      // SECURITY: Validate session ownership
+      if (userId) {
+        const session = await PlacementSession.findByPk(sessionId);
+        if (!session || session.userId !== userId) {
+          return res.status(403).json({
+            success: false,
+            message: 'Bạn không có quyền truy cập bài kiểm tra này.',
+          });
+        }
+      }
 
       const result = await placementService.submitAnswer(
         sessionId,
