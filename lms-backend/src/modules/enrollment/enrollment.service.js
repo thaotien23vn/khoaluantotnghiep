@@ -158,7 +158,7 @@ class EnrollmentService {
           as: 'Course',
           attributes: ['id', 'title', 'slug', 'price', 'published', 'imageUrl', 'level', 'duration',
             'durationType', 'durationValue', 'durationUnit', 'renewalDiscountPercent', 'gracePeriodDays',
-            'students', 'rating', 'reviewCount', 'totalLessons', 'description', 'category', 'teacher', 'teacherAvatar'],
+            'students', 'rating', 'reviewCount', 'totalLessons', 'description', 'category'],
           include: [
             { model: User, as: 'creator', attributes: ['id', 'name', 'username'] },
           ],
