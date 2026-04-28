@@ -928,109 +928,77 @@ class PlacementService {
     const cefrLevels = ['A1', 'A2', 'B1', 'B2', 'C1', 'C2'];
     const userLevelIndex = cefrLevels.indexOf(level);
     
-    // Generate fallback levels: same level first, then adjacent levels
+    // Generate fallback levels: higher levels first (to help user level up),
+    // then same level, then lower levels
     const getFallbackLevels = (idx) => {
       const levels = [];
+      // Add all higher levels first (closest to user's level first)
+      for (let i = idx + 1; i < cefrLevels.length; i++) {
+        levels.push(this.cefrToCourseLevel(cefrLevels[i]));
+      }
       // Add same level
       if (idx >= 0) levels.push(this.cefrToCourseLevel(cefrLevels[idx]));
-      // Add one level below (easier)
-      if (idx > 0) levels.push(this.cefrToCourseLevel(cefrLevels[idx - 1]));
-      // Add one level above (harder)
-      if (idx < cefrLevels.length - 1) levels.push(this.cefrToCourseLevel(cefrLevels[idx + 1]));
-      // Add two levels below (if exists)
-      if (idx > 1) levels.push(this.cefrToCourseLevel(cefrLevels[idx - 2]));
-      // Add all remaining levels
-      for (let i = 0; i < cefrLevels.length; i++) {
-        if (!levels.includes(this.cefrToCourseLevel(cefrLevels[i]))) {
-          levels.push(this.cefrToCourseLevel(cefrLevels[i]));
-        }
+      // Add lower levels (closest to user's level first)
+      for (let i = idx - 1; i >= 0; i--) {
+        levels.push(this.cefrToCourseLevel(cefrLevels[i]));
       }
       return levels;
     };
     
     const fallbackLevels = getFallbackLevels(userLevelIndex);
-    logger.debug('PLACEMENT_SUGGESTED_COURSES_FALLBACK_LEVELS', { userLevel: level, fallbackLevels });
     
-    // Try each level in fallback order
+    // Collect courses from ALL levels (prioritize higher levels)
+    const allCollectedCourses = [];
+    const seenCourseIds = new Set();
+    
     for (const tryLevel of fallbackLevels) {
       const baseWhere = {
         level: tryLevel,
         published: true,
       };
       
-      // If we have weak areas, try to find courses that cover them
-      if (weakAreas.length > 0) {
-        try {
-          // Fetch all courses at this level, then filter by weak areas in JS
-          // (JSON columns are not JSONB, so Op.contains doesn't work in PostgreSQL)
-          const allCoursesAtLevel = await Course.findAll({
-            where: baseWhere,
-            attributes: ['id', 'title', 'description', 'imageUrl', 'level', 'willLearn', 'requirements', 'tags', 'rating', 'reviewCount', 'students', 'totalLessons', 'duration'],
-          });
-
-          // Filter courses that match weak areas
-          const coursesWithWeakAreas = allCoursesAtLevel.filter(course => {
-            const courseContent = [
-              ...(course.willLearn || []),
-              ...(course.tags || [])
-            ].join(' ').toLowerCase();
-
-            return weakAreas.some(area => courseContent.includes(area.toLowerCase()));
-          }).map(course => {
-            const courseContent = [
-              ...(course.willLearn || []),
-              ...(course.tags || [])
-            ].join(' ').toLowerCase();
-
-            const matchedWeakAreas = weakAreas.filter(area =>
-              courseContent.includes(area.toLowerCase())
-            );
-
-            return {
-              ...course.toJSON(),
-              matchScore: matchedWeakAreas.length,
-              matchedWeakAreas,
-              matchReason: `Khóa học giúp cải thiện: ${matchedWeakAreas.join(', ')}`,
-            };
-          }).sort((a, b) => b.matchScore - a.matchScore);
-
-          if (coursesWithWeakAreas.length > 0) {
-            return coursesWithWeakAreas.slice(0, 5);
-          }
-        } catch (e) {
-          logger.warn('PLACEMENT_SUGGESTED_COURSES_WEAK_AREA_SEARCH_ERROR', { level: tryLevel, error: e.message });
-        }
-      }
-      
-      // Fallback: return all courses at this level
       try {
         const courses = await Course.findAll({
           where: baseWhere,
-          attributes: ['id', 'title', 'description', 'imageUrl', 'level', 'willLearn', 'requirements', 'tags', 'rating', 'reviewCount', 'students', 'totalLessons', 'duration'],
-          limit: 5,
+          attributes: ['id', 'title', 'description', 'imageUrl', 'level', 'willLearn', 'requirements', 'tags', 'rating', 'reviewCount', 'students', 'totalLessons', 'duration', 'price'],
+          limit: 10,
         });
-        
-        if (courses.length > 0) {
-          logger.debug('PLACEMENT_SUGGESTED_COURSES_FOUND_AT_LEVEL', { level: tryLevel, count: courses.length });
-          return courses.map(course => ({
-            ...course.toJSON(),
-            matchScore: tryLevel === courseLevel ? 10 : 5, // Higher score for exact match
-            matchedWeakAreas: [],
-            matchReason: tryLevel === courseLevel 
-              ? 'Khóa học phù hợp trình độ của bạn'
-              : `Khóa học ${this.courseLevelToCefr(tryLevel)} - gần với trình độ ${level} của bạn`,
-          }));
+
+
+        for (const course of courses) {
+          if (!seenCourseIds.has(course.id)) {
+            seenCourseIds.add(course.id);
+            
+            // Calculate match score based on level priority
+            const levelIndex = fallbackLevels.indexOf(tryLevel);
+            const matchScore = Math.max(10 - levelIndex, 1); // Higher score for higher levels
+            
+            allCollectedCourses.push({
+              ...course.toJSON(),
+              matchScore,
+              matchedWeakAreas: [],
+              matchReason: tryLevel === courseLevel 
+                ? 'Khóa học phù hợp trình độ của bạn'
+                : `Khóa học ${this.courseLevelToCefr(tryLevel)} - nâng cao từ trình độ ${level}`,
+            });
+          }
         }
       } catch (e) {
-        logger.warn('PLACEMENT_SUGGESTED_COURSES_SEARCH_ERROR', { level: tryLevel, error: e.message });
+        // Removed logger statement
       }
     }
     
+    // Sort by match score and return top courses
+    if (allCollectedCourses.length > 0) {
+      return allCollectedCourses
+        .sort((a, b) => b.matchScore - a.matchScore)
+        .slice(0, 10);
+    }
+    
     // Ultimate fallback: return any published courses
-    logger.warn('PLACEMENT_SUGGESTED_COURSES_NO_LEVEL_MATCH_FALLBACK_ALL');
     const allCourses = await Course.findAll({
       where: { published: true },
-      attributes: ['id', 'title', 'description', 'imageUrl', 'level', 'willLearn', 'requirements', 'tags', 'rating', 'reviewCount', 'students', 'totalLessons', 'duration'],
+      attributes: ['id', 'title', 'description', 'imageUrl', 'level', 'willLearn', 'requirements', 'tags', 'rating', 'reviewCount', 'students', 'totalLessons', 'duration', 'price'],
       limit: 5,
     });
     
