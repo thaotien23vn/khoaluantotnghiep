@@ -975,7 +975,7 @@ class PlacementService {
               ...baseWhere,
               [Op.or]: weakAreaConditions,
             },
-            attributes: ['id', 'title', 'description', 'imageUrl', 'level', 'willLearn', 'requirements', 'tags'],
+            attributes: ['id', 'title', 'description', 'imageUrl', 'level', 'willLearn', 'requirements', 'tags', 'rating', 'reviewCount', 'students', 'totalLessons', 'duration'],
             limit: 5,
           });
           
@@ -1007,7 +1007,7 @@ class PlacementService {
       try {
         const courses = await Course.findAll({
           where: baseWhere,
-          attributes: ['id', 'title', 'description', 'imageUrl', 'level', 'willLearn', 'requirements', 'tags'],
+          attributes: ['id', 'title', 'description', 'imageUrl', 'level', 'willLearn', 'requirements', 'tags', 'rating', 'reviewCount', 'students', 'totalLessons', 'duration'],
           limit: 5,
         });
         
@@ -1031,7 +1031,7 @@ class PlacementService {
     logger.warn('PLACEMENT_SUGGESTED_COURSES_NO_LEVEL_MATCH_FALLBACK_ALL');
     const allCourses = await Course.findAll({
       where: { published: true },
-      attributes: ['id', 'title', 'description', 'imageUrl', 'level', 'willLearn', 'requirements', 'tags'],
+      attributes: ['id', 'title', 'description', 'imageUrl', 'level', 'willLearn', 'requirements', 'tags', 'rating', 'reviewCount', 'students', 'totalLessons', 'duration'],
       limit: 5,
     });
     

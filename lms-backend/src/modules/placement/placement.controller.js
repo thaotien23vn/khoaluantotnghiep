@@ -532,15 +532,43 @@ class PlacementController {
   async adminDeleteSession(req, res, next) {
     try {
       const { sessionId } = req.params;
-      
+
       const result = await placementService.deleteSession(parseInt(sessionId));
-      
+
       res.json({
         success: true,
         data: result,
       });
     } catch (err) {
       logger.error('ADMIN_DELETE_SESSION_ERROR', { error: err.message, sessionId: req.params.sessionId });
+      next(err);
+    }
+  }
+
+  /**
+   * GET /student/placement/suggested-courses
+   * Get suggested courses based on placement level
+   */
+  async getSuggestedCourses(req, res, next) {
+    try {
+      const { level, weakAreas } = req.query;
+
+      if (!level) {
+        return res.status(400).json({
+          success: false,
+          message: 'Level parameter is required',
+        });
+      }
+
+      const weakAreasArray = weakAreas ? weakAreas.split(',') : [];
+      const courses = await placementService.getSuggestedCourses(level, weakAreasArray);
+
+      res.json({
+        success: true,
+        data: courses,
+      });
+    } catch (err) {
+      logger.error('GET_SUGGESTED_COURSES_ERROR', { error: err.message });
       next(err);
     }
   }

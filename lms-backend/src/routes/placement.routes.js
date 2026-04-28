@@ -160,6 +160,14 @@ router.get(
   placementController.getUserPlacementHistory
 );
 
+// Get suggested courses based on placement level
+router.get(
+  '/student/placement/suggested-courses',
+  authMiddleware,
+  authorizeRole('student', 'admin'),
+  placementController.getSuggestedCourses
+);
+
 // Get current in-progress session (for resume test)
 router.get(
   '/student/placement/current',
