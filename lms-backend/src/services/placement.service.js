@@ -961,42 +961,41 @@ class PlacementService {
       // If we have weak areas, try to find courses that cover them
       if (weakAreas.length > 0) {
         try {
-          // Safe approach: Use Sequelize's Op.contains for JSON array matching
-          // Build OR conditions for each weak area in willLearn or tags
-          const weakAreaConditions = weakAreas.map(area => ({
-            [Op.or]: [
-              { willLearn: { [Op.contains]: [area] } },
-              { tags: { [Op.contains]: [area] } }
-            ]
-          }));
-
-          const coursesWithWeakAreas = await Course.findAll({
-            where: {
-              ...baseWhere,
-              [Op.or]: weakAreaConditions,
-            },
+          // Fetch all courses at this level, then filter by weak areas in JS
+          // (JSON columns are not JSONB, so Op.contains doesn't work in PostgreSQL)
+          const allCoursesAtLevel = await Course.findAll({
+            where: baseWhere,
             attributes: ['id', 'title', 'description', 'imageUrl', 'level', 'willLearn', 'requirements', 'tags', 'rating', 'reviewCount', 'students', 'totalLessons', 'duration'],
-            limit: 5,
           });
-          
+
+          // Filter courses that match weak areas
+          const coursesWithWeakAreas = allCoursesAtLevel.filter(course => {
+            const courseContent = [
+              ...(course.willLearn || []),
+              ...(course.tags || [])
+            ].join(' ').toLowerCase();
+
+            return weakAreas.some(area => courseContent.includes(area.toLowerCase()));
+          }).map(course => {
+            const courseContent = [
+              ...(course.willLearn || []),
+              ...(course.tags || [])
+            ].join(' ').toLowerCase();
+
+            const matchedWeakAreas = weakAreas.filter(area =>
+              courseContent.includes(area.toLowerCase())
+            );
+
+            return {
+              ...course.toJSON(),
+              matchScore: matchedWeakAreas.length,
+              matchedWeakAreas,
+              matchReason: `Khóa học giúp cải thiện: ${matchedWeakAreas.join(', ')}`,
+            };
+          }).sort((a, b) => b.matchScore - a.matchScore);
+
           if (coursesWithWeakAreas.length > 0) {
-            return coursesWithWeakAreas.map(course => {
-              const courseContent = [
-                ...(course.willLearn || []),
-                ...(course.tags || [])
-              ].join(' ').toLowerCase();
-              
-              const matchedWeakAreas = weakAreas.filter(area => 
-                courseContent.includes(area.toLowerCase())
-              );
-              
-              return {
-                ...course.toJSON(),
-                matchScore: matchedWeakAreas.length,
-                matchedWeakAreas,
-                matchReason: `Khóa học giúp cải thiện: ${matchedWeakAreas.join(', ')}`,
-              };
-            }).sort((a, b) => b.matchScore - a.matchScore);
+            return coursesWithWeakAreas.slice(0, 5);
           }
         } catch (e) {
           logger.warn('PLACEMENT_SUGGESTED_COURSES_WEAK_AREA_SEARCH_ERROR', { level: tryLevel, error: e.message });
