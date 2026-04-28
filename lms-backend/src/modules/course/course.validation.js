@@ -134,12 +134,50 @@ const updateCourseValidation = [
     .trim()
     .isIn(['beginner', 'elementary', 'intermediate', 'upper-intermediate', 'advanced', 'proficiency', 'all-levels'])
     .withMessage('Cấp độ không hợp lệ'),
-  
+
   body('duration')
     .optional()
     .trim()
     .isLength({ max: 50 })
     .withMessage('Thời lượng không được vượt quá 50 ký tự'),
+
+  // Duration settings
+  body('durationType')
+    .optional()
+    .isIn(['lifetime', 'fixed', 'subscription'])
+    .withMessage('Loại thời hạn không hợp lệ'),
+
+  body('durationValue')
+    .optional()
+    .custom((value) => {
+      if (value === null || value === undefined) return true;
+      if (Number.isInteger(Number(value)) && Number(value) >= 1) return true;
+      throw new Error('Giá trị thời hạn phải là số nguyên dương');
+    }),
+
+  body('durationUnit')
+    .optional()
+    .custom((value) => {
+      if (value === null || value === undefined) return true;
+      if (['days', 'months', 'years'].includes(value)) return true;
+      throw new Error('Đơn vị thời gian không hợp lệ');
+    }),
+
+  body('renewalDiscountPercent')
+    .optional()
+    .custom((value) => {
+      if (value === null || value === undefined) return true;
+      if (Number.isInteger(Number(value)) && Number(value) >= 0 && Number(value) <= 100) return true;
+      throw new Error('Phần trăm giảm giá phải từ 0 đến 100');
+    }),
+
+  body('gracePeriodDays')
+    .optional()
+    .custom((value) => {
+      if (value === null || value === undefined) return true;
+      if (Number.isInteger(Number(value)) && Number(value) >= 0) return true;
+      throw new Error('Số ngày ân hạn phải là số nguyên không âm');
+    }),
 ];
 
 const getCourseValidation = [
