@@ -143,6 +143,52 @@ class CertificateService {
       str = str.replace(/Đ/g, "D");
       return str;
    }
+
+   /**
+    * Get all certificates for a student
+    * Returns list of courses where student is eligible for certificate
+    */
+   async getMyCertificates(userId) {
+      const { Enrollment, Course } = db.models;
+
+      // Get all completed enrollments
+      const enrollments = await Enrollment.findAll({
+         where: { userId },
+         include: [{
+            model: Course,
+            where: { published: true },
+            required: true
+         }]
+      });
+
+      const certificates = [];
+
+      for (const enrollment of enrollments) {
+         try {
+            const eligibility = await progressService.getCertificateEligibility(userId, enrollment.courseId);
+            if (eligibility.isEligible) {
+               certificates.push({
+                  courseId: enrollment.courseId,
+                  courseTitle: eligibility.course.title,
+                  courseSlug: eligibility.course.slug,
+                  courseImage: eligibility.course.imageUrl,
+                  progressPercent: eligibility.progressPercent,
+                  completedAt: eligibility.completedAt,
+                  certificateId: eligibility.certificateData?.certificateId || `CERT-${enrollment.courseId}-${userId}`,
+                  totalLectures: eligibility.totalLectures,
+                  completedLectures: eligibility.completedLectures,
+                  quizPassed: eligibility.quizRequirement.passed,
+                  quizTotal: eligibility.quizRequirement.total
+               });
+            }
+         } catch (err) {
+            // Skip if eligibility check fails
+            continue;
+         }
+      }
+
+      return certificates;
+   }
 }
 
 module.exports = new CertificateService();

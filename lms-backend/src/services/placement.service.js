@@ -6,8 +6,6 @@ const logger = require('../utils/logger');
 const { Op } = require('sequelize');
 const { sequelize } = db;
 
-logger.debug('PLACEMENT_SEQUELIZE_OP_CHECK', { opType: typeof Op, opKeys: Op ? Object.keys(Op) : 'undefined' });
-
 const {
   PlacementSession,
   PlacementQuestion,
@@ -126,13 +124,6 @@ class PlacementService {
       retakeCount,
     });
 
-    logger.info('PLACEMENT_SESSION_STARTED', {
-      sessionId: session.id,
-      userId,
-      targetCourseId,
-      startingLevel,
-    });
-
     return session;
   }
 
@@ -166,39 +157,14 @@ class PlacementService {
       const existingQuestions = session.questions || [];
       const existingResponses = session.responses || [];
 
-      logger.info('PLACEMENT_GET_NEXT_QUESTION_DEBUG', {
-        sessionId,
-        questionCount: session.questionCount,
-        existingQuestionsCount: existingQuestions.length,
-        existingResponsesCount: existingResponses.length,
-        questions: existingQuestions.map(q => ({ id: q.id, questionIndex: q.questionIndex })),
-        responses: existingResponses.map(r => ({ questionId: r.questionId, isCorrect: r.isCorrect })),
-      });
-
       // Find the most recent question that doesn't have a response
       const answeredQuestionIds = new Set(existingResponses.map(r => r.questionId));
-      logger.info('PLACEMENT_ANSWERED_QUESTION_IDS', { sessionId, answeredQuestionIds: Array.from(answeredQuestionIds) });
 
       const sortedQuestions = existingQuestions.sort((a, b) => b.questionIndex - a.questionIndex);
-      logger.info('PLACEMENT_SORTED_QUESTIONS', {
-        sessionId,
-        sorted: sortedQuestions.map(q => ({ id: q.id, questionIndex: q.questionIndex }))
-      });
 
       const unansweredQuestion = sortedQuestions.find(q => !answeredQuestionIds.has(q.id));
 
-      logger.info('PLACEMENT_UNANSWERED_QUESTION_FOUND', {
-        sessionId,
-        unansweredQuestion: unansweredQuestion ? { id: unansweredQuestion.id, questionIndex: unansweredQuestion.questionIndex } : null
-      });
-
       if (unansweredQuestion) {
-        logger.info('PLACEMENT_RETURNING_EXISTING_QUESTION', {
-          sessionId,
-          questionId: unansweredQuestion.id,
-          questionIndex: unansweredQuestion.questionIndex,
-        });
-
         // Return the existing unanswered question WITHOUT creating new one or advancing counter
         return {
           questionId: unansweredQuestion.id,

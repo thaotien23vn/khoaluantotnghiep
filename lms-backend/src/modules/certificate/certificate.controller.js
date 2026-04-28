@@ -34,6 +34,27 @@ class CertificateController {
       }
     }
   }
+
+  /**
+   * Get all certificates for the logged-in student
+   */
+  async getMyCertificates(req, res) {
+    try {
+      const { id: userId } = req.user;
+      const certificates = await certificateService.getMyCertificates(userId);
+
+      res.json({
+        success: true,
+        data: certificates,
+      });
+    } catch (error) {
+      console.error('Lỗi lấy danh sách chứng chỉ:', error);
+      res.status(500).json({
+        success: false,
+        message: error.message || 'Lỗi hệ thống khi lấy danh sách chứng chỉ',
+      });
+    }
+  }
 }
 
 module.exports = new CertificateController();

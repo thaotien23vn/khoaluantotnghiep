@@ -351,4 +351,4 @@ const connectDB = async () => {
   }
 };
 
-module.exports = { sequelize, connectDB, models };
+module.exports = { sequelize, Sequelize, connectDB, models };

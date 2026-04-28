@@ -341,18 +341,19 @@ class QuizService {
    * Get all quizzes for student dashboard
    */
   async getAllMyQuizzes(userId) {
-    const enrollments = await db.models.Enrollment.findAll({
-      where: { 
-        userId, 
-        enrollmentStatus: { [db.Sequelize.Op.in]: ['active', 'grace_period'] } 
-      },
-      attributes: ['courseId'],
-    });
+    try {
+      const enrollments = await db.models.Enrollment.findAll({
+        where: { 
+          userId, 
+          enrollmentStatus: { [db.Sequelize.Op.in]: ['active', 'grace_period'] } 
+        },
+        attributes: ['courseId'],
+      });
 
-    const courseIds = enrollments.map((e) => e.courseId);
-    if (courseIds.length === 0) {
-      return { quizzes: [] };
-    }
+      const courseIds = enrollments.map((e) => e.courseId);
+      if (courseIds.length === 0) {
+        return { quizzes: [] };
+      }
 
     const quizzes = await Quiz.findAll({
       where: { courseId: courseIds, status: 'published' },
@@ -416,6 +417,9 @@ class QuizService {
     });
 
     return { quizzes: formattedQuizzes };
+    } catch (error) {
+      throw error;
+    }
   }
 }
 

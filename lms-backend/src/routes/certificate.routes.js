@@ -12,4 +12,12 @@ router.get(
   certificateController.downloadCertificate
 );
 
+// Get My Certificates (Requires authentication and Student role)
+router.get(
+  '/my-certificates',
+  authMiddleware,
+  authorizeRole('student'),
+  certificateController.getMyCertificates
+);
+
 module.exports = router;
