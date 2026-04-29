@@ -100,12 +100,13 @@ const updateCourseValidation = [
     .trim()
     .custom((value) => {
       if (value === null || value === '' || value === undefined) return true;
-      // Simple URL validation
-      const urlRegex = /^(https?:\/\/)?([\w.-]+)([\/\w.-]*)$/;
-      if (!urlRegex.test(value)) {
+      // URL validation with query params support
+      try {
+        new URL(value);
+        return true;
+      } catch {
         throw new Error('Image URL không hợp lệ');
       }
-      return true;
     }),
   
   body('price')

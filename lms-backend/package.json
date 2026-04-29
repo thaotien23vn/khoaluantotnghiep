@@ -12,7 +12,11 @@
     "db:reset": "set CLEANUP_DB=true&& node src/models/seed.js",
     "security-test": "bash test-security.sh",
     "test": "jest --runInBand",
-    "test:watch": "jest --watch --runInBand"
+    "test:watch": "jest --watch --runInBand",
+    "test:experimental": "jest --config jest.experimental.config.js --runInBand",
+    "test:experimental:report": "node src/__tests__/experimental/run-experimental-tests.js --json --csv",
+    "test:live-measurement": "jest src/__tests__/experimental/api-live-measurement.test.js --verbose --runInBand",
+    "test:ai-tutor": "jest src/__tests__/experimental/ai-tutor-chatbot.test.js --verbose --runInBand"
   },
   "keywords": [],
   "author": "",

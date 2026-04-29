@@ -130,8 +130,16 @@ class CourseController {
    */
   async updateCourse(req, res) {
     try {
+      // Check express-validator errors
+      const errors = require('express-validator').validationResult(req);
+      if (!errors.isEmpty()) {
+        console.log('[DEBUG] Validation errors:', errors.array());
+      }
+
       const validationError = handleValidationErrors(req, res);
-      if (validationError) return;
+      if (validationError) {
+        return;
+      }
 
       const { id } = req.params;
       const { id: userId, role } = req.user;
