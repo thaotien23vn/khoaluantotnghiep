@@ -431,6 +431,49 @@ class StripeService {
       throw { status: 400, message: 'Khóa học miễn phí, không cần thanh toán' };
     }
 
+    // 🛡️ FIX: Check for existing pending payment to avoid duplicates
+    const existingPayment = await Payment.findOne({
+      where: {
+        userId,
+        courseId,
+        status: 'pending',
+        provider: 'stripe',
+      },
+      order: [['createdAt', 'DESC']],
+    });
+
+    // If there's an existing pending payment with a session, try to reuse it
+    if (existingPayment?.paymentDetails?.sessionId) {
+      try {
+        const existingSessionId = existingPayment.paymentDetails.sessionId;
+        const existingSession = await stripe.checkout.sessions.retrieve(existingSessionId);
+        
+        // If session is still open (not expired/completed), reuse it
+        if (existingSession.status === 'open' && existingSession.url) {
+          logger.info('STRIPE_CHECKOUT_REUSE_SESSION', { 
+            userId, 
+            courseId, 
+            existingPaymentId: existingPayment.id,
+            sessionId: existingSessionId 
+          });
+          return {
+            payment: existingPayment,
+            checkoutUrl: existingSession.url,
+            sessionId: existingSessionId,
+            isNew: false,
+          };
+        }
+      } catch (sessionErr) {
+        // Session expired or invalid, will create new one and update payment
+        logger.info('STRIPE_CHECKOUT_SESSION_EXPIRED', { 
+          userId, 
+          courseId, 
+          existingPaymentId: existingPayment.id,
+          error: sessionErr.message 
+        });
+      }
+    }
+
     // Create Stripe Checkout Session
     const session = await stripe.checkout.sessions.create({
       payment_method_types: ['card'],
@@ -460,21 +503,16 @@ class StripeService {
       },
     });
 
-    // Create payment record
-    const payment = await Payment.create({
-      userId,
-      courseId,
-      amount: price,
-      currency: 'VND',
-      provider: 'stripe',
-      providerTxn: session.id,
-      status: 'pending',
-      paymentMethod: 'card',
-      paymentDetails: {
-        initiatedAt: new Date().toISOString(),
+    // 🛡️ FIX: Update existing payment if found, otherwise create new
+    let payment;
+    if (existingPayment) {
+      // Update existing payment with new session
+      existingPayment.providerTxn = session.id;
+      existingPayment.paymentDetails = {
+        ...existingPayment.paymentDetails,
         sessionId: session.id,
+        renewedAt: new Date().toISOString(),
         type: 'checkout_session',
-        // Include renewal metadata for proper renewal handling
         ...(isRenewal ? {
           isRenewal: true,
           renewalMonths: renewalMonths,
@@ -484,13 +522,48 @@ class StripeService {
         } : {
           source: 'stripe_checkout',
         }),
-      },
-    });
+      };
+      await existingPayment.save();
+      payment = existingPayment;
+      logger.info('STRIPE_CHECKOUT_UPDATE_EXISTING', { 
+        userId, 
+        courseId, 
+        paymentId: payment.id,
+        sessionId: session.id 
+      });
+    } else {
+      // Create new payment record
+      payment = await Payment.create({
+        userId,
+        courseId,
+        amount: price,
+        currency: 'VND',
+        provider: 'stripe',
+        providerTxn: session.id,
+        status: 'pending',
+        paymentMethod: 'card',
+        paymentDetails: {
+          initiatedAt: new Date().toISOString(),
+          sessionId: session.id,
+          type: 'checkout_session',
+          ...(isRenewal ? {
+            isRenewal: true,
+            renewalMonths: renewalMonths,
+            enrollmentId,
+            renewalPrice,
+            source: 'stripe_renewal',
+          } : {
+            source: 'stripe_checkout',
+          }),
+        },
+      });
+    }
 
     return {
       payment,
       checkoutUrl: session.url,
       sessionId: session.id,
+      isNew: !existingPayment,
     };
   }
 

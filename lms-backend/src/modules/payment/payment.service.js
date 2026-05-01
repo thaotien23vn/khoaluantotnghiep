@@ -974,27 +974,57 @@ class PaymentService {
       throw { status: 400, message: 'Khóa học miễn phí, không cần thanh toán' };
     }
 
-    // Generate unique transaction reference
+    // 🛡️ FIX: Check for existing pending payment to avoid duplicates
+    const existingPayment = await Payment.findOne({
+      where: {
+        userId,
+        courseId,
+        status: 'pending',
+        provider: 'vnpay',
+      },
+      order: [['createdAt', 'DESC']],
+    });
+
+    // Generate unique transaction reference (new for each attempt)
     const txnRef = vnpayService.generateTxnRef(userId);
     
-    // Create payment record
-    const payment = await Payment.create({
-      userId,
-      courseId,
-      amount: price,
-      currency: 'VND',
-      provider: 'vnpay',
-      providerTxn: txnRef,
-      status: 'pending',
-      paymentDetails: {
+    let payment;
+    if (existingPayment) {
+      // Update existing payment with new txnRef and timestamp
+      existingPayment.providerTxn = txnRef;
+      existingPayment.paymentDetails = {
+        ...existingPayment.paymentDetails,
         initiatedAt: new Date().toISOString(),
+        renewedAt: new Date().toISOString(),
+        previousTxnRef: existingPayment.providerTxn, // Keep history
         source: 'vnpay',
         provider: 'vnpay',
         isRenewal,
         enrollmentId: enrollmentId ? Number(enrollmentId) : null,
         renewalMonths: renewalMonths != null ? Number(renewalMonths) : null,
-      },
-    });
+      };
+      await existingPayment.save();
+      payment = existingPayment;
+    } else {
+      // Create new payment record
+      payment = await Payment.create({
+        userId,
+        courseId,
+        amount: price,
+        currency: 'VND',
+        provider: 'vnpay',
+        providerTxn: txnRef,
+        status: 'pending',
+        paymentDetails: {
+          initiatedAt: new Date().toISOString(),
+          source: 'vnpay',
+          provider: 'vnpay',
+          isRenewal,
+          enrollmentId: enrollmentId ? Number(enrollmentId) : null,
+          renewalMonths: renewalMonths != null ? Number(renewalMonths) : null,
+        },
+      });
+    }
 
     // Create VNPay payment URL
     const paymentUrl = await vnpayService.createPaymentUrl({
@@ -1014,6 +1044,7 @@ class PaymentService {
         title: course.title,
         price: course.price,
       },
+      isNew: !existingPayment,
     };
   }
 

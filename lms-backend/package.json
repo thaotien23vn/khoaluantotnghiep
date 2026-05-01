@@ -16,7 +16,9 @@
     "test:experimental": "jest --config jest.experimental.config.js --runInBand",
     "test:experimental:report": "node src/__tests__/experimental/run-experimental-tests.js --json --csv",
     "test:live-measurement": "jest src/__tests__/experimental/api-live-measurement.test.js --verbose --runInBand",
-    "test:ai-tutor": "jest src/__tests__/experimental/ai-tutor-chatbot.test.js --verbose --runInBand"
+    "test:ai-tutor": "jest src/__tests__/experimental/ai-tutor-chatbot.test.js --verbose --runInBand",
+    "test:ai-support": "jest src/__tests__/experimental/ai-support-chatbot.test.js --verbose --runInBand",
+    "test:rag-quiz": "jest src/__tests__/experimental/rag-quiz-generation.test.js --verbose --runInBand"
   },
   "keywords": [],
   "author": "",
