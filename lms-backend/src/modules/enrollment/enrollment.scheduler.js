@@ -23,7 +23,7 @@ class EnrollmentScheduler {
       },
       include: [
         { model: Course, as: 'Course', attributes: ['id', 'title'] },
-        { model: User, as: 'User', attributes: ['id', 'email', 'firstName', 'lastName'] },
+        { model: User, as: 'User', attributes: ['id', 'email', 'name'] },
       ],
     });
 
@@ -39,7 +39,7 @@ class EnrollmentScheduler {
         subject: 'Khóa học của bạn đã hết hạn - Ân hạn 7 ngày',
         template: 'course-grace-period',
         data: {
-          userName: `${enrollment.User?.firstName || ''} ${enrollment.User?.lastName || ''}`.trim(),
+          userName: enrollment.User?.name || 'Người dùng',
           courseTitle: enrollment.Course?.title,
           gracePeriodEndsAt: enrollment.gracePeriodEndsAt,
           renewalUrl: `/course/${enrollment.courseId}/renew`,
@@ -55,7 +55,7 @@ class EnrollmentScheduler {
       },
       include: [
         { model: Course, as: 'Course', attributes: ['id', 'title'] },
-        { model: User, as: 'User', attributes: ['id', 'email', 'firstName', 'lastName'] },
+        { model: User, as: 'User', attributes: ['id', 'email', 'name'] },
       ],
     });
 
@@ -71,7 +71,7 @@ class EnrollmentScheduler {
         subject: 'Khóa học của bạn đã hết hạn hoàn toàn',
         template: 'course-expired',
         data: {
-          userName: `${enrollment.User?.firstName || ''} ${enrollment.User?.lastName || ''}`.trim(),
+          userName: enrollment.User?.name || 'Người dùng',
           courseTitle: enrollment.Course?.title,
           renewUrl: `/course/${enrollment.courseId}/renew`,
         },
@@ -90,7 +90,7 @@ class EnrollmentScheduler {
       },
       include: [
         { model: Course, as: 'Course', attributes: ['id', 'title'] },
-        { model: User, as: 'User', attributes: ['id', 'email', 'firstName', 'lastName'] },
+        { model: User, as: 'User', attributes: ['id', 'email', 'name'] },
       ],
     });
 
@@ -134,7 +134,7 @@ class EnrollmentScheduler {
       },
       include: [
         { model: Course, as: 'Course', attributes: ['id', 'title'] },
-        { model: User, as: 'User', attributes: ['id', 'email', 'firstName', 'lastName'] },
+        { model: User, as: 'User', attributes: ['id', 'email', 'name'] },
       ],
     });
 
@@ -149,7 +149,7 @@ class EnrollmentScheduler {
       },
       include: [
         { model: Course, as: 'Course', attributes: ['id', 'title'] },
-        { model: User, as: 'User', attributes: ['id', 'email', 'firstName', 'lastName'] },
+        { model: User, as: 'User', attributes: ['id', 'email', 'name'] },
       ],
     });
 
@@ -159,7 +159,7 @@ class EnrollmentScheduler {
         subject: 'Khóa học của bạn sắp hết hạn (7 ngày)',
         template: 'course-expiring-soon',
         data: {
-          userName: `${enrollment.User?.firstName || ''} ${enrollment.User?.lastName || ''}`.trim(),
+          userName: enrollment.User?.name || 'Người dùng',
           courseTitle: enrollment.Course?.title,
           expiresAt: enrollment.expiresAt,
           renewalUrl: `/course/${enrollment.courseId}/renew`,
@@ -174,7 +174,7 @@ class EnrollmentScheduler {
         subject: 'Khóa học của bạn sắp hết hạn (1 ngày)',
         template: 'course-expiring-soon',
         data: {
-          userName: `${enrollment.User?.firstName || ''} ${enrollment.User?.lastName || ''}`.trim(),
+          userName: enrollment.User?.name || 'Người dùng',
           courseTitle: enrollment.Course?.title,
           expiresAt: enrollment.expiresAt,
           renewalUrl: `/course/${enrollment.courseId}/renew`,
