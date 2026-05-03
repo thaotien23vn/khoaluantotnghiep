@@ -917,7 +917,14 @@ class PaymentService {
       console.error('Recompute course students (silent) error:', aggErr);
     }
 
-    // 🔔 Send enrollment notification (outside transaction)
+    // �️ FIX: Remove from cart automatically after successful enrollment
+    try {
+      await cartService.removeFromCart(userId, courseId);
+    } catch (cartErr) {
+      console.error('Remove from cart (silent) error:', cartErr);
+    }
+
+    // �🔔 Send enrollment notification (outside transaction)
     try {
       await notificationService.createNotification({
         userId,
