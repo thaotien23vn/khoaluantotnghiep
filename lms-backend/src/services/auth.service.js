@@ -184,14 +184,18 @@ const verifyEmail = async (code) => {
     emailVerificationTokenExpires: null,
   });
 
+  // Create JWT token for auto-login after verification
+  const token = createJWTToken(user);
+
   return {
     user: {
       id: user.id,
       name: user.name,
       email: user.email,
       role: user.role,
-      isEmailVerified: user.isEmailVerified,
+      isEmailVerified: true,
     },
+    token,
   };
 };
 

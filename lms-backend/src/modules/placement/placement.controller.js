@@ -1,6 +1,7 @@
 const placementService = require('../../services/placement.service');
 const logger = require('../../utils/logger');
-const { PlacementSession } = require('../../models');
+const db = require('../../models');
+const { PlacementSession } = db.models;
 class PlacementController {
   /**
    * POST /student/placement/start
@@ -322,12 +323,13 @@ class PlacementController {
       const { sessionId } = req.params;
       const { questionId, timeSpentSeconds } = req.body;
 
-      const result = await placementService.submitAnswer(sessionId, {
+      // Correct call to submitAnswer with discrete parameters
+      const result = await placementService.submitAnswer(
+        sessionId,
         questionId,
-        answer: null, // Skipped
-        isSkipped: true,
-        timeSpentSeconds: timeSpentSeconds || 0,
-      });
+        null, // answer is null for skip
+        timeSpentSeconds || 0
+      );
 
       res.json({
         success: true,

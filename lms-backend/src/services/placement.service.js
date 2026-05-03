@@ -133,14 +133,26 @@ class PlacementService {
   async getNextQuestion(sessionId) {
     // Use transaction with row-level lock to prevent race conditions
     return await sequelize.transaction(async (t) => {
+      // First, lock the session only (no include to avoid FOR UPDATE with outer join)
       const session = await PlacementSession.findByPk(sessionId, {
-        include: [
-          { model: PlacementQuestion, as: 'questions' },
-          { model: PlacementResponse, as: 'responses' },
-        ],
-        lock: t.LOCK.UPDATE, // Row-level lock to prevent concurrent modifications
+        lock: t.LOCK.UPDATE,
         transaction: t,
       });
+
+      // Then fetch associations separately without lock
+      const questions = await PlacementQuestion.findAll({
+        where: { sessionId },
+        transaction: t,
+      });
+
+      const responses = await PlacementResponse.findAll({
+        where: { sessionId },
+        transaction: t,
+      });
+
+      // Attach to session object for compatibility
+      session.questions = questions;
+      session.responses = responses;
 
       if (!session || session.status !== 'in_progress') {
         throw { status: 404, message: 'Session not found or not in progress' };
@@ -351,7 +363,7 @@ class PlacementService {
       }
 
       // SECURITY: Validate question ownership - question must belong to this session
-      if (question.sessionId !== sessionId) {
+      if (Number(question.sessionId) !== Number(sessionId)) {
         logger.warn('PLACEMENT_QUESTION_OWNSHIP_VIOLATION', {
           sessionId,
           questionId,
@@ -411,7 +423,7 @@ class PlacementService {
         questionId,
         answer,
         isCorrect,
-        timeSpentSeconds,
+        timeSpentSeconds: timeSpentSeconds ? Math.round(timeSpentSeconds) : null,
       }, { transaction: t });
 
       // Ability-based adaptive logic

@@ -102,7 +102,10 @@ const validateEnv = () => {
       placementQuestionCron.start();
     });
   } catch (error) {
-    logger.error('SERVER_STARTUP_FAILED', { error: error.message });
+    logger.error('SERVER_STARTUP_FAILED', { 
+      error: error.message,
+      stack: error.stack 
+    });
     process.exit(1);
   }
 })();
