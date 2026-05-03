@@ -36,9 +36,11 @@ class CartController {
       }
 
       const result = await cartService.addToCart(userId, courseId, notes);
+      // Fetch updated cart to return full state
+      const updatedCart = await cartService.getCart(userId);
       res.status(result.isNew ? 201 : 200).json({
         success: true,
-        data: result.item,
+        data: updatedCart,
         message: result.isNew ? 'Đã thêm vào giỏ hàng' : 'Khóa học đã có trong giỏ hàng',
       });
     } catch (error) {
@@ -56,9 +58,11 @@ class CartController {
       const { notes } = req.body;
 
       const result = await cartService.updateCartItem(userId, itemId, notes);
+      // Fetch updated cart
+      const updatedCart = await cartService.getCart(userId);
       res.json({
         success: true,
-        data: result.item,
+        data: updatedCart,
         message: 'Đã cập nhật ghi chú',
       });
     } catch (error) {
@@ -75,8 +79,11 @@ class CartController {
       const { itemId } = req.params;
 
       const result = await cartService.removeFromCart(userId, itemId);
+      // Fetch updated cart
+      const updatedCart = await cartService.getCart(userId);
       res.json({
         success: true,
+        data: updatedCart,
         message: result.message,
       });
     } catch (error) {
