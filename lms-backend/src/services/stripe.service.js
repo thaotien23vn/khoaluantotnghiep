@@ -425,7 +425,15 @@ class StripeService {
     logger.info('STRIPE_CHECKOUT_SESSION_CREATE', { userId, courseId, isRenewal, renewalPrice });
 
     // Use renewal price if provided, otherwise use full course price
-    const price = renewalPrice && renewalPrice > 0 ? Number(renewalPrice) : Number(course.price || 0);
+    let price = renewalPrice && renewalPrice > 0 ? Number(renewalPrice) : Number(course.price || 0);
+
+    // 🛡️ FIX: Stripe minimum amount check (approx $0.50 USD = ~13,000 VND)
+    // To be safe, we set minimum to 20,000 VND for Stripe
+    const STRIPE_MIN_AMOUNT = 20000;
+    if (price < STRIPE_MIN_AMOUNT) {
+      logger.warn('STRIPE_AMOUNT_TOO_LOW_ADJUSTING', { originalPrice: price, adjustedPrice: STRIPE_MIN_AMOUNT });
+      price = STRIPE_MIN_AMOUNT;
+    }
 
     if (price === 0) {
       throw { status: 400, message: 'Khóa học miễn phí, không cần thanh toán' };
@@ -583,17 +591,29 @@ class StripeService {
     }
 
     // Build line items from cart
-    const lineItems = cartData.items.map(item => ({
-      price_data: {
-        currency: 'vnd',
-        product_data: {
-          name: item.course?.title || 'Khóa học',
-          description: item.notes || 'Khóa học trực tuyến',
+    const lineItems = cartData.items.map(item => {
+      let itemPrice = Number(item.course?.price || 0);
+      
+      // 🛡️ FIX: Stripe minimum per item check for small amounts
+      // If the total of the session is still too low, Stripe will fail.
+      // We adjust small items to at least 20,000 VND for test purposes.
+      const STRIPE_MIN_AMOUNT = 20000;
+      if (itemPrice > 0 && itemPrice < STRIPE_MIN_AMOUNT) {
+        itemPrice = STRIPE_MIN_AMOUNT;
+      }
+
+      return {
+        price_data: {
+          currency: 'vnd',
+          product_data: {
+            name: item.course?.title || 'Khóa học',
+            description: item.notes || 'Khóa học trực tuyến',
+          },
+          unit_amount: Math.round(itemPrice),
         },
-        unit_amount: Math.round(Number(item.course?.price || 0)),
-      },
-      quantity: 1,
-    }));
+        quantity: 1,
+      };
+    });
 
     // Create Stripe Checkout Session
     const session = await stripe.checkout.sessions.create({
@@ -727,6 +747,14 @@ class StripeService {
             throw err;
           }
         }
+      }
+      
+      // 🛡️ FIX: Clear these courses from cart
+      try {
+        await cartService.removePaidItemsFromCart(metadataUserId, courseIdList);
+        logger.info('STRIPE_CART_CLEARED_AFTER_SUCCESS', { userId: metadataUserId, count: courseIdList.length });
+      } catch (cartErr) {
+        logger.warn('STRIPE_CART_CLEAR_FAILED_SILENT', { error: cartErr.message });
       }
       
       return { success: true, payments, userId: metadataUserId, courseIds: courseIdList };
