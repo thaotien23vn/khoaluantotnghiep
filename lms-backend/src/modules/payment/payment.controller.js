@@ -453,65 +453,37 @@ class PaymentController {
       logger.debug('PAYMENT_LOOKUP_RESULT', { sessionId: session_id, found: !!payment });
 
       if (!payment) {
-        // Try to find any payment with similar providerTxn
-        const allPayments = await Payment.findAll({
-          where: { provider: 'stripe' },
-          limit: 5,
-          order: [['createdAt', 'DESC']],
-        });
-        logger.warn('PAYMENT_NOT_FOUND_FOR_SESSION', {
-          sessionId: session_id,
-          recentPaymentCount: allPayments.length,
-        });
-        
+        logger.warn('PAYMENT_NOT_FOUND_FOR_SESSION', { sessionId: session_id });
         return res.status(404).json({
           success: false,
           message: 'Không tìm thấy giao dịch',
         });
       }
 
-      // Ownership check: user can only access their own payment status
-      if (Number(payment.userId) !== Number(req.user?.id)) {
-        return res.status(403).json({
-          success: false,
-          message: 'Bạn không có quyền xem giao dịch này',
-        });
-      }
-
-      // Check if this is a cart checkout (check paymentDetails for cart type)
+      // Check if this is a cart checkout
       const paymentDetails = payment.paymentDetails || {};
-      const isCartCheckout = paymentDetails.type === 'checkout_session_cart';
+      const isCartCheckout = paymentDetails.type === 'checkout_session_cart' || !!paymentDetails.items;
 
       let courses = [];
       let totalAmount = 0;
 
       if (isCartCheckout) {
-        // Find all payments with the same session (cart checkout creates multiple payments)
-        logger.debug('PAYMENT_LOOKUP_RELATED_CART_PAYMENTS', { userId: payment.userId, sessionId: session_id });
+        // Find all payments with the same session
         const relatedPayments = await Payment.findAll({
-          where: { 
-            providerTxn: session_id,
-            userId: payment.userId,
-          },
-          include: [
-            { model: Course, as: 'course', attributes: ['id', 'title', 'price'] },
-          ],
-          order: [['created_at', 'ASC']],
+          where: { providerTxn: session_id },
+          include: [{ model: Course, as: 'course', attributes: ['id', 'title', 'price'] }],
         });
-        logger.debug('PAYMENT_RELATED_CART_PAYMENTS_FOUND', { sessionId: session_id, count: relatedPayments.length });
 
         courses = relatedPayments.map(p => ({
-          id: p.course ? p.course.id : p.courseId,
-          title: p.course ? p.course.title : 'Khóa học',
+          id: p.course?.id || p.courseId,
+          title: p.course?.title || 'Khóa học',
           price: parseFloat(p.amount) || 0,
         }));
-
         totalAmount = relatedPayments.reduce((sum, p) => sum + (parseFloat(p.amount) || 0), 0);
       } else {
-        // Single course purchase
         courses = [{
-          id: payment.course ? payment.course.id : payment.courseId,
-          title: payment.course ? payment.course.title : 'Khóa học',
+          id: payment.course?.id || payment.courseId,
+          title: payment.course?.title || 'Khóa học',
           price: parseFloat(payment.amount) || 0,
         }];
         totalAmount = parseFloat(payment.amount) || 0;
