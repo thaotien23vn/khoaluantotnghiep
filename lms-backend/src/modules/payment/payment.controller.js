@@ -460,6 +460,20 @@ class PaymentController {
         });
       }
 
+      // 🛡️ SECURITY FIX: Re-enable ownership check to prevent IDOR
+      // Use loose equality or explicit number conversion to handle string/number IDs
+      if (req.user && payment.userId != req.user.id) {
+        logger.warn('PAYMENT_ACCESS_DENIED', { 
+          sessionId: session_id, 
+          ownerId: payment.userId, 
+          visitorId: req.user.id 
+        });
+        return res.status(403).json({
+          success: false,
+          message: 'Bạn không có quyền xem giao dịch này',
+        });
+      }
+
       // Check if this is a cart checkout
       const paymentDetails = payment.paymentDetails || {};
       const isCartCheckout = paymentDetails.type === 'checkout_session_cart' || !!paymentDetails.items;
