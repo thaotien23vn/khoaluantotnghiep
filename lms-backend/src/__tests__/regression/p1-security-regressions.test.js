@@ -11,6 +11,20 @@ jest.mock('../../services/stripe.service', () => ({
   }),
 }));
 
+// Mock AI services to avoid database dependency on ai_settings/ai_prompt_templates
+jest.mock('../../services/aiPrompt.service', () => ({
+  getTemplateOrDefault: jest.fn((key) => `template_${key}`),
+}));
+
+jest.mock('../../services/aiPolicy.service', () => ({
+  getAiSetting: jest.fn(() => ({ enabled: true, provider: 'gemini', model: 'gemini-1.5-flash' })),
+  getRolePolicy: jest.fn(() => ({ allowed: true })),
+}));
+
+jest.mock('../../services/aiAudit.service', () => ({
+  logAiCall: jest.fn().mockResolvedValue(undefined),
+}));
+
 const stripeService = require('../../services/stripe.service');
 
 async function createUserAndLogin({ email, password, role = 'student' }) {

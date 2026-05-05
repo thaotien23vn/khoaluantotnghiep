@@ -44,84 +44,124 @@ class CertificateService {
 
       // Fallbacks
       const courseTitle = course ? course.title : (eligibility.certificateData?.courseTitle || 'Khóa học');
-      const certId = eligibility.certificateData?.certificateId || `CERT-${courseId}-${userId}-${Date.now()}`;
+      const certId = eligibility.certificateData?.certificateId || `CERT-${courseId}-${userId}`;
 
-      return { user, courseTitle, certificateId: certId };
+      return { user, courseTitle, certificateId: certId, studentName: user.name };
    }
 
    _drawCertificateDesign(doc, studentName, courseTitle, certificateId, completionDate) {
       const width = doc.page.width;
       const height = doc.page.height;
 
-      // Background Container (Border)
+      // 1. CHỮ NỀN (Watermark)
+      doc.save();
+      doc.opacity(0.03);
+      doc.fontSize(100).font('Arial-Bold').fillColor('#1a365d');
+      doc.rotate(-30, { origin: [width / 2, height / 2] });
+      doc.text('E-LEARNING CERTIFIED', 0, height / 2 - 50, { align: 'center' });
+      doc.restore();
+
+      // 2. VIỀN NGOÀI (Border) - Sang trọng hơn
+      // Viền dầy màu xanh đậm
       doc.rect(20, 20, width - 40, height - 40)
-         .lineWidth(10)
-         .stroke('#1a365d'); // Dark blue border
+         .lineWidth(4)
+         .stroke('#1a365d');
 
-      doc.rect(35, 35, width - 70, height - 70)
-         .lineWidth(2)
-         .stroke('#e2e8f0'); // Inner border
-
-      // Title
-      doc.font('Arial-Bold')
-         .fontSize(45)
-         .fillColor('#1a365d')
-         .text('CERTIFICATE', 0, 100, { align: 'center' });
-
-      doc.fontSize(20)
-         .font('Arial')
-         .text('OF COMPLETION', 0, 155, { align: 'center', characterSpacing: 5 });
-
-      // Ribbon / Line
-      doc.moveTo(width / 2 - 150, 190)
-         .lineTo(width / 2 + 150, 190)
+      // Viền mỏng màu vàng gold
+      doc.rect(28, 28, width - 56, height - 56)
          .lineWidth(2)
          .stroke('#cda434');
 
-      // Body text
-      doc.moveDown(3);
-      doc.fontSize(16)
-         .fillColor('#4a5568')
-         .text('This is to certify that', 0, 230, { align: 'center' });
+      // 4 Góc hoa văn (Corners)
+      const cornerSize = 40;
+      // Top Left
+      doc.rect(20, 20, cornerSize, cornerSize).fill('#1a365d');
+      // Top Right
+      doc.rect(width - 20 - cornerSize, 20, cornerSize, cornerSize).fill('#1a365d');
+      // Bottom Left
+      doc.rect(20, height - 20 - cornerSize, cornerSize, cornerSize).fill('#1a365d');
+      // Bottom Right
+      doc.rect(width - 20 - cornerSize, height - 20 - cornerSize, cornerSize, cornerSize).fill('#1a365d');
 
-      // Student Name
-      doc.moveDown(1);
+      // 3. TIÊU ĐỀ
       doc.font('Arial-Bold')
-         .fontSize(35)
-         .fillColor('#2d3748')
-         .text(studentName.toUpperCase(), 0, 260, { align: 'center' });
-
-      // Course
-      doc.fontSize(16)
-         .font('Arial')
-         .fillColor('#4a5568')
-         .text('has successfully completed the course', 0, 320, { align: 'center' });
-
-      doc.moveDown(1);
-      doc.font('Arial-Bold')
-         .fontSize(25)
+         .fontSize(50)
          .fillColor('#1a365d')
-         .text(courseTitle, 30, 360, { align: 'center', width: width - 60 });
+         .text('CERTIFICATE', 0, 90, { align: 'center', characterSpacing: 2 });
 
-      // Date & Signatures
-      const dateStr = new Date(completionDate).toLocaleDateString('vi-VN');
-
-      doc.fontSize(12)
+      doc.fontSize(18)
          .font('Arial')
-         .fillColor('#4a5568');
+         .fillColor('#cda434')
+         .text('OF COMPLETION', 0, 145, { align: 'center', characterSpacing: 8 });
 
-      // Date Layout
-      doc.text(`Date completed: ${dateStr}`, 100, 480);
-      doc.moveTo(100, 500).lineTo(300, 500).stroke();
+      // 4. NỘI DUNG CHÍNH
+      doc.moveDown(2);
+      doc.fontSize(16)
+         .fillColor('#4a5568')
+         .font('Arial')
+         .text('This is to certify that', 0, 220, { align: 'center' });
 
-      // Signature
-      doc.text('E-Learning Platform', width - 300, 480, { align: 'right' });
-      doc.moveTo(width - 300, 500).lineTo(width - 100, 500).stroke();
+      // Tên học viên - Chỉnh size tự động nếu dài
+      const nameFontSize = studentName.length > 20 ? 30 : 40;
+      doc.moveDown(0.5);
+      doc.font('Arial-Bold')
+         .fontSize(nameFontSize)
+         .fillColor('#2d3748')
+         .text(studentName.toUpperCase(), 0, 255, { align: 'center' });
 
-      // Verification ID
-      doc.fontSize(10)
+      // Gạch dưới tên
+      doc.moveTo(width / 2 - 200, 305)
+         .lineTo(width / 2 + 200, 305)
+         .lineWidth(1)
+         .stroke('#e2e8f0');
+
+      doc.moveDown(1.5);
+      doc.fontSize(16)
+         .font('Arial')
+         .fillColor('#4a5568')
+         .text('has successfully completed the online course', 0, 330, { align: 'center' });
+
+      // Tên khóa học
+      doc.moveDown(0.5);
+      doc.font('Arial-Bold')
+         .fontSize(28)
+         .fillColor('#1a365d')
+         .text(`"${courseTitle}"`, 50, 365, { align: 'center', width: width - 100 });
+
+      // 5. NGÀY VÀ CHỮ KÝ
+      const dateStr = new Date(completionDate).toLocaleDateString('vi-VN', {
+         day: '2-digit',
+         month: 'long',
+         year: 'numeric'
+      });
+
+      // Cột bên trái: Ngày tháng
+      doc.fontSize(12).font('Arial').fillColor('#718096').text('DATE ISSUED', 120, 460);
+      doc.fontSize(14).font('Arial-Bold').fillColor('#2d3748').text(dateStr, 120, 480);
+      doc.moveTo(120, 500).lineTo(320, 500).lineWidth(1).stroke('#cbd5e0');
+
+      // Cột bên phải: Chữ ký
+      doc.fontSize(12).font('Arial').fillColor('#718096').text('DIRECTOR OF ACADEMIC', width - 320, 460, { align: 'left' });
+      doc.fontSize(14).font('Arial-Bold').fillColor('#1a365d').text('E-Learning Platform', width - 320, 480, { align: 'left' });
+      doc.moveTo(width - 320, 500).lineTo(width - 120, 500).lineWidth(1).stroke('#cbd5e0');
+
+      // 6. CON DẤU (Digital Seal) - Giả lập bằng các hình vẽ
+      const sealX = width / 2;
+      const sealY = 485;
+      doc.circle(sealX, sealY, 45).lineWidth(2).stroke('#cda434');
+      doc.circle(sealX, sealY, 40).lineWidth(1).stroke('#cda434');
+      doc.fontSize(8).font('Arial-Bold').fillColor('#cda434')
+         .text('VERIFIED', sealX - 30, sealY - 15, { width: 60, align: 'center' })
+         .text('OFFICIAL', sealX - 30, sealY + 5, { width: 60, align: 'center' });
+
+      // 7. MÃ XÁC MINH (Footer)
+      doc.fontSize(9)
+         .font('Arial')
          .fillColor('#a0aec0')
-         .text(`Verification ID: ${certificateId}`, 50, height - 60);
+         .text(`Certificate ID: ${certificateId}`, 50, height - 55);
+      
+      const verifyUrl = `Verify at: ${process.env.FRONTEND_URL || 'http://localhost:3000'}/verify/${certificateId}`;
+      doc.text(verifyUrl, width - 350, height - 55, { align: 'right' });
    }
 
    // Remove accents to avoid font rendering issues when missing custom fonts
@@ -172,6 +212,7 @@ class CertificateService {
                   courseTitle: eligibility.course.title,
                   courseSlug: eligibility.course.slug,
                   courseImage: eligibility.course.imageUrl,
+                  studentName: eligibility.certificateData?.studentName || eligibility.user?.name || 'Học viên',
                   progressPercent: eligibility.progressPercent,
                   completedAt: eligibility.completedAt,
                   certificateId: eligibility.certificateData?.certificateId || `CERT-${enrollment.courseId}-${userId}`,

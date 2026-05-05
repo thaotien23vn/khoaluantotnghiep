@@ -1,4 +1,4 @@
-const emailConfig = require('../config/email');
+  const emailConfig = require('../config/email');
 
 // Brevo API base URL
 const BREVO_API_URL = 'https://api.brevo.com/v3';

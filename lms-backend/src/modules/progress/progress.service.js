@@ -308,9 +308,12 @@ class ProgressService {
       completedAt = latestCompleted?.completedAt || new Date();
     }
 
+    const user = enrollment.User || await db.models.User.findByPk(userId);
+
     return {
       courseId,
       course: enrollment.Course,
+      user,
       isEligible: isEligible && quizzesPassed.allPassed,
       progressPercent: snapshot.progressPercent,
       totalLectures: snapshot.totalLectures,
@@ -319,11 +322,11 @@ class ProgressService {
       completedAt,
       certificateData: isEligible && quizzesPassed.allPassed ? {
         studentId: userId,
+        studentName: user?.name || 'Học viên',
         courseId,
         courseTitle: enrollment.Course?.title,
         issuedAt: new Date().toISOString(),
-        // In real scenario, generate a unique certificate token
-        certificateId: `CERT-${courseId}-${userId}-${Date.now()}`,
+        certificateId: `CERT-${courseId}-${userId}`,
       } : null,
     };
   }
