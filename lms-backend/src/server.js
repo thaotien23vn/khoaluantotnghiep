@@ -9,40 +9,36 @@ const { initSocket } = require('./socket');
 const notificationCron = require('./modules/notification/notification.cron');
 const placementQuestionCron = require('./modules/placement/placementQuestion.cron');
 const logger = require('./utils/logger');
-const { fixEnumTypesBeforeSync, cleanupOldEnumTypes } = require('./utils/enum-helper');
+
 require('./modules/notification/notification.worker');
-require('./services/courseGeneration.worker'); // Khởi động course generation worker
+require('./services/courseGeneration.worker');
 
 const PORT = process.env.PORT || 5000;
+const NODE_ENV = (process.env.NODE_ENV || 'development').toLowerCase();
 
-logger.info('SERVER_STARTING');
+logger.info('SERVER_STARTING', { env: NODE_ENV });
 
 const requireEnv = (name) => {
   const v = process.env[name];
-  if (v == null || String(v).trim() === '') {
+  if (!v || String(v).trim() === '') {
     throw new Error(`Missing required environment variable: ${name}`);
   }
   return v;
 };
 
 const validateEnv = () => {
-  const isProd = String(process.env.NODE_ENV || '').toLowerCase() === 'production';
-  const hasDatabaseUrl = !!process.env.DATABASE_URL;
-  const hasOldDbConfig = process.env.DB_NAME && process.env.DB_USER && process.env.DB_HOST;
+  const isProd = NODE_ENV === 'production';
 
-  // Database config: either DATABASE_URL (Neon) or old DB_* variables
-  if (!hasDatabaseUrl && !hasOldDbConfig) {
-    throw new Error('Missing database configuration. Please set either DATABASE_URL (for Neon PostgreSQL) or DB_NAME, DB_USER, DB_HOST');
+  if (!process.env.DATABASE_URL && !(process.env.DB_NAME && process.env.DB_USER && process.env.DB_HOST)) {
+    throw new Error('Missing database configuration');
   }
 
-  // JWT validation
   if (isProd) {
     requireEnv('JWT_SECRET');
   } else if (!process.env.JWT_SECRET) {
     logger.warn('JWT_SECRET_MISSING_DEV_DEFAULT');
   }
 
-  // Optional but recommended
   if (!process.env.ALLOWED_ORIGINS) {
     logger.warn('ALLOWED_ORIGINS_MISSING_USING_DEFAULTS');
   }
@@ -52,66 +48,62 @@ const validateEnv = () => {
   try {
     validateEnv();
 
-    // Kết nối database
+    // 1. CONNECT DB
     await connectDB();
+    logger.info('DATABASE_CONNECTED');
 
-    // Auto-sync database cho production (Render free tier)
-    if (process.env.NODE_ENV === 'production') {
-      logger.info('DATABASE_AUTO_SYNC_STARTED');
+    // 2. SYNC (STRICT CONTROL)
+    if (NODE_ENV === 'development') {
+      logger.warn('DATABASE_SYNC_DEVELOPMENT_ONLY');
+
       try {
-        // Fix enum types trước khi sync để tránh lỗi "cannot cast type"
-        await fixEnumTypesBeforeSync(sequelize);
-        
-        await sequelize.sync({ alter: true });
-        logger.info('DATABASE_AUTO_SYNC_COMPLETED');
-        
-        // Cleanup enum cũ sau khi sync thành công
-        await cleanupOldEnumTypes(sequelize);
-      } catch (syncErr) {
-        logger.error('DATABASE_AUTO_SYNC_FAILED', {
-          error: syncErr.message,
-          errors: syncErr.errors?.map(e => ({
-            message: e.message,
-            path: e.path,
-            value: e.value
-          })),
-          stack: syncErr.stack
+        // ⚠️ DEV ONLY → KHÔNG dùng alter
+        await sequelize.sync();
+        logger.info('DATABASE_SYNC_DONE');
+      } catch (err) {
+        logger.error('DATABASE_SYNC_FAILED_DEV', {
+          error: err.message
         });
-        // Không exit, vẫn tiếp tục chạy
       }
+    } else {
+      logger.info('DATABASE_SYNC_SKIPPED', {
+        env: NODE_ENV,
+        reason: 'Use migrations in production'
+      });
     }
 
-    // Tự động tạo admin nếu chưa có (không cần biến env)
-    logger.info('AUTO_SEED_STARTED');
+    // 3. SEED
     try {
       await autoSeed();
       logger.info('AUTO_SEED_COMPLETED');
-    } catch (seedErr) {
-      logger.warn('AUTO_SEED_FAILED_CONTINUE_STARTUP', { error: seedErr.message });
+    } catch (err) {
+      logger.warn('AUTO_SEED_FAILED_CONTINUE', { error: err.message });
     }
 
-    // Kiểm tra kết nối email
+    // 4. EMAIL CHECK
     const emailConnected = await emailService.verifyEmailConnection();
     if (!emailConnected) {
       logger.warn('EMAIL_SERVICE_NOT_CONFIGURED');
     }
 
+    // 5. START SERVER
     const server = http.createServer(app);
     initSocket(server);
 
     server.listen(PORT, '0.0.0.0', () => {
-      logger.info('SERVER_LISTENING', { port: PORT, apiBaseUrl: `http://localhost:${PORT}/api` });
-      
-      // Start notification scheduler cron jobs
+      logger.info('SERVER_LISTENING', {
+        port: PORT,
+        env: NODE_ENV
+      });
+
       notificationCron.start();
-      
-      // Start placement question pre-generation cron
       placementQuestionCron.start();
     });
+
   } catch (error) {
-    logger.error('SERVER_STARTUP_FAILED', { 
+    logger.error('SERVER_STARTUP_FAILED', {
       error: error.message,
-      stack: error.stack 
+      stack: error.stack
     });
     process.exit(1);
   }
