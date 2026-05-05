@@ -9,6 +9,7 @@ const { initSocket } = require('./socket');
 const notificationCron = require('./modules/notification/notification.cron');
 const placementQuestionCron = require('./modules/placement/placementQuestion.cron');
 const logger = require('./utils/logger');
+const { fixEnumTypesBeforeSync, cleanupOldEnumTypes } = require('./utils/enum-helper');
 require('./modules/notification/notification.worker');
 require('./services/courseGeneration.worker'); // Khởi động course generation worker
 
@@ -58,8 +59,14 @@ const validateEnv = () => {
     if (process.env.NODE_ENV === 'production') {
       logger.info('DATABASE_AUTO_SYNC_STARTED');
       try {
+        // Fix enum types trước khi sync để tránh lỗi "cannot cast type"
+        await fixEnumTypesBeforeSync(sequelize);
+        
         await sequelize.sync({ alter: true });
         logger.info('DATABASE_AUTO_SYNC_COMPLETED');
+        
+        // Cleanup enum cũ sau khi sync thành công
+        await cleanupOldEnumTypes(sequelize);
       } catch (syncErr) {
         logger.error('DATABASE_AUTO_SYNC_FAILED', {
           error: syncErr.message,
