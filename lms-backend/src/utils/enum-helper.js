@@ -25,7 +25,7 @@ async function getEnumTypes(sequelize) {
     ORDER BY t.typname;
   `;
   
-  const [results] = await sequelize.query(query, { type: sequelize.QueryTypes.SELECT });
+  const results = await sequelize.query(query, { type: sequelize.QueryTypes.SELECT });
   return results || [];
 }
 
@@ -43,11 +43,12 @@ async function recreateEnumType(sequelize, enumName, values, tableName, columnNa
       JOIN pg_namespace n ON n.oid = t.typnamespace
       WHERE t.typname = :enumName AND n.nspname = 'public'
     `;
-    const [exists] = await sequelize.query(checkQuery, {
+    const existsResult = await sequelize.query(checkQuery, {
       replacements: { enumName },
       type: sequelize.QueryTypes.SELECT,
       transaction
     });
+    const exists = existsResult && existsResult[0];
     
     if (!exists) {
       // Enum chưa tồn tại, tạo mới
@@ -90,10 +91,11 @@ async function fixEnumTypesBeforeSync(sequelize) {
           JOIN pg_namespace n ON n.oid = t.typnamespace
           WHERE t.typname = :oldName AND n.nspname = 'public'
         `;
-        const [oldExists] = await sequelize.query(checkOldQuery, {
+        const oldExistsResult = await sequelize.query(checkOldQuery, {
           replacements: { oldName },
           type: sequelize.QueryTypes.SELECT
         });
+        const oldExists = oldExistsResult && oldExistsResult[0];
         
         if (!oldExists) {
           // Đổi tên enum hiện tại thành _old
@@ -136,7 +138,7 @@ async function cleanupOldEnumTypes(sequelize) {
       )
     `;
     
-    const [oldEnums] = await sequelize.query(query, { type: sequelize.QueryTypes.SELECT });
+    const oldEnums = await sequelize.query(query, { type: sequelize.QueryTypes.SELECT });
     
     for (const enumType of oldEnums) {
       try {
