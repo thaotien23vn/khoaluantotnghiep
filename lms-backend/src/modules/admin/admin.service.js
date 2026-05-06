@@ -197,16 +197,20 @@ class AdminService {
         LIMIT ${Number(limit)}
       `;
       
+      console.log('[AdminService.getTopCourses] SQL Query:', query);
+      
       const topCourses = await db.sequelize.query(query, {
         type: db.sequelize.QueryTypes.SELECT,
       });
+
+      console.log('[AdminService.getTopCourses] Raw DB result:', topCourses);
 
       return {
         topCourses: (topCourses || []).map((c) => ({
           id: c.id,
           title: c.title,
           thumbnail: c.thumbnail,
-          enrollmentCount: Number(c.enrollmentCount || 0),
+          enrollmentCount: Number(c.enrollmentcount || 0), // Fix: enrollmentcount (lowercase from DB)
         })),
       };
     } catch (error) {

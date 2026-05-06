@@ -506,13 +506,19 @@ class AttemptService {
    */
   async getQuizAttemptsForTeacher(quizId, userId, userRole) {
     const quiz = await Quiz.findByPk(quizId, {
-      include: [{ model: Course, as: 'course', attributes: ['id', 'title', 'createdBy'] }],
+      include: [
+        { model: Course, as: 'course', attributes: ['id', 'title', 'createdBy'] },
+        { model: Question, as: 'questions', attributes: ['id', 'points'] },
+      ],
     });
 
     if (!quiz) throw { status: 404, message: 'Không tìm thấy quiz' };
     if (quiz.course.createdBy !== userId && userRole !== 'admin') {
       throw { status: 403, message: 'Bạn không có quyền xem kết quả quiz này' };
     }
+
+    // Calculate actual maxScore from sum of question points
+    const actualMaxScore = quiz.questions?.reduce((sum, q) => sum + (q.points || 0), 0) || 100;
 
     const attempts = await Attempt.findAll({
       where: { quizId },
@@ -523,7 +529,16 @@ class AttemptService {
       order: [['completedAt', 'DESC']],
     });
 
-    const completedAttempts = attempts.filter(a => a.completedAt);
+    // Convert to plain objects and override quiz maxScore with actual calculated value
+    const attemptsPlain = attempts.map(a => {
+      const plain = a.toJSON ? a.toJSON() : a;
+      if (plain.quiz) {
+        plain.quiz.maxScore = actualMaxScore;
+      }
+      return plain;
+    });
+
+    const completedAttempts = attemptsPlain.filter(a => a.completedAt);
     const completedCount = completedAttempts.length;
     const passedAttempts = completedAttempts.filter(a => a.passed).length;
     const averageScore = completedCount > 0
@@ -550,10 +565,16 @@ class AttemptService {
       .map((item, index) => ({ rank: index + 1, ...item }));
 
     return {
-      attempts,
+      quiz: {
+        id: quiz.id,
+        title: quiz.title,
+        maxScore: actualMaxScore,
+        passingScore: quiz.passingScore,
+      },
+      attempts: attemptsPlain,
       ranking,
       statistics: {
-        totalAttempts: attempts.length,
+        totalAttempts: attemptsPlain.length,
         completedAttempts: completedCount,
         passedAttempts,
         passRate: completedCount > 0 ? (passedAttempts / completedCount) * 100 : 0,
