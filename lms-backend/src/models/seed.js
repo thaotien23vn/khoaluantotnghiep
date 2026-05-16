@@ -104,6 +104,30 @@ async function createAdmin() {
   console.log(`   Role: admin`);
 }
 
+async function createAiBot() {
+  const { User } = models;
+  const aiBotEmail = 'aibot@lms.com';
+
+  const existing = await User.findOne({ where: { email: aiBotEmail } });
+  if (existing) {
+    console.log(`  ℹ️  AI Bot đã tồn tại (id=${existing.id})`);
+    return existing;
+  }
+
+  const passwordHash = bcrypt.hashSync('AIBot_NoLogin_' + Math.random(), 10);
+  const bot = await User.create({
+    name: 'AI Trợ Giảng',
+    email: aiBotEmail,
+    passwordHash,
+    role: 'admin',
+    username: 'aibot',
+    isActive: true,
+    isEmailVerified: true,
+  });
+  console.log(`✅ Đã tạo AI Bot user (id=${bot.id})`);
+  return bot;
+}
+
 async function seed() {
   try {
     await connectDB();
@@ -113,6 +137,7 @@ async function seed() {
     
     await cleanupDatabase();
     await createAdmin();
+    await createAiBot();
     
     console.log('\n🎉 Seed hoàn tất!');
     process.exit(0);
@@ -139,6 +164,7 @@ async function autoSeed() {
   
   // Luôn tạo admin nếu chưa có
   await createAdmin();
+  await createAiBot();
 }
 
-module.exports = { seed, autoSeed, cleanupDatabase, createAdmin };
+module.exports = { seed, autoSeed, cleanupDatabase, createAdmin, createAiBot };

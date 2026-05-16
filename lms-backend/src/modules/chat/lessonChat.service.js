@@ -5,6 +5,19 @@ const logger = require('../../utils/logger');
 const { Op } = require('sequelize');
 const { sequelize } = db;
 
+const AI_BOT_EMAIL = 'aibot@lms.com';
+let _aiBotUserId = null;
+async function getAiBotUserId() {
+  if (_aiBotUserId) return _aiBotUserId;
+  const bot = await db.models.User.findOne({ where: { email: AI_BOT_EMAIL } });
+  if (bot) {
+    _aiBotUserId = bot.id;
+    return _aiBotUserId;
+  }
+  logger.error('AI_BOT_USER_NOT_FOUND', { email: AI_BOT_EMAIL });
+  return null;
+}
+
 const {
   LessonChat,
   LessonMessage,
@@ -22,8 +35,6 @@ const {
  * Lesson Chat Service
  * Handles public chat for lessons with AI + Teacher + Admin support
  */
-// AI system user ID (reserved ID for AI assistant)
-const AI_SYSTEM_USER_ID = 0;
 
 class LessonChatService {
   async assertLessonAccessByLessonId(lessonId, userId, userRole) {
@@ -245,9 +256,10 @@ class LessonChatService {
 
     if (aiResult.confidence >= 0.7) {
       // AI confident enough - save response
+      const aiBotId = await getAiBotUserId();
       const aiMessage = await LessonMessage.create({
         chatId,
-        senderId: AI_SYSTEM_USER_ID,
+        senderId: aiBotId,
         senderType: 'ai',
         content: aiResult.content,
         parentId: message.id,

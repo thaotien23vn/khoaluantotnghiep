@@ -4,6 +4,19 @@ const logger = require('../../utils/logger');
 const { Op } = require('sequelize');
 const { sequelize } = db;
 
+const AI_BOT_EMAIL = 'aibot@lms.com';
+let _aiBotUserId = null;
+async function getAiBotUserId() {
+  if (_aiBotUserId) return _aiBotUserId;
+  const bot = await db.models.User.findOne({ where: { email: AI_BOT_EMAIL } });
+  if (bot) {
+    _aiBotUserId = bot.id;
+    return _aiBotUserId;
+  }
+  logger.error('AI_BOT_USER_NOT_FOUND', { email: AI_BOT_EMAIL });
+  return null;
+}
+
 const {
   CourseChat,
   CourseMessage,
@@ -16,7 +29,6 @@ const {
   AiChunk,
 } = db.models;
 
-const AI_SYSTEM_USER_ID = 0;
 
 /**
  * Course Chat Service
@@ -138,9 +150,10 @@ class CourseChatService {
 
       if (aiResult.confidence >= 0.7) {
         // AI can answer confidently
+        const aiBotId = await getAiBotUserId();
         aiResponse = await CourseMessage.create({
           chatId,
-          senderId: AI_SYSTEM_USER_ID,
+          senderId: aiBotId,
           senderType: 'ai',
           content: aiResult.content,
           parentId: message.id,
