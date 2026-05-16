@@ -80,8 +80,8 @@ class ProgressService {
       },
     });
 
-    // 🛡️ FIX E5: Rate limiting - không cho phép cập nhật quá nhanh (tối thiểu 10 giây)
-    const MIN_UPDATE_INTERVAL = 10; // seconds
+    // 🛡️ FIX E5: Rate limiting - không cho phép cập nhật quá nhanh (tối thiểu 8 giây)
+    const MIN_UPDATE_INTERVAL = 8; // seconds
     if (!created && lecture.type === 'video' && process.env.NODE_ENV !== 'test') {
       const now = new Date();
       const prevLastAccessedAt = progress.lastAccessedAt ? new Date(progress.lastAccessedAt) : null;
