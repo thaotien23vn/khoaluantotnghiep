@@ -52,4 +52,31 @@ const authMiddleware = async (req, res, next) => {
   }
 };
 
+const optionalAuthMiddleware = async (req, res, next) => {
+  try {
+    const authHeader = req.headers.authorization;
+    const token = authHeader && authHeader.startsWith('Bearer ') ? authHeader.slice('Bearer '.length) : null;
+    if (!token) return next();
+
+    const decoded = jwt.verify(token, jwtConfig.secret);
+    const { User } = db.models;
+    const user = await User.findByPk(decoded.id);
+    if (user && user.isActive) {
+      req.user = {
+        id: user.id,
+        email: user.email,
+        role: user.role,
+        name: user.name,
+        username: user.username,
+        chatBannedUntil: user.chatBannedUntil,
+        chatBanReason: user.chatBanReason,
+      };
+    }
+  } catch (_) {
+    // Invalid token - continue as guest
+  }
+  next();
+};
+
 module.exports = authMiddleware;
+module.exports.optionalAuthMiddleware = optionalAuthMiddleware;

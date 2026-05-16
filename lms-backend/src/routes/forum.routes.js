@@ -1,5 +1,6 @@
 const express = require('express');
 const authMiddleware = require('../middlewares/auth');
+const { optionalAuthMiddleware } = require('../middlewares/auth');
 const { authorizeRole } = require('../middlewares/authorize');
 const forumController = require('../modules/forum/forum.controller');
 const {
@@ -27,7 +28,7 @@ router.get('/topics', listTopicsValidation, forumController.listTopics);
 router.get('/stats', forumController.getForumStats);
 router.get('/top-contributors', forumController.getTopContributors);
 router.post('/topics', authMiddleware, createTopicValidation, forumController.createTopic);
-router.get('/topics/:id', getTopicValidation, forumController.getTopicDetails);
+router.get('/topics/:id', optionalAuthMiddleware, getTopicValidation, forumController.getTopicDetails);
 router.put('/topics/:topicId', authMiddleware, editTopicValidation, forumController.editTopic);
 router.put('/topics/:topicId/lock', authMiddleware, authorizeRole('admin'), lockTopicValidation, forumController.lockTopic);
 router.delete('/topics/:topicId', authMiddleware, deleteTopicValidation, forumController.deleteTopic);
