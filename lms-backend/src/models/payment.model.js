@@ -51,9 +51,7 @@ module.exports = (sequelize) => {
     },
   }, {
     tableName: 'payments',
-    timestamps: true,
-    createdAt: 'created_at',
-    updatedAt: 'updated_at',
+    timestamps: false,
   });
 
   Payment.associate = (models) => {

@@ -178,7 +178,7 @@ class StripeService {
         provider: 'stripe',
         status: 'pending',
       },
-      order: [['created_at', 'DESC']],
+      order: [['id', 'DESC']],
     });
 
     if (existingPayment && existingPayment.paymentDetails?.clientSecret) {
@@ -400,7 +400,7 @@ class StripeService {
         status: 'pending',
         provider: 'stripe',
       },
-      order: [['createdAt', 'DESC']],
+      order: [['id', 'DESC']],
     });
 
     // If there's an existing pending payment with a session, try to reuse it
