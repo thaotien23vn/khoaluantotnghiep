@@ -151,23 +151,27 @@ class CourseChatService {
       if (aiResult.confidence >= 0.7) {
         // AI can answer confidently
         const aiBotId = await getAiBotUserId();
-        aiResponse = await CourseMessage.create({
-          chatId,
-          senderId: aiBotId,
-          senderType: 'ai',
-          content: aiResult.content,
-          parentId: message.id,
-          status: 'answered',
-          answeredBy: 'ai',
-          aiConfidence: aiResult.confidence,
-          aiContext: { sources: aiResult.sources },
-        });
+        if (!aiBotId) {
+          logger.warn('AI_BOT_USER_MISSING_SKIP_RESPONSE', { chatId });
+        } else {
+          aiResponse = await CourseMessage.create({
+            chatId,
+            senderId: aiBotId,
+            senderType: 'ai',
+            content: aiResult.content,
+            parentId: message.id,
+            status: 'answered',
+            answeredBy: 'ai',
+            aiConfidence: aiResult.confidence,
+            aiContext: { sources: aiResult.sources },
+          });
 
-        await this.markAsAnswered(message.id, 'ai');
-        answeredBy = 'ai';
+          await this.markAsAnswered(message.id, 'ai');
+          answeredBy = 'ai';
 
-        // Record AI analytics
-        await this.recordAnalytics(chatId, 'ai');
+          // Record AI analytics
+          await this.recordAnalytics(chatId, 'ai');
+        }
       } else {
         // AI confidence low - escalate to teacher
         escalation = await this.escalateToTeacher(chatId, message.id, 'low_confidence', aiResult);

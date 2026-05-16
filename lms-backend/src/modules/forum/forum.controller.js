@@ -96,7 +96,7 @@ class ForumController {
       const validationError = handleValidationErrors(req, res);
       if (validationError) return;
 
-      const result = await forumService.createTopic(req.user.id, req.body);
+      const result = await forumService.createTopic(req.user.id, req.body, req.user.role);
       res.status(201).json({ success: true, data: result.topic });
     } catch (error) {
       handleServiceError(error, res);

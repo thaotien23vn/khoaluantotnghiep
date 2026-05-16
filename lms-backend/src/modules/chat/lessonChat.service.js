@@ -257,6 +257,10 @@ class LessonChatService {
     if (aiResult.confidence >= 0.7) {
       // AI confident enough - save response
       const aiBotId = await getAiBotUserId();
+      if (!aiBotId) {
+        logger.warn('AI_BOT_USER_MISSING_SKIP_RESPONSE', { chatId });
+        return this.escalateToTeacher(chatId, message.id, 'AI bot user not configured');
+      }
       const aiMessage = await LessonMessage.create({
         chatId,
         senderId: aiBotId,

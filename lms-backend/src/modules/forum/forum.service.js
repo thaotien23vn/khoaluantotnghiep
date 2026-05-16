@@ -99,7 +99,7 @@ class ForumService {
     return { contributors };
   }
 
-  async createTopic(userId, topicData) {
+  async createTopic(userId, topicData, userRole = 'student') {
     const { title, content, type, courseId, lectureId } = topicData;
     const normalizedType = type || 'global';
 
