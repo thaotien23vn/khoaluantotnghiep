@@ -7,7 +7,6 @@ const db = require('../models');
 
 // Defensive: Sequelize.LOCK may not be available in all environments (e.g., SQLite tests)
 const LOCK_UPDATE = (Sequelize && Sequelize.LOCK && Sequelize.LOCK.UPDATE) ? Sequelize.LOCK.UPDATE : undefined;
-const cartService = require('../modules/cart/cart.service');
 const courseAggregatesService = require('./courseAggregates.service');
 const logger = require('../utils/logger');
 
@@ -122,12 +121,13 @@ class StripeService {
 
     try {
       return await Enrollment.create({
-      userId: uid,
-      courseId: cid,
-      status: 'enrolled',
-      enrollmentStatus: 'active',
-      progressPercent: 0,
-    }, { transaction });
+        userId: uid,
+        courseId: cid,
+        status: 'active',
+        enrollmentType: 'paid',
+        enrollmentStatus: 'active',
+        progressPercent: 0,
+      }, { transaction });
     } catch (err) {
       if (err?.name === 'SequelizeUniqueConstraintError') {
         const afterRace = await Enrollment.findOne({ where: { userId: uid, courseId: cid }, transaction });
@@ -225,50 +225,6 @@ class StripeService {
   }
 
   /**
-   * Create Stripe Payment Intent from cart
-   * @param {number} userId - User ID
-   * @param {Array} selectedItems - Optional specific cart items
-   * @returns {Promise<Object>} - Payment intents for cart items
-   */
-  async createPaymentIntentFromCart(userId, selectedItems = null) {
-    const cartData = await cartService.convertCartToPayment(userId, selectedItems);
-
-    if (cartData.items.length === 0) {
-      throw { status: 400, message: 'Giỏ hàng trống hoặc không có khóa học hợp lệ' };
-    }
-
-    const payments = [];
-    const clientSecrets = [];
-
-    for (const item of cartData.items) {
-      try {
-        const result = await this.createPaymentIntent(userId, item.courseId);
-        payments.push(result.payment);
-        if (result.clientSecret) {
-          clientSecrets.push({
-            courseId: item.courseId,
-            clientSecret: result.clientSecret,
-          });
-        }
-      } catch (error) {
-        // Skip items that can't be processed
-        console.error(`Stripe payment error for course ${item.courseId}:`, error);
-      }
-    }
-
-    if (payments.length === 0) {
-      throw { status: 400, message: 'Không thể tạo thanh toán cho khóa học trong giỏ' };
-    }
-
-    return {
-      payments,
-      clientSecrets,
-      totalAmount: cartData.totalAmount,
-      itemCount: payments.length,
-    };
-  }
-
-  /**
    * Handle Stripe webhook
    * @param {Object} payload - Webhook payload
    * @param {string} signature - Stripe signature
@@ -346,9 +302,6 @@ class StripeService {
       } catch (aggErr) {
         logger.warn('RECOMPUTE_COURSE_STUDENTS_AFTER_STRIPE_WEBHOOK_FAILED', { error: aggErr.message });
       }
-
-      // Remove from cart
-      await cartService.removeCourseFromCart(parseInt(result.userId), parseInt(result.courseId));
 
       return {
         success: true,
@@ -576,89 +529,6 @@ class StripeService {
   }
 
   /**
-   * Create Stripe Checkout Session for cart (multiple courses)
-   * @param {number} userId - User ID
-   * @param {Array} selectedItems - Optional specific cart items
-   * @param {string} successUrl - Redirect URL after success
-   * @param {string} cancelUrl - Redirect URL after cancel
-   * @returns {Promise<Object>} - Checkout session URL
-   */
-  async createCheckoutSessionFromCart(userId, selectedItems = null, successUrl, cancelUrl) {
-    const cartData = await cartService.convertCartToPayment(userId, selectedItems);
-
-    if (cartData.items.length === 0) {
-      throw { status: 400, message: 'Giỏ hàng trống hoặc không có khóa học hợp lệ' };
-    }
-
-    // Build line items from cart
-    const lineItems = cartData.items.map(item => {
-      let itemPrice = Number(item.course?.price || 0);
-      
-      // 🛡️ FIX: Stripe minimum per item check for small amounts
-      // If the total of the session is still too low, Stripe will fail.
-      // We adjust small items to at least 20,000 VND for test purposes.
-      const STRIPE_MIN_AMOUNT = 20000;
-      if (itemPrice > 0 && itemPrice < STRIPE_MIN_AMOUNT) {
-        itemPrice = STRIPE_MIN_AMOUNT;
-      }
-
-      return {
-        price_data: {
-          currency: 'vnd',
-          product_data: {
-            name: item.course?.title || 'Khóa học',
-            description: item.notes || 'Khóa học trực tuyến',
-          },
-          unit_amount: Math.round(itemPrice),
-        },
-        quantity: 1,
-      };
-    });
-
-    // Create Stripe Checkout Session
-    const session = await stripe.checkout.sessions.create({
-      payment_method_types: ['card'],
-      line_items: lineItems,
-      mode: 'payment',
-      success_url: successUrl || 'http://localhost:5173/payment/success?session_id={CHECKOUT_SESSION_ID}',
-      cancel_url: cancelUrl || 'http://localhost:5173/payment/cancel',
-      metadata: {
-        userId: String(userId),
-        source: 'stripe_checkout_cart',
-        courseIds: JSON.stringify(cartData.items.map(i => i.courseId)),
-      },
-    });
-
-    // Create payment records for each course
-    const payments = [];
-    for (const item of cartData.items) {
-      const payment = await Payment.create({
-        userId,
-        courseId: item.courseId,
-        amount: item.course?.price || 0,
-        currency: 'VND',
-        provider: 'stripe',
-        providerTxn: session.id,
-        status: 'pending',
-        paymentDetails: {
-          initiatedAt: new Date().toISOString(),
-          sessionId: session.id,
-          type: 'checkout_session_cart',
-        },
-      });
-      payments.push(payment);
-    }
-
-    return {
-      payments,
-      checkoutUrl: session.url,
-      sessionId: session.id,
-      itemCount: cartData.items.length,
-      totalAmount: cartData.totalAmount,
-    };
-  }
-
-  /**
    * Handle Stripe Checkout Session completed
    * @param {Object} session - Checkout session object
    */
@@ -699,65 +569,6 @@ class StripeService {
     const metadataUserId = parseInt(userId, 10);
     if (!Number.isFinite(metadataUserId)) {
       throw { status: 400, message: 'Invalid userId in session metadata' };
-    }
-
-    // Handle cart payment (multiple courses)
-    if (courseIds) {
-      const courseIdList = JSON.parse(courseIds);
-      logger.info('STRIPE_CART_CHECKOUT_PROCESSING', { sessionId: session.id, itemCount: courseIdList.length });
-      
-      // 🛡️ FIX: Find and lock all payments with this session ID
-      const payments = await Payment.findAll({
-        where: { providerTxn: session.id },
-        lock: (transaction && LOCK_UPDATE) ? LOCK_UPDATE : undefined,
-        transaction,
-      });
-      
-      logger.debug('STRIPE_CART_PAYMENTS_FOUND', { sessionId: session.id, count: payments.length });
-      
-      for (const payment of payments) {
-        // 🛡️ FIX: Validate payment userId matches metadata
-        if (payment.userId !== metadataUserId) {
-          logger.error('STRIPE_CART_USER_MISMATCH', { 
-            paymentId: payment.id, 
-            paymentUserId: payment.userId, 
-            metadataUserId 
-          });
-          throw { status: 403, message: 'User mismatch in payment metadata' };
-        }
-        
-        if (payment.status === 'completed') {
-          continue;
-        }
-        
-        // Update payment status
-        payment.status = 'completed';
-        payment.paymentDetails = {
-          ...payment.paymentDetails,
-          completedAt: new Date().toISOString(),
-          receiptUrl: session.receipt_url,
-        };
-        await payment.save({ transaction });
-        
-        // Create enrollment (unique-safe / race-safe)
-        try {
-          await this._ensureEnrollment(userId, payment.courseId, transaction);
-        } catch (err) {
-          if (err?.name !== 'SequelizeUniqueConstraintError') {
-            throw err;
-          }
-        }
-      }
-      
-      // 🛡️ FIX: Clear these courses from cart
-      try {
-        await cartService.removePaidItemsFromCart(metadataUserId, courseIdList);
-        logger.info('STRIPE_CART_CLEARED_AFTER_SUCCESS', { userId: metadataUserId, count: courseIdList.length });
-      } catch (cartErr) {
-        logger.warn('STRIPE_CART_CLEAR_FAILED_SILENT', { error: cartErr.message });
-      }
-      
-      return { success: true, payments, userId: metadataUserId, courseIds: courseIdList };
     }
 
     // Handle single course payment
@@ -839,9 +650,6 @@ class StripeService {
     } catch (aggErr) {
       logger.warn('RECOMPUTE_COURSE_STUDENTS_AFTER_STRIPE_CHECKOUT_FAILED', { error: aggErr.message });
     }
-
-    // Remove from cart
-    await cartService.removeCourseFromCart(parseInt(userId), parseInt(courseId));
 
     return { success: true, payment };
   }

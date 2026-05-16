@@ -139,6 +139,16 @@ module.exports = (sequelize) => {
       type: DataTypes.JSON,
       defaultValue: [],
     },
+    prerequisiteCourseId: {
+      type: DataTypes.INTEGER.UNSIGNED,
+      allowNull: true,
+      field: 'prerequisite_course_id',
+      references: {
+        model: 'courses',
+        key: 'id',
+      },
+      comment: 'Optional prerequisite course that must be completed before enrolling',
+    },
     tags: {
       type: DataTypes.JSON,
       defaultValue: [],

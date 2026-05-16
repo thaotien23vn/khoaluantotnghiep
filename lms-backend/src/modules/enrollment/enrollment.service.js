@@ -10,7 +10,9 @@ const { Enrollment, Course, User, Payment, LectureProgress } = db.models;
  */
 class EnrollmentService {
   /**
-   * Enroll user into a course
+   * Enroll user into a course (direct enrollment flow — no cart)
+   * Free courses → active immediately.
+   * Paid courses → pending_payment, frontend proceeds to payment.
    */
   async enroll(userId, userRole, courseId) {
     if (userRole !== 'student') {
@@ -28,18 +30,11 @@ class EnrollmentService {
       throw { status: 400, message: 'Bạn không thể ghi danh vào khóa học do chính bạn tạo' };
     }
 
-    const price = Number(course.price || 0);
-
-    if (price > 0) {
-      const completedPayment = await Payment.findOne({
-        where: { userId, courseId: Number(courseId), status: 'completed' },
-        order: [['created_at', 'DESC']],
-      });
-      if (!completedPayment) {
-        throw {
-          status: 402,
-          message: 'Khóa học có phí. Vui lòng thanh toán hợp lệ trước khi ghi danh',
-        };
+    // Check prerequisite
+    if (course.prerequisiteCourseId) {
+      const prerequisiteCompleted = await this.checkPrerequisiteCompleted(userId, course.prerequisiteCourseId);
+      if (!prerequisiteCompleted) {
+        throw { status: 403, message: 'Bạn cần hoàn thành khóa học tiên quyết trước khi đăng ký khóa học này' };
       }
     }
 
@@ -47,6 +42,9 @@ class EnrollmentService {
     if (existing) {
       throw { status: 409, message: 'Bạn đã đăng ký khóa học này rồi', data: { enrollmentId: existing.id } };
     }
+
+    const price = Number(course.price || 0);
+    const isFree = price === 0;
 
     // Calculate expiration date based on course duration settings
     let expiresAt = null;
@@ -61,14 +59,14 @@ class EnrollmentService {
       enrollment = await Enrollment.create({
         userId,
         courseId: Number(courseId),
-        status: 'enrolled',
+        status: isFree ? 'active' : 'pending_payment',
+        enrollmentType: isFree ? 'free' : 'paid',
         enrollmentStatus: 'active',
         progressPercent: 0,
         expiresAt,
         gracePeriodEndsAt,
       });
     } catch (err) {
-      // Race-condition safe: unique constraint on (userId, courseId)
       if (err?.name === 'SequelizeUniqueConstraintError') {
         throw { status: 409, message: 'Bạn đã đăng ký khóa học này rồi' };
       }
@@ -85,20 +83,43 @@ class EnrollmentService {
       include: [{ model: Course, as: 'Course', attributes: ['id', 'title', 'slug', 'price'] }],
     });
 
-    try {
-      await notificationService.createNotification({
-        userId,
-        title: 'Đăng ký khóa học thành công',
-        message: `Bạn đã đăng ký thành công khóa học "${course.title}"`,
-        type: 'enrollment',
-        relatedId: course.id,
-        relatedType: 'course',
-      });
-    } catch (notifyErr) {
-      console.error('Create enrollment notification (silent) error:', notifyErr);
+    if (isFree) {
+      try {
+        await notificationService.createNotification({
+          userId,
+          title: 'Đăng ký khóa học thành công',
+          message: `Bạn đã đăng ký thành công khóa học "${course.title}"`,
+          type: 'enrollment',
+          relatedId: course.id,
+          relatedType: 'course',
+        });
+      } catch (notifyErr) {
+        console.error('Create enrollment notification (silent) error:', notifyErr);
+      }
     }
 
-    return { enrollment: enrollmentWithCourse };
+    return {
+      enrollment: enrollmentWithCourse,
+      requiresPayment: !isFree,
+      message: isFree
+        ? 'Đăng ký khóa học thành công'
+        : 'Vui lòng hoàn tất thanh toán để kích hoạt khóa học',
+    };
+  }
+
+  /**
+   * Check if user has completed a prerequisite course (100% progress and active enrollment)
+   */
+  async checkPrerequisiteCompleted(userId, prerequisiteCourseId) {
+    const enrollment = await Enrollment.findOne({
+      where: {
+        userId,
+        courseId: Number(prerequisiteCourseId),
+        status: 'active',
+        progressPercent: 100,
+      },
+    });
+    return !!enrollment;
   }
 
   /**

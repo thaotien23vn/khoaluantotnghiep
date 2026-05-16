@@ -18,8 +18,15 @@ module.exports = (sequelize) => {
       field: 'course_id',
     },
     status: {
-      type: DataTypes.STRING(32),
-      defaultValue: 'enrolled',
+      type: DataTypes.ENUM('pending_payment', 'active', 'expired', 'cancelled'),
+      defaultValue: 'pending_payment',
+      comment: 'Enrollment lifecycle status',
+    },
+    enrollmentType: {
+      type: DataTypes.ENUM('free', 'paid', 'scholarship'),
+      field: 'enrollment_type',
+      defaultValue: 'paid',
+      comment: 'How the student enrolled: free, paid, or scholarship',
     },
     progressPercent: {
       type: DataTypes.DECIMAL(5, 2),

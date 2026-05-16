@@ -39,7 +39,7 @@ async function recomputeCourseStudents(courseId, options = {}) {
   const students = await Enrollment.count({
     where: {
       courseId: courseIdNum,
-      status: 'enrolled',
+      status: 'active',
     },
     transaction: options.transaction,
   });

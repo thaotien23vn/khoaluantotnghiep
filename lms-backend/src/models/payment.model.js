@@ -17,6 +17,12 @@ module.exports = (sequelize) => {
       allowNull: false,
       field: 'course_id',
     },
+    enrollmentId: {
+      type: DataTypes.INTEGER.UNSIGNED,
+      allowNull: true,
+      field: 'enrollment_id',
+      comment: 'Link to enrollment record (for direct enrollment flow)',
+    },
     amount: {
       type: DataTypes.DECIMAL(10,2),
       allowNull: false,
@@ -55,10 +61,15 @@ module.exports = (sequelize) => {
       foreignKey: 'userId',
       as: 'user',
     });
-    
+
     Payment.belongsTo(models.Course, {
       foreignKey: 'courseId',
       as: 'course',
+    });
+
+    Payment.belongsTo(models.Enrollment, {
+      foreignKey: 'enrollmentId',
+      as: 'enrollment',
     });
   };
 

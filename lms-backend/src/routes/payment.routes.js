@@ -34,12 +34,6 @@ router.use(authMiddleware);
 // Create payment for single course (direct buy) - Student only
 router.post('/create', requireStudent, createPaymentValidation, paymentController.createPayment);
 
-// Create payment from cart - Student only
-router.post('/cart', requireStudent, paymentController.createPaymentFromCart);
-
-// Process cart checkout - Student only
-router.post('/cart/checkout', requireStudent, paymentController.processCartCheckout);
-
 // Process payment (verify/callback) - Student only
 router.post('/process', requireStudent, processPaymentValidation, paymentController.processPayment);
 
@@ -72,9 +66,6 @@ router.post('/vnpay/:courseId', requireStudent, createVNPayPaymentValidation, pa
 // Create Stripe Checkout Session (single course - direct payment) - Student only
 router.post('/stripe/checkout', requireStudent, paymentController.createStripeCheckout);
 
-// Create Stripe Checkout Session from cart - Student only
-router.post('/stripe/checkout/cart', requireStudent, paymentController.createStripeCartCheckout);
-
 // Stripe manual verify (frontend calls this after redirect from Stripe) - Student only
 router.post('/stripe/verify', requireStudent, stripeVerifyValidation, paymentController.verifyStripePayment);
 
@@ -83,8 +74,5 @@ router.get('/stripe/status', stripeStatusValidation, paymentController.getPaymen
 
 // Create Stripe Payment Intent - Student only
 router.post('/stripe/create', requireStudent, paymentController.createStripePayment);
-
-// Create Stripe Payment Intent from cart - Student only
-router.post('/stripe/cart', requireStudent, paymentController.createStripeCartPayment);
 
 module.exports = router;

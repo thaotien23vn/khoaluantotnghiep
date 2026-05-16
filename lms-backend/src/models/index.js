@@ -86,7 +86,6 @@ const models = {};
   'aiAuditLog',
   'enrollment',
   'payment',
-  'cart',
   'quiz',
   'question',
   'attempt',
@@ -139,7 +138,6 @@ const {
   AiAuditLog,
   Enrollment,
   Payment,
-  Cart,
   Quiz,
   Question,
   Attempt,
@@ -259,7 +257,7 @@ Course.hasMany(Payment, { foreignKey: 'courseId' });
 
 // Quiz/Question/Attempt/Review/Notification/Payment/Cart models define associations with aliases.
 // Wire them up here so controller `include: { as: ... }` works reliably.
-for (const model of [Payment, Review, Notification, Quiz, Question, Attempt, Cart]) {
+for (const model of [Payment, Review, Notification, Quiz, Question, Attempt]) {
   if (model && typeof model.associate === 'function') {
     model.associate(models);
   }

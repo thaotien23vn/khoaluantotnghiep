@@ -850,7 +850,8 @@ class AdminService {
       enrollment = await Enrollment.create({
         userId,
         courseId,
-        status: 'enrolled',
+        status: 'active',
+        enrollmentType: 'scholarship',
         enrollmentStatus: 'active',
         progressPercent: 0,
       });

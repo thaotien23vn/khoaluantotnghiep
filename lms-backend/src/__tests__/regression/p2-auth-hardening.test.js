@@ -24,7 +24,7 @@ describe('P2 auth hardening regressions', () => {
     await user.update({ isActive: false });
 
     const res = await request(app)
-      .get('/api/cart/count')
+      .get('/api/student/payments/history')
       .set('Authorization', `Bearer ${token}`);
 
     expect(res.statusCode).toBe(401);

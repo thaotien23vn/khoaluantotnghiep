@@ -33,7 +33,8 @@ class EnrollmentAccess {
         enrollment = await Enrollment.create({
           userId,
           courseId,
-          status: 'enrolled',
+          status: 'active',
+          enrollmentType: 'free',
           enrollmentStatus: 'active',
           source: 'teacher_access',
           payment: 'none',
@@ -63,7 +64,8 @@ class EnrollmentAccess {
         enrollment = await Enrollment.create({
           userId,
           courseId,
-          status: 'enrolled',
+          status: 'active',
+          enrollmentType: 'free',
           enrollmentStatus: 'active',
           source: 'admin_access',
           payment: 'none',

@@ -138,7 +138,8 @@ class SubscriptionService {
     const enrollment = await Enrollment.create({
       userId,
       courseId,
-      status: 'enrolled',
+      status: 'active',
+      enrollmentType: 'paid',
       progressPercent: 0,
     });
 

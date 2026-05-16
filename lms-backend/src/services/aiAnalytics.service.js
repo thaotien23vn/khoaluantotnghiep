@@ -376,7 +376,7 @@ class AiAnalyticsService {
   async getCourseEnrollmentStats(courseId) {
     try {
       const [totalEnrolled, activeStudents, completionRates] = await Promise.all([
-        Enrollment.count({ where: { courseId, status: 'enrolled' } }),
+        Enrollment.count({ where: { courseId, status: 'active' } }),
         LearningAnalytics.count({
           where: {
             courseId,

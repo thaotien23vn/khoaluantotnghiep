@@ -48,12 +48,6 @@ jest.mock('../models', () => ({
   },
 }));
 
-// Mock cart service
-jest.mock('../modules/cart/cart.service', () => ({
-  convertCartToPayment: jest.fn(),
-  removeCourseFromCart: jest.fn(),
-}));
-
 // Mock course aggregates service
 jest.mock('../services/courseAggregates.service', () => ({
   recomputeCourseStudents: jest.fn(),

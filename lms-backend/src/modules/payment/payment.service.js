@@ -1,6 +1,5 @@
 const { Sequelize } = require('sequelize');
 const db = require('../../models');
-const cartService = require('../cart/cart.service');
 const courseAggregatesService = require('../../services/courseAggregates.service');
 const notificationService = require('../notification/notification.service');
 const vnpayService = require('../../services/vnpay.service');
@@ -267,81 +266,14 @@ class PaymentService {
   }
 
   /**
-   * Create payment from cart (multiple courses)
-   * This is for student buying multiple courses at once
-   */
-  async createPaymentFromCart(userId, selectedItemIds = null) {
-    // Get cart items
-    const cartData = await cartService.convertCartToPayment(userId, selectedItemIds);
-    
-    if (cartData.items.length === 0) {
-      throw { status: 400, message: 'Giỏ hàng trống hoặc không có khóa học hợp lệ' };
-    }
-
-    // Create a parent payment record for the entire cart
-    const providerTxn = generateProviderTxn('mock');
-    
-    // Create individual payment records for each course
-    const payments = [];
-    for (const item of cartData.items) {
-      const existingPending = await Payment.findOne({
-        where: {
-          userId,
-          courseId: item.courseId,
-          status: 'pending',
-        },
-      });
-
-      if (existingPending) {
-        payments.push(existingPending);
-        continue;
-      }
-
-      const payment = await Payment.create({
-        userId,
-        courseId: item.courseId,
-        amount: Number(item.course.price || 0),
-        currency: 'USD',
-        provider: 'mock',
-        providerTxn: `${providerTxn}_course_${item.courseId}`,
-        status: 'pending',
-        paymentDetails: {
-          initiatedAt: new Date().toISOString(),
-          source: 'cart',
-          cartItemId: item.id,
-          parentTxn: providerTxn,
-        },
-      });
-      payments.push(payment);
-    }
-
-    return {
-      payments,
-      totalAmount: cartData.totalAmount,
-      itemCount: cartData.itemCount,
-      providerTxn,
-      courses: cartData.items.map(item => ({
-        id: item.courseId,
-        title: item.course.title,
-        price: item.course.price,
-      })),
-    };
-  }
-
-  /**
    * Process payment success/failure callback
    * Also handles creating payment if courseId is provided (for backward compatibility)
    */
   async processPayment(userId, processData) {
-    const { paymentId, courseId, providerTxn, provider = 'mock', cartCheckout = false } = processData;
+    const { paymentId, courseId, providerTxn, provider = 'mock' } = processData;
     // SECURITY: Status must never be trusted from the client request body.
     // Defaulting to 'pending' if it's a new payment creation, otherwise we fetch from DB.
-    let status = 'pending'; 
-
-    // If cart checkout, process all pending payments for user
-    if (cartCheckout) {
-      return this._processCartCheckout(userId, status);
-    }
+    let status = 'pending';
 
     let payment;
 
@@ -452,112 +384,11 @@ class PaymentService {
       };
     });
 
-    // Remove from cart outside transaction (non-critical)
-    if (result.enrollment) {
-      await cartService.removeCourseFromCart(userId, result.courseId);
-    }
-
     return { 
       payment: result.payment,
       enrollment: result.enrollment,
       isNew: false,
       processorResult: result.processorResult,
-    };
-  }
-
-  /**
-   * Process cart checkout (multiple courses)
-   */
-  async _processCartCheckout(userId, requestedStatus = 'completed') {
-    // Get all pending payments for user
-    const pendingPayments = await Payment.findAll({
-      where: {
-        userId,
-        status: 'pending',
-      },
-      include: [
-        {
-          model: Course,
-          as: 'course',
-          attributes: ['id', 'title', 'price', 'published'],
-        },
-      ],
-    });
-
-    if (pendingPayments.length === 0) {
-      throw { status: 400, message: 'Không có giao dịch chờ thanh toán' };
-    }
-
-    const results = [];
-    const successfulCourseIds = [];
-    let totalProcessed = 0;
-    let totalFailed = 0;
-
-    // Process each payment
-    for (const payment of pendingPayments) {
-      try {
-        // Process with mock processor
-        const processResult = await mockProcessor.process({
-          amount: payment.amount,
-          currency: payment.currency,
-          providerTxn: payment.providerTxn,
-        });
-
-        // Update payment status
-        payment.status = processResult.status;
-        payment.paymentDetails = {
-          ...payment.paymentDetails,
-          ...processResult.mockDetails,
-          processedAt: processResult.processedAt,
-          processorResponse: processResult,
-        };
-
-        await payment.save();
-
-        let enrollment = null;
-        if (payment.status === 'completed') {
-          enrollment = await this._enrollAfterPayment(userId, payment.courseId);
-          successfulCourseIds.push(payment.courseId);
-          totalProcessed += payment.amount;
-        } else {
-          totalFailed += payment.amount;
-        }
-
-        results.push({
-          paymentId: payment.id,
-          courseId: payment.courseId,
-          courseTitle: payment.course?.title,
-          status: payment.status,
-          amount: payment.amount,
-          enrollment,
-          message: processResult.message,
-        });
-      } catch (error) {
-        results.push({
-          paymentId: payment.id,
-          courseId: payment.courseId,
-          status: 'failed',
-          amount: payment.amount,
-          error: error.message,
-        });
-        totalFailed += payment.amount;
-      }
-    }
-
-    // Remove successfully paid courses from cart
-    if (successfulCourseIds.length > 0) {
-      await cartService.removePaidItemsFromCart(userId, successfulCourseIds);
-    }
-
-    return {
-      results,
-      summary: {
-        total: results.length,
-        successful: results.filter(r => r.status === 'completed').length,
-        failed: results.filter(r => r.status === 'failed').length,
-        totalAmount: totalProcessed,
-        failedAmount: totalFailed,
-      },
     };
   }
 
@@ -876,59 +707,61 @@ class PaymentService {
   }
 
   /**
-   * Internal: Enroll user after successful payment
+   * Internal: Activate enrollment after successful payment
+   * New flow: enrollment is created before payment with status='pending_payment'.
+   * This method updates it to 'active'. Falls back to creating enrollment for backward compat.
    */
   async _enrollAfterPayment(userId, courseId, transaction = null) {
-    // Check if already enrolled
     const existing = await Enrollment.findOne({
       where: { userId, courseId },
       transaction,
     });
 
     if (existing) {
+      // New flow: activate pending enrollment
+      if (existing.status === 'pending_payment') {
+        existing.status = 'active';
+        await existing.save({ transaction });
+      }
       return existing;
     }
 
-    // Get course info for notification
+    // Backward compatibility: create enrollment if none exists (old data)
     const course = await Course.findByPk(courseId, { transaction });
-
-    // Create enrollment
     let enrollment;
     try {
       enrollment = await Enrollment.create({
         userId,
         courseId,
-        status: 'enrolled',
+        status: 'active',
+        enrollmentType: 'paid',
         enrollmentStatus: 'active',
         progressPercent: 0,
       }, { transaction });
     } catch (err) {
       if (err?.name === 'SequelizeUniqueConstraintError') {
         const existingAfterRace = await Enrollment.findOne({ where: { userId, courseId }, transaction });
-        if (existingAfterRace) return existingAfterRace;
+        if (existingAfterRace) {
+          if (existingAfterRace.status === 'pending_payment') {
+            existingAfterRace.status = 'active';
+            await existingAfterRace.save({ transaction });
+          }
+          return existingAfterRace;
+        }
       }
       throw err;
     }
 
-    // Update course students count
     try {
       await courseAggregatesService.recomputeCourseStudents(courseId);
     } catch (aggErr) {
       console.error('Recompute course students (silent) error:', aggErr);
     }
 
-    // �️ FIX: Remove from cart automatically after successful enrollment
-    try {
-      await cartService.removeFromCart(userId, courseId);
-    } catch (cartErr) {
-      console.error('Remove from cart (silent) error:', cartErr);
-    }
-
-    // �🔔 Send enrollment notification (outside transaction)
     try {
       await notificationService.createNotification({
         userId,
-        title: '🎉 Đăng ký khóa học thành công',
+        title: 'Đăng ký khóa học thành công',
         message: `Chúc mừng! Bạn đã đăng ký thành công khóa học "${course?.title || 'Khóa học'}". Bắt đầu học ngay hôm nay!`,
         type: 'enrollment_success',
         payload: { courseId, courseTitle: course?.title },
@@ -1153,9 +986,6 @@ class PaymentService {
         enrollment = await this._enrollAfterPayment(paymentLocked.userId, paymentLocked.courseId, t);
       }
       
-      // Remove from cart if exists
-      await cartService.removeCourseFromCart(paymentLocked.userId, paymentLocked.courseId, { transaction: t });
-
       return {
         success: true,
         message: 'Thanh toán thành công',
@@ -1226,7 +1056,6 @@ class PaymentService {
             } else {
               await this._enrollAfterPayment(paymentLocked.userId, paymentLocked.courseId, t);
             }
-            await cartService.removeCourseFromCart(paymentLocked.userId, paymentLocked.courseId, { transaction: t });
           });
         }
       } catch (err) {

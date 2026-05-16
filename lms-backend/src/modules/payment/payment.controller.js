@@ -175,62 +175,6 @@ class PaymentController {
   }
 
   /**
-   * Create payment from cart
-   */
-  async createPaymentFromCart(req, res) {
-    try {
-      const validationError = handleValidationErrors(req, res);
-      if (validationError) return;
-
-      const { id: userId } = req.user;
-      const { selectedItems } = req.body;
-      
-      const result = await paymentService.createPaymentFromCart(userId, selectedItems);
-      
-      res.status(201).json({
-        success: true,
-        message: `Đã tạo ${result.payments.length} giao dịch thanh toán từ giỏ hàng`,
-        data: result,
-      });
-    } catch (error) {
-      handleServiceError(error, res);
-    }
-  }
-
-  /**
-   * Process cart checkout
-   */
-  async processCartCheckout(req, res) {
-    try {
-      const validationError = handleValidationErrors(req, res);
-      if (validationError) return;
-
-      const { id: userId } = req.user;
-      const result = await paymentService.processPayment(userId, { cartCheckout: true });
-      
-      const successfulCount = result.summary.successful;
-      const failedCount = result.summary.failed;
-      
-      let message;
-      if (successfulCount > 0 && failedCount === 0) {
-        message = `Thanh toán thành công ${successfulCount} khóa học`;
-      } else if (successfulCount > 0 && failedCount > 0) {
-        message = `Thanh toán ${successfulCount}/${result.summary.total} khóa học thành công, ${failedCount} thất bại`;
-      } else {
-        message = 'Tất cả thanh toán thất bại';
-      }
-
-      res.json({
-        success: successfulCount > 0,
-        message,
-        data: result,
-      });
-    } catch (error) {
-      handleServiceError(error, res);
-    }
-  }
-
-  /**
    * Process refund for a payment
    */
   async processRefund(req, res) {
@@ -474,34 +418,11 @@ class PaymentController {
         });
       }
 
-      // Check if this is a cart checkout
-      const paymentDetails = payment.paymentDetails || {};
-      const isCartCheckout = paymentDetails.type === 'checkout_session_cart' || !!paymentDetails.items;
-
-      let courses = [];
-      let totalAmount = 0;
-
-      if (isCartCheckout) {
-        // Find all payments with the same session
-        const relatedPayments = await Payment.findAll({
-          where: { providerTxn: session_id },
-          include: [{ model: Course, as: 'course', attributes: ['id', 'title', 'price'] }],
-        });
-
-        courses = relatedPayments.map(p => ({
-          id: p.course?.id || p.courseId,
-          title: p.course?.title || 'Khóa học',
-          price: parseFloat(p.amount) || 0,
-        }));
-        totalAmount = relatedPayments.reduce((sum, p) => sum + (parseFloat(p.amount) || 0), 0);
-      } else {
-        courses = [{
-          id: payment.course?.id || payment.courseId,
-          title: payment.course?.title || 'Khóa học',
-          price: parseFloat(payment.amount) || 0,
-        }];
-        totalAmount = parseFloat(payment.amount) || 0;
-      }
+      const course = {
+        id: payment.course?.id || payment.courseId,
+        title: payment.course?.title || 'Khóa học',
+        price: parseFloat(payment.amount) || 0,
+      };
 
       res.json({
         success: true,
@@ -509,8 +430,7 @@ class PaymentController {
           id: payment.id,
           courseId: payment.courseId,
           courseTitle: payment.course?.title || 'Khóa học',
-          courses: courses.length > 1 ? courses : undefined,
-          amount: totalAmount,
+          amount: parseFloat(payment.amount) || 0,
           currency: payment.currency,
           status: payment.status,
           provider: payment.provider,
@@ -558,34 +478,6 @@ class PaymentController {
         RspCode: '99',
         Message: 'Unknown error',
       });
-    }
-  }
-
-  /**
-   * Create Stripe Checkout Session from cart
-   */
-  async createStripeCartCheckout(req, res) {
-    try {
-      const validationError = handleValidationErrors(req, res);
-      if (validationError) return;
-
-      const { id: userId } = req.user;
-      const { selectedItems, successUrl, cancelUrl } = req.body;
-
-      const result = await stripeService.createCheckoutSessionFromCart(userId, selectedItems, successUrl, cancelUrl);
-      
-      res.status(201).json({
-        success: true,
-        message: `Tạo Stripe Checkout Session cho ${result.itemCount} khóa học trong giỏ hàng`,
-        data: {
-          checkoutUrl: result.checkoutUrl,
-          sessionId: result.sessionId,
-          payments: result.payments,
-          totalAmount: result.totalAmount,
-        },
-      });
-    } catch (error) {
-      handleServiceError(error, res);
     }
   }
 
@@ -665,34 +557,6 @@ class PaymentController {
           clientSecret: result.clientSecret,
           publishableKey: stripeService.getPublishableKey(),
           payment: result.payment,
-        },
-      });
-    } catch (error) {
-      handleServiceError(error, res);
-    }
-  }
-
-  /**
-   * Create Stripe Payment Intent from cart
-   */
-  async createStripeCartPayment(req, res) {
-    try {
-      const validationError = handleValidationErrors(req, res);
-      if (validationError) return;
-
-      const { id: userId } = req.user;
-      const { selectedItems } = req.body;
-
-      const result = await stripeService.createPaymentIntentFromCart(userId, selectedItems);
-      
-      res.status(201).json({
-        success: true,
-        message: `Đã tạo ${result.clientSecrets.length} Payment Intent từ giỏ hàng`,
-        data: {
-          clientSecrets: result.clientSecrets,
-          publishableKey: stripeService.getPublishableKey(),
-          payments: result.payments,
-          totalAmount: result.totalAmount,
         },
       });
     } catch (error) {
