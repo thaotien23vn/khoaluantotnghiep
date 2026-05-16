@@ -51,7 +51,8 @@ module.exports = (sequelize) => {
     },
   }, {
     tableName: 'payments',
-    timestamps: false,
+    timestamps: true,
+    underscored: true,
   });
 
   Payment.associate = (models) => {
