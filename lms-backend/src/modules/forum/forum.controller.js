@@ -120,7 +120,7 @@ class ForumController {
       if (validationError) return;
 
       const topicId = parseInt(req.params.topicId, 10);
-      const result = await forumService.createPost(req.user.id, topicId, req.body);
+      const result = await forumService.createPost(req.user.id, topicId, req.body, req.user.role);
       res.status(201).json({ success: true, data: result.post });
     } catch (error) {
       handleServiceError(error, res);

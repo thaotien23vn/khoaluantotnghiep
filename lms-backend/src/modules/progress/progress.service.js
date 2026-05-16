@@ -81,8 +81,10 @@ class ProgressService {
     });
 
     // 🛡️ FIX E5: Rate limiting - không cho phép cập nhật quá nhanh (tối thiểu 8 giây)
+    // Skip rate limit if: already completed, or reaching completion threshold (80%+)
     const MIN_UPDATE_INTERVAL = 8; // seconds
-    if (!created && lecture.type === 'video' && process.env.NODE_ENV !== 'test') {
+    const isCompletionUpdate = watched >= 80 || progress.isCompleted;
+    if (!created && !isCompletionUpdate && lecture.type === 'video' && process.env.NODE_ENV !== 'test') {
       const now = new Date();
       const prevLastAccessedAt = progress.lastAccessedAt ? new Date(progress.lastAccessedAt) : null;
       const elapsedSeconds = prevLastAccessedAt ? Math.max(0, (now - prevLastAccessedAt) / 1000) : null;

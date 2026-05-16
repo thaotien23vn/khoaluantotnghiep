@@ -163,6 +163,7 @@ class ForumService {
 
     // Access check for course-bound topics
     if (userRole !== 'admin' && topic.type !== 'global' && topic.courseId) {
+      if (!userId) throw { status: 401, message: 'Vui lòng đăng nhập để xem chủ đề này' };
       const access = await EnrollmentAccess.checkAccess(userId, topic.courseId, userRole);
       if (!access.hasAccess) {
         throw { status: 403, message: access.message || 'Bạn không có quyền xem chủ đề này' };
@@ -180,7 +181,7 @@ class ForumService {
     return { topic, posts };
   }
 
-  async createPost(userId, topicId, postData) {
+  async createPost(userId, topicId, postData, userRole = 'student') {
     const { content, parentId } = postData;
 
     const topic = await ForumTopic.findByPk(topicId);
@@ -189,6 +190,7 @@ class ForumService {
 
     // Access check
     if (topic.type !== 'global' && topic.courseId) {
+      if (!userId) throw { status: 401, message: 'Vui lòng đăng nhập để đăng bài' };
       const access = await EnrollmentAccess.checkAccess(userId, topic.courseId, userRole);
       if (!access.hasAccess) {
         throw { status: 403, message: access.message || 'Bạn đã hết hạn quyền tham gia diễn đàn của khóa học này' };
