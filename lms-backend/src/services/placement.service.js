@@ -53,7 +53,7 @@ const MIN_QUESTIONS = 8;      // Min questions before early stop
 const CONFIDENCE_THRESHOLD = 0.85; // Stop when confident enough
 const RETAKE_COOLDOWN_DAYS = 30;   // Days before can retake
 
-const MIN_TIME_PER_QUESTION = 5; // Minimum 5 seconds per question
+const MIN_TIME_PER_QUESTION = 1; // Minimum 5 seconds per question
 
 class PlacementService {
   /**
@@ -267,19 +267,57 @@ class PlacementService {
         }
       }
 
-      // If still no question found
+      // If still no question found for this skill type, try other skill types
       if (!question) {
-        logger.error('PLACEMENT_BANK_EXHAUSTED_ALL_TYPES', {
+        logger.warn('PLACEMENT_BANK_EXHAUSTED_FOR_SKILL', {
           sessionId: session.id,
           cefrLevel: targetLevel,
           skillType,
           askedCount: askedBankQuestionIdsSet.size,
         });
-        throw {
-          status: 500,
-          message: 'Không còn câu hỏi phù hợp trong ngân hàng câu hỏi. Vui lòng liên hệ admin để bổ sung thêm câu hỏi.',
-          code: 'BANK_EMPTY',
-        };
+
+        const allSkillTypes = ['grammar', 'vocabulary', 'reading', 'listening'];
+        const otherSkills = allSkillTypes.filter(s => s !== skillType);
+
+        for (const fallbackSkill of otherSkills) {
+          if (question) break;
+          for (const qType of questionTypes) {
+            if (question) break;
+            const bankQuestions = await this.getFromQuestionBank(
+              currentAbility,
+              fallbackSkill,
+              qType,
+              Array.from(askedBankQuestionIdsSet),
+              20
+            );
+            if (bankQuestions.length === 0) continue;
+            const topK = bankQuestions.slice(0, 10);
+            const shuffledTopK = this.shuffleArray(topK);
+            for (const bankQuestion of shuffledTopK) {
+              const normalizedBankContent = this.normalizeContent(bankQuestion.content);
+              const isBankDuplicate = askedContents.some(askedContent =>
+                askedContent === normalizedBankContent ||
+                this.contentSimilarity(askedContent, normalizedBankContent) > SIMILARITY_THRESHOLD
+              );
+              if (!isBankDuplicate) {
+                question = bankQuestion;
+                selectedType = qType;
+                break;
+              }
+            }
+          }
+        }
+      }
+
+      // If ALL skill types exhausted, auto-complete the session
+      if (!question) {
+        logger.warn('PLACEMENT_BANK_EXHAUSTED_ALL_SKILLS', {
+          sessionId: session.id,
+          cefrLevel: targetLevel,
+          askedCount: askedBankQuestionIdsSet.size,
+        });
+        const testResult = await this.completeSession(sessionId);
+        return { completed: true, result: testResult };
       }
 
       // Anti-gaming: Strip old prefixes, shuffle, then add new clean prefixes
