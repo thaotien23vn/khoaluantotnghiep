@@ -83,6 +83,25 @@ async function runMigrations() {
   await addColumnIfNotExists('courses', 'skill', 'VARCHAR(20)');
   await addColumnIfNotExists('courses', 'deleted_at', 'TIMESTAMP WITH TIME ZONE');
 
+  // Seed path_courses for existing courses (idempotent)
+  console.log('  Seeding path_courses...');
+  const seedPathCourses = await sequelize.query(`
+    INSERT INTO path_courses (path_id, course_id, order_index, is_required, created_at, updated_at)
+    SELECT lp.id, c.id,
+      ROW_NUMBER() OVER (PARTITION BY lp.id ORDER BY c.id) - 1,
+      true, NOW(), NOW()
+    FROM learning_paths lp
+    JOIN categories cat ON cat.id = lp.category_id
+    JOIN courses c ON c.category_id = cat.id
+    WHERE c.deleted_at IS NULL
+      AND NOT EXISTS (
+        SELECT 1 FROM path_courses pc
+        WHERE pc.path_id = lp.id AND pc.course_id = c.id
+      )
+    RETURNING path_id, course_id
+  `);
+  console.log(`    ✓ Linked ${seedPathCourses[0]?.length || 0} courses to paths`);
+
   console.log('✅ Migrations complete');
   process.exit(0);
 }

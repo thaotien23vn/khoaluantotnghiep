@@ -134,12 +134,12 @@ async function seedCategoriesAndCourses() {
   console.log('📚 Đang seed Categories & Courses...');
 
   const cefrLevels = [
-    { name: 'A1 Beginner', sortOrder: 1, cefrLevel: 'A1', desc: 'Mới bắt đầu học tiếng Anh' },
-    { name: 'A2 Elementary', sortOrder: 2, cefrLevel: 'A2', desc: 'Cơ bản' },
-    { name: 'B1 Intermediate', sortOrder: 3, cefrLevel: 'B1', desc: 'Trung cấp' },
-    { name: 'B2 Upper-Intermediate', sortOrder: 4, cefrLevel: 'B2', desc: 'Trung cấp cao' },
-    { name: 'C1 Advanced', sortOrder: 5, cefrLevel: 'C1', desc: 'Nâng cao' },
-    { name: 'C2 Proficiency', sortOrder: 6, cefrLevel: 'C2', desc: 'Thành thạo' },
+    { name: 'Level A1', sortOrder: 1, cefrLevel: 'A1', desc: 'Mới bắt đầu học tiếng Anh' },
+    { name: 'Level A2', sortOrder: 2, cefrLevel: 'A2', desc: 'Cơ bản' },
+    { name: 'Level B1', sortOrder: 3, cefrLevel: 'B1', desc: 'Trung cấp' },
+    { name: 'Level B2', sortOrder: 4, cefrLevel: 'B2', desc: 'Trung cấp cao' },
+    { name: 'Level C1', sortOrder: 5, cefrLevel: 'C1', desc: 'Nâng cao' },
+    { name: 'Level C2', sortOrder: 6, cefrLevel: 'C2', desc: 'Thành thạo' },
   ];
 
   const skills = ['listening', 'speaking', 'reading', 'writing'];
@@ -249,14 +249,27 @@ async function seedCategoriesAndCourses() {
             status: 'published',
           });
         }
+      } else {
+        // Update existing course to ensure it has correct category and skill
+        if (course.categoryId !== category.id || course.skill !== skill) {
+          await course.update({ categoryId: category.id, skill });
+        }
+      }
 
-        // Link course to learning path
-        await PathCourse.create({
-          pathId: path.id,
-          courseId: course.id,
-          orderIndex: i,
-          isRequired: true,
+      // Link course to learning path (idempotent)
+      if (course) {
+        const existingPathCourse = await PathCourse.findOne({
+          where: { pathId: path.id, courseId: course.id },
         });
+        if (!existingPathCourse) {
+          await PathCourse.create({
+            pathId: path.id,
+            courseId: course.id,
+            orderIndex: i,
+            isRequired: true,
+          });
+          console.log(`      ✓ PathCourse: ${courseTitle} -> ${path.name}`);
+        }
       }
     }
   }
