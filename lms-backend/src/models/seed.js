@@ -144,6 +144,16 @@ async function seedCategoriesAndCourses() {
 
   const skills = ['listening', 'speaking', 'reading', 'writing'];
 
+  // CEFR to Course level ENUM mapping
+  const cefrToLevel = {
+    A1: 'beginner',
+    A2: 'elementary',
+    B1: 'intermediate',
+    B2: 'upper-intermediate',
+    C1: 'advanced',
+    C2: 'proficiency',
+  };
+
   // Get or create admin as course creator
   const admin = await models.User.findOne({ where: { role: 'admin' } });
   const createdBy = admin?.id || null;
@@ -204,7 +214,7 @@ async function seedCategoriesAndCourses() {
           slug,
           description: `Khóa học ${skillLabel} cho trình độ ${level.name}. ${level.desc}`,
           imageUrl: `/courses/${skill}.jpg`,
-          level: level.cefrLevel.toLowerCase(),
+          level: cefrToLevel[level.cefrLevel],
           categoryId: category.id,
           skill,
           price: 0,
