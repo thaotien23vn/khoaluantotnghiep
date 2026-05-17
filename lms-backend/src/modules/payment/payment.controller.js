@@ -1,6 +1,7 @@
 const { validationResult } = require('express-validator');
 const paymentService = require('./payment.service');
 const stripeService = require('../../services/stripe.service');
+const learningPathService = require('../learningPath/learningPath.service');
 const db = require('../../models');
 const logger = require('../../utils/logger');
 const { Payment, Course, User } = db.models;
@@ -218,6 +219,17 @@ class PaymentController {
       const { type, renewalPrice, enrollmentId, renewalMonths } = req.body || {};
       const isRenewal = type === 'renewal';
       const ipAddr = req.ip || req.headers['x-forwarded-for'] || req.connection.remoteAddress;
+
+      // Check level eligibility (skip for renewal)
+      if (!isRenewal) {
+        const enrollCheck = await learningPathService.canEnrollCourse(userId, courseId);
+        if (!enrollCheck.allowed) {
+          return res.status(403).json({
+            success: false,
+            message: enrollCheck.reason || 'Bạn không đủ điều kiện đăng ký khóa học này',
+          });
+        }
+      }
 
       const result = await paymentService.createVNPayPayment(
         userId,
@@ -492,6 +504,17 @@ class PaymentController {
       const { courseId, successUrl, cancelUrl, type, renewalPrice, enrollmentId, renewalMonths } = req.body;
       const { id: userId } = req.user;
       const isRenewal = type === 'renewal';
+
+      // Check level eligibility (skip for renewal)
+      if (!isRenewal) {
+        const enrollCheck = await learningPathService.canEnrollCourse(userId, courseId);
+        if (!enrollCheck.allowed) {
+          return res.status(403).json({
+            success: false,
+            message: enrollCheck.reason || 'Bạn không đủ điều kiện đăng ký khóa học này',
+          });
+        }
+      }
       
       // Use default URLs with session_id placeholder if not provided
       const defaultSuccessUrl = `${process.env.FRONTEND_URL || 'http://localhost:5173'}/payment/success?session_id={CHECKOUT_SESSION_ID}`;
@@ -547,6 +570,17 @@ class PaymentController {
       const { courseId, type } = req.body;
       const { id: userId } = req.user;
       const isRenewal = type === 'renewal';
+
+      // Check level eligibility (skip for renewal)
+      if (!isRenewal) {
+        const enrollCheck = await learningPathService.canEnrollCourse(userId, courseId);
+        if (!enrollCheck.allowed) {
+          return res.status(403).json({
+            success: false,
+            message: enrollCheck.reason || 'Bạn không đủ điều kiện đăng ký khóa học này',
+          });
+        }
+      }
 
       const result = await stripeService.createPaymentIntent(userId, courseId, isRenewal);
       
