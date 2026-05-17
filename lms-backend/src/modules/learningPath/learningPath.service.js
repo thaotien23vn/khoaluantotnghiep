@@ -385,8 +385,26 @@ class LearningPathService {
       throw { status: 404, message: 'Không tìm thấy khóa học' };
     }
 
-    // If no category/cefrLevel on course, allow freely
-    if (!course.Category?.cefrLevel) {
+    // Resolve CEFR level from category or fallback to course.level field
+    const COURSE_LEVEL_TO_SORT = {
+      'beginner': 1,
+      'elementary': 2,
+      'intermediate': 3,
+      'upper-intermediate': 4,
+      'advanced': 5,
+      'proficiency': 6,
+    };
+    const CEFR_TO_SORT = { A1: 1, A2: 2, B1: 3, B2: 4, C1: 5, C2: 6 };
+
+    let targetSortOrder = null;
+    if (course.Category?.cefrLevel) {
+      targetSortOrder = course.Category.sortOrder ?? CEFR_TO_SORT[course.Category.cefrLevel] ?? null;
+    } else if (course.level) {
+      targetSortOrder = COURSE_LEVEL_TO_SORT[course.level?.toLowerCase()] ?? null;
+    }
+
+    // If truly no level info at all, allow freely
+    if (targetSortOrder === null) {
       return { allowed: true };
     }
 
@@ -407,9 +425,9 @@ class LearningPathService {
       ],
     });
 
-    // If user has no path yet, only allow A1 courses
+    // If user has no path yet, only allow A1 courses (sortOrder = 1)
     if (!userPath) {
-      const targetSort = course.Category?.sortOrder || 999;
+      const targetSort = targetSortOrder;
       if (targetSort > 1) {
         return {
           allowed: false,
@@ -420,7 +438,7 @@ class LearningPathService {
     }
 
     const userLevelSort = userPath.learningPath?.category?.sortOrder || 1;
-    const targetLevelSort = course.Category?.sortOrder || 999;
+    const targetLevelSort = targetSortOrder;
 
     // Can always enroll in current level or below
     if (targetLevelSort <= userLevelSort) {

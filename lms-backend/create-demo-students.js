@@ -141,16 +141,18 @@ async function createDemoUser(demo) {
   if (!data) return;
   const { path, courses } = data;
 
-  // 3. Create or update UserLearningPath
-  await UserLearningPath.findOrCreate({
-    where: { userId: user.id },
-    defaults: {
-      userId: user.id,
-      pathId: path.id,
-      currentLevel: demo.level,
-      status: 'active',
-    },
-  });
+  // 3. Create or update UserLearningPath (skip if demo.noPath)
+  if (!demo.noPath) {
+    await UserLearningPath.findOrCreate({
+      where: { userId: user.id },
+      defaults: {
+        userId: user.id,
+        pathId: path.id,
+        currentLevel: demo.level,
+        status: 'active',
+      },
+    });
+  }
 
   // 4. Create enrollments + progress
   for (const enrollCfg of demo.enrollments) {
@@ -165,10 +167,13 @@ async function createDemoUser(demo) {
       defaults: {
         userId: user.id,
         courseId: course.id,
-        status: 'active',
+        status: enrollCfg.expired ? 'expired' : 'active',
         enrollmentType: 'free',
         progressPercent: enrollCfg.progress,
         enrolledAt: new Date(),
+        expiresAt: enrollCfg.expired ? new Date(Date.now() - 30 * 24 * 60 * 60 * 1000) :
+                    enrollCfg.gracePeriod ? new Date(Date.now() - 5 * 24 * 60 * 60 * 1000) : null,
+        gracePeriodEndsAt: enrollCfg.gracePeriod ? new Date(Date.now() + 2 * 24 * 60 * 60 * 1000) : null,
       },
     });
 
@@ -244,10 +249,67 @@ async function main() {
         { courseIndex: 1, progress: 10 },
       ],
     },
+    {
+      name: 'Học viên Hết hạn',
+      email: 'student_expired@demo.com',
+      level: 'A1',
+      enrollments: [
+        { courseIndex: 0, progress: 40, expired: true },
+      ],
+    },
+    {
+      name: 'Chưa có lộ trình',
+      email: 'student_no_path@demo.com',
+      level: 'A1',
+      noPath: true,
+      enrollments: [],
+    },
+    {
+      name: 'Học viên A2 Sẵn sàng lên B1',
+      email: 'student_a2_ready@demo.com',
+      level: 'A2',
+      enrollments: [
+        { courseIndex: 0, progress: 100 },
+        { courseIndex: 1, progress: 100 },
+        { courseIndex: 2, progress: 100 },
+        { courseIndex: 3, progress: 70 },
+      ],
+    },
+    {
+      name: 'Học viên B1 Sẵn sàng lên B2',
+      email: 'student_b1_ready@demo.com',
+      level: 'B1',
+      enrollments: [
+        { courseIndex: 0, progress: 100 },
+        { courseIndex: 1, progress: 100 },
+        { courseIndex: 2, progress: 100 },
+        { courseIndex: 3, progress: 80 },
+      ],
+    },
+    {
+      name: 'Học viên Grace Period',
+      email: 'student_grace@demo.com',
+      level: 'A1',
+      enrollments: [
+        { courseIndex: 0, progress: 60, gracePeriod: true },
+      ],
+    },
   ];
 
   for (const demo of demos) {
     await createDemoUser(demo);
+  }
+
+  // Sync enrollment counts to course.students for accurate display
+  console.log('\n🔄 Đồng bộ số học viên cho các khóa học...');
+  const { Course, Enrollment } = models;
+  const allCourses = await Course.findAll();
+  for (const course of allCourses) {
+    const count = await Enrollment.count({ where: { courseId: course.id } });
+    if (count !== course.students) {
+      await course.update({ students: count });
+      console.log(`  ✓ ${course.title}: ${count} học viên`);
+    }
   }
 
   console.log('\n🎉 TẠO DEMO STUDENTS HOÀN TẤT');

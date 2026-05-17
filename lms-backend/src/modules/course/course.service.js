@@ -55,7 +55,9 @@ const formatCourseForListing = (course) => {
     teacher: course.creator ? course.creator.name : 'Giảng viên',
     teacherAvatar: `https://i.pravatar.cc/150?u=${course.creator?.username || 'teacher'}`,
     image: course.imageUrl || '/elearning-1.jpg',
-    category: (course.Category || course.category)?.name || 'Khác',
+    category: (course.Category && typeof course.Category === 'object' && course.Category.name)
+      || (typeof course.category === 'string' ? course.category : null)
+      || 'Khác',
     rating: parseFloat(course.rating) || 0,
     reviewCount: course.reviewCount || 0,
     students: course.students || 0,
@@ -148,7 +150,9 @@ const formatCourseDetail = (course) => {
     teacher: course.creator ? course.creator.name : 'Giảng viên',
     teacherAvatar: `https://i.pravatar.cc/150?u=${course.creator?.username || 'teacher'}`,
     image: course.imageUrl || '/elearning-1.jpg',
-    category: course.Category ? course.Category.name : 'Khác',
+    category: (course.Category && typeof course.Category === 'object' && course.Category.name)
+      || (typeof course.category === 'string' ? course.category : null)
+      || 'Khác',
     rating: parseFloat(course.rating) || 0,
     reviewCount: course.reviewCount || 0,
     students: course.students || 0,
