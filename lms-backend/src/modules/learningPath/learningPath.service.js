@@ -51,32 +51,14 @@ class LearningPathService {
    * Get user's learning path progress
    */
   async getMyProgress(userId) {
+    // 1. Get user's current path for currentLevel
     const userPath = await UserLearningPath.findOne({
       where: { userId, status: { [Op.in]: ['active', 'completed'] } },
       include: [
         {
           model: LearningPath,
           as: 'learningPath',
-          include: [
-            {
-              model: Category,
-              as: 'category',
-              attributes: ['id', 'name', 'cefrLevel', 'sortOrder'],
-            },
-            {
-              model: PathCourse,
-              as: 'pathCourses',
-              include: [
-                {
-                  model: Course,
-                  as: 'course',
-                  attributes: ['id', 'title', 'slug', 'imageUrl', 'skill', 'level', 'status'],
-                  where: { deletedAt: null },
-                  required: false,
-                },
-              ],
-            },
-          ],
+          include: [{ model: Category, as: 'category', attributes: ['id', 'name', 'cefrLevel', 'sortOrder'] }],
         },
       ],
     });
@@ -85,59 +67,85 @@ class LearningPathService {
       return null;
     }
 
-    const path = userPath.learningPath;
-    const courseIds = (path.pathCourses || [])
-      .filter(pc => pc.course)
-      .map(pc => pc.course.id);
+    const currentLevel = userPath.currentLevel;
 
-    // Get all enrollments for this user in these courses
-    const enrollments = await Enrollment.findAll({
-      where: { userId, courseId: { [Op.in]: courseIds } },
+    // 2. Get ALL active learning paths with their courses
+    const allPaths = await LearningPath.findAll({
+      where: { isActive: true },
+      include: [
+        {
+          model: Category,
+          as: 'category',
+          attributes: ['id', 'name', 'cefrLevel', 'sortOrder'],
+        },
+        {
+          model: PathCourse,
+          as: 'pathCourses',
+          include: [
+            {
+              model: Course,
+              as: 'course',
+              attributes: ['id', 'title', 'slug', 'imageUrl', 'skill', 'level', 'status'],
+              where: { deletedAt: null },
+              required: false,
+            },
+          ],
+        },
+      ],
+      order: [[{ model: Category, as: 'category' }, 'sortOrder', 'ASC']],
+    });
+
+    // 3. Get ALL user enrollments across all courses
+    const allEnrollments = await Enrollment.findAll({
+      where: { userId },
       attributes: ['courseId', 'progressPercent', 'status'],
     });
 
     const enrollmentMap = Object.fromEntries(
-      enrollments.map(e => [e.courseId, Number(e.progressPercent || 0)])
+      allEnrollments.map(e => [e.courseId, Number(e.progressPercent || 0)])
     );
 
-    // Group by skill/level and calculate progress
-    const levels = {};
-    for (const pc of path.pathCourses || []) {
-      if (!pc.course) continue;
-      const level = path.category?.cefrLevel || 'Unknown';
-      if (!levels[level]) {
-        levels[level] = { total: 0, completed: 0, courses: [] };
+    // 4. Build all 6 CEFR levels
+    const cefrLevels = ['A1', 'A2', 'B1', 'B2', 'C1', 'C2'];
+    const levelProgress = cefrLevels.map(level => {
+      const path = allPaths.find(p => p.category?.cefrLevel === level);
+      if (!path) {
+        return { level, totalCourses: 0, completedCourses: 0, progressPercent: 0, courses: [] };
       }
-      const progress = enrollmentMap[pc.course.id] || 0;
-      levels[level].total++;
-      if (progress >= 100) levels[level].completed++;
-      levels[level].courses.push({
-        courseId: pc.course.id,
-        title: pc.course.title,
-        slug: pc.course.slug,
-        skill: pc.course.skill,
-        progress,
-        isEnrolled: !!enrollmentMap[pc.course.id],
-      });
-    }
 
-    const levelProgress = Object.entries(levels).map(([level, data]) => ({
-      level,
-      totalCourses: data.total,
-      completedCourses: data.completed,
-      progressPercent: data.total > 0 ? Math.round((data.completed / data.total) * 100) : 0,
-      courses: data.courses,
-    }));
+      const courses = (path.pathCourses || [])
+        .filter(pc => pc.course)
+        .map(pc => {
+          const progress = enrollmentMap[pc.course.id] || 0;
+          return {
+            courseId: pc.course.id,
+            title: pc.course.title,
+            slug: pc.course.slug,
+            skill: pc.course.skill,
+            progress,
+            isEnrolled: !!enrollmentMap[pc.course.id],
+          };
+        });
+
+      const completed = courses.filter(c => c.progress >= 100).length;
+      return {
+        level,
+        totalCourses: courses.length,
+        completedCourses: completed,
+        progressPercent: courses.length > 0 ? Math.round((completed / courses.length) * 100) : 0,
+        courses,
+      };
+    });
 
     const totalCourses = levelProgress.reduce((sum, l) => sum + l.totalCourses, 0);
     const totalCompleted = levelProgress.reduce((sum, l) => sum + l.completedCourses, 0);
 
     return {
       userPathId: userPath.id,
-      currentLevel: userPath.currentLevel,
+      currentLevel,
       overallProgress: totalCourses > 0 ? Math.round((totalCompleted / totalCourses) * 100) : 0,
-      pathName: path.name,
-      pathSlug: path.slug,
+      pathName: userPath.learningPath?.name || 'Lộ trình học tập',
+      pathSlug: userPath.learningPath?.slug || '',
       levels: levelProgress,
     };
   }
