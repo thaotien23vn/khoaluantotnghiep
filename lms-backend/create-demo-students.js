@@ -219,6 +219,17 @@ async function main() {
       ],
     },
     {
+      name: 'Học viên B1 Hoàn thành 2',
+      email: 'student_b1_done2@demo.com',
+      level: 'B1',
+      enrollments: [
+        { courseIndex: 0, progress: 100 },
+        { courseIndex: 1, progress: 100 },
+        { courseIndex: 2, progress: 100 },
+        { courseIndex: 3, progress: 100 },
+      ],
+    },
+    {
       name: 'Học viên B2',
       email: 'student_b2@demo.com',
       level: 'B2',

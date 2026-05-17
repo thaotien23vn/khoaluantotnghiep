@@ -970,7 +970,7 @@ class CourseService {
       order: [
         ['order', 'ASC'],
         ['lectures', 'order', 'ASC'],
-        ['quizzes', 'created_at', 'ASC'],
+        [{ model: Quiz, as: 'quizzes' }, 'createdAt', 'ASC'],
       ],
     });
 
