@@ -57,6 +57,7 @@ module.exports = (sequelize) => {
     {
       tableName: 'user_learning_paths',
       timestamps: true,
+      underscored: true,
       indexes: [
         {
           unique: true,

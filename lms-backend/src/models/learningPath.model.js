@@ -41,6 +41,7 @@ module.exports = (sequelize) => {
     {
       tableName: 'learning_paths',
       timestamps: true,
+      underscored: true,
     }
   );
 

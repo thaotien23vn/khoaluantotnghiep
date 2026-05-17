@@ -43,6 +43,7 @@ module.exports = (sequelize) => {
     {
       tableName: 'path_courses',
       timestamps: true,
+      underscored: true,
       indexes: [
         {
           unique: true,
