@@ -114,6 +114,9 @@ const models = {};
   'courseChatAnalytics',
   'tracking',
   'adminActionLog',
+  'learningPath',
+  'pathCourse',
+  'userLearningPath',
 ].forEach((name) => {
   models[name.charAt(0).toUpperCase() + name.slice(1)] = require(`./${name}.model`)(sequelize);
 });
@@ -166,6 +169,9 @@ const {
   CourseChatAnalytics,
   Tracking,
   AdminActionLog,
+  LearningPath,
+  PathCourse,
+  UserLearningPath,
 } = models;
 
 User.hasMany(Course, { foreignKey: 'createdBy', as: 'createdCourses' });
@@ -337,6 +343,22 @@ Tracking.belongsTo(User, { foreignKey: 'userId', as: 'user' });
 // AdminActionLog associations
 User.hasMany(AdminActionLog, { foreignKey: 'adminId', as: 'adminActions' });
 AdminActionLog.belongsTo(User, { foreignKey: 'adminId', as: 'admin' });
+
+// Learning Path Associations
+LearningPath.belongsTo(Category, { foreignKey: 'categoryId', as: 'category' });
+Category.hasOne(LearningPath, { foreignKey: 'categoryId', as: 'learningPath' });
+
+LearningPath.hasMany(PathCourse, { foreignKey: 'pathId', as: 'pathCourses' });
+PathCourse.belongsTo(LearningPath, { foreignKey: 'pathId', as: 'learningPath' });
+
+PathCourse.belongsTo(Course, { foreignKey: 'courseId', as: 'course' });
+Course.hasMany(PathCourse, { foreignKey: 'courseId', as: 'pathCourses' });
+
+User.hasMany(UserLearningPath, { foreignKey: 'userId', as: 'userLearningPaths' });
+UserLearningPath.belongsTo(User, { foreignKey: 'userId', as: 'user' });
+
+LearningPath.hasMany(UserLearningPath, { foreignKey: 'pathId', as: 'userPaths' });
+UserLearningPath.belongsTo(LearningPath, { foreignKey: 'pathId', as: 'learningPath' });
 
 const connectDB = async () => {
   await sequelize.authenticate();

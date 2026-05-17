@@ -614,12 +614,27 @@ class CourseService {
       throw { status: 404, message: 'Không tìm thấy khóa học' };
     }
 
-    // 🛡️ Fix: Use Number() for consistent comparison
-    if (role === 'teacher' && Number(course.createdBy) !== Number(userId)) {
+    // Fix: Use Number() for consistent comparison
+    if (role !== 'admin' && course.createdBy !== userId) {
       throw { status: 403, message: 'Bạn không có quyền xóa khóa học này' };
     }
 
-    // 🛡️ Fix: Collect media URLs before transaction, delete after transaction commits
+    // FIX: Prevent deleting course with active enrollments
+    const enrollmentCount = await Enrollment.count({ where: { courseId: course.id } });
+    if (enrollmentCount > 0) {
+      // Soft delete instead of hard delete
+      course.deletedAt = new Date();
+      course.status = 'draft';
+      await course.save();
+      return {
+        success: true,
+        archived: true,
+        message: 'Khóa học đã được lưu trữ (archive) vì đã có học viên đăng ký. Dữ liệu học viên được bảo toàn.',
+        enrollmentCount,
+      };
+    }
+
+    // Fix: Collect media URLs before transaction, delete after transaction commits
     const chapters = await Chapter.findAll({
       where: { courseId: course.id },
       attributes: ['id'],

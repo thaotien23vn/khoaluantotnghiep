@@ -1,0 +1,415 @@
+const db = require('../../models');
+const { Op } = require('sequelize');
+
+const {
+  LearningPath,
+  PathCourse,
+  UserLearningPath,
+  Category,
+  Course,
+  Enrollment,
+  LectureProgress,
+  User,
+} = db.models;
+
+class LearningPathService {
+  /**
+   * Get all learning paths with their categories
+   */
+  async getAllPaths() {
+    const paths = await LearningPath.findAll({
+      where: { isActive: true },
+      include: [
+        {
+          model: Category,
+          as: 'category',
+          attributes: ['id', 'name', 'cefrLevel', 'sortOrder'],
+        },
+        {
+          model: PathCourse,
+          as: 'pathCourses',
+          include: [
+            {
+              model: Course,
+              as: 'course',
+              attributes: ['id', 'title', 'slug', 'imageUrl', 'skill', 'level', 'status'],
+              where: { deletedAt: null },
+              required: false,
+            },
+          ],
+        },
+      ],
+      order: [
+        [{ model: Category, as: 'category' }, 'sortOrder', 'ASC'],
+        ['id', 'ASC'],
+      ],
+    });
+    return paths;
+  }
+
+  /**
+   * Get user's learning path progress
+   */
+  async getMyProgress(userId) {
+    const userPath = await UserLearningPath.findOne({
+      where: { userId, status: { [Op.in]: ['active', 'completed'] } },
+      include: [
+        {
+          model: LearningPath,
+          as: 'learningPath',
+          include: [
+            {
+              model: Category,
+              as: 'category',
+              attributes: ['id', 'name', 'cefrLevel', 'sortOrder'],
+            },
+            {
+              model: PathCourse,
+              as: 'pathCourses',
+              include: [
+                {
+                  model: Course,
+                  as: 'course',
+                  attributes: ['id', 'title', 'slug', 'imageUrl', 'skill', 'level', 'status'],
+                  where: { deletedAt: null },
+                  required: false,
+                },
+              ],
+            },
+          ],
+        },
+      ],
+    });
+
+    if (!userPath) {
+      return null;
+    }
+
+    const path = userPath.learningPath;
+    const courseIds = (path.pathCourses || [])
+      .filter(pc => pc.course)
+      .map(pc => pc.course.id);
+
+    // Get all enrollments for this user in these courses
+    const enrollments = await Enrollment.findAll({
+      where: { userId, courseId: { [Op.in]: courseIds } },
+      attributes: ['courseId', 'progressPercent', 'status'],
+    });
+
+    const enrollmentMap = Object.fromEntries(
+      enrollments.map(e => [e.courseId, Number(e.progressPercent || 0)])
+    );
+
+    // Group by skill/level and calculate progress
+    const levels = {};
+    for (const pc of path.pathCourses || []) {
+      if (!pc.course) continue;
+      const level = path.category?.cefrLevel || 'Unknown';
+      if (!levels[level]) {
+        levels[level] = { total: 0, completed: 0, courses: [] };
+      }
+      const progress = enrollmentMap[pc.course.id] || 0;
+      levels[level].total++;
+      if (progress >= 100) levels[level].completed++;
+      levels[level].courses.push({
+        courseId: pc.course.id,
+        title: pc.course.title,
+        slug: pc.course.slug,
+        skill: pc.course.skill,
+        progress,
+        isEnrolled: !!enrollmentMap[pc.course.id],
+      });
+    }
+
+    const levelProgress = Object.entries(levels).map(([level, data]) => ({
+      level,
+      totalCourses: data.total,
+      completedCourses: data.completed,
+      progressPercent: data.total > 0 ? Math.round((data.completed / data.total) * 100) : 0,
+      courses: data.courses,
+    }));
+
+    const totalCourses = levelProgress.reduce((sum, l) => sum + l.totalCourses, 0);
+    const totalCompleted = levelProgress.reduce((sum, l) => sum + l.completedCourses, 0);
+
+    return {
+      userPathId: userPath.id,
+      currentLevel: userPath.currentLevel,
+      overallProgress: totalCourses > 0 ? Math.round((totalCompleted / totalCourses) * 100) : 0,
+      pathName: path.name,
+      pathSlug: path.slug,
+      levels: levelProgress,
+    };
+  }
+
+  /**
+   * Assign a learning path to user after placement test
+   */
+  async assignPath(userId, cefrLevel) {
+    // Find the learning path matching this CEFR level
+    const category = await Category.findOne({
+      where: { cefrLevel },
+      include: [
+        {
+          model: LearningPath,
+          as: 'learningPath',
+          where: { isActive: true },
+          required: true,
+        },
+      ],
+    });
+
+    if (!category || !category.learningPath) {
+      throw { status: 404, message: `Không tìm thấy lộ trình cho cấp độ ${cefrLevel}` };
+    }
+
+    const path = category.learningPath;
+
+    // Check if user already has this path
+    const existing = await UserLearningPath.findOne({
+      where: { userId, pathId: path.id },
+    });
+
+    if (existing) {
+      // Update current level if changed
+      if (existing.currentLevel !== cefrLevel) {
+        existing.currentLevel = cefrLevel;
+        await existing.save();
+      }
+      return {
+        assigned: true,
+        updated: true,
+        userPathId: existing.id,
+        pathId: path.id,
+        pathName: path.name,
+        currentLevel: cefrLevel,
+      };
+    }
+
+    // Create new user learning path
+    const userPath = await UserLearningPath.create({
+      userId,
+      pathId: path.id,
+      currentLevel: cefrLevel,
+      overallProgress: 0,
+      status: 'active',
+      startedAt: new Date(),
+    });
+
+    return {
+      assigned: true,
+      updated: false,
+      userPathId: userPath.id,
+      pathId: path.id,
+      pathName: path.name,
+      currentLevel: cefrLevel,
+    };
+  }
+
+  /**
+   * Get single learning path detail with courses
+   */
+  async getPathById(pathId, userId = null) {
+    const path = await LearningPath.findOne({
+      where: { id: pathId, isActive: true },
+      include: [
+        {
+          model: Category,
+          as: 'category',
+          attributes: ['id', 'name', 'cefrLevel', 'sortOrder'],
+        },
+        {
+          model: PathCourse,
+          as: 'pathCourses',
+          include: [
+            {
+              model: Course,
+              as: 'course',
+              attributes: ['id', 'title', 'slug', 'imageUrl', 'skill', 'level', 'price', 'status'],
+              where: { deletedAt: null },
+              required: false,
+            },
+          ],
+          order: [['orderIndex', 'ASC']],
+        },
+      ],
+    });
+
+    if (!path) {
+      throw { status: 404, message: 'Không tìm thấy lộ trình' };
+    }
+
+    // If userId provided, include enrollment status
+    let enrollments = [];
+    if (userId) {
+      const courseIds = (path.pathCourses || [])
+        .filter(pc => pc.course)
+        .map(pc => pc.course.id);
+      if (courseIds.length > 0) {
+        enrollments = await Enrollment.findAll({
+          where: { userId, courseId: { [Op.in]: courseIds } },
+          attributes: ['courseId', 'progressPercent', 'status'],
+        });
+      }
+    }
+
+    const enrollmentMap = Object.fromEntries(
+      enrollments.map(e => [e.courseId, Number(e.progressPercent || 0)])
+    );
+
+    const courses = (path.pathCourses || [])
+      .filter(pc => pc.course)
+      .map(pc => ({
+        ...pc.course.toJSON(),
+        orderIndex: pc.orderIndex,
+        isRequired: pc.isRequired,
+        isEnrolled: !!enrollmentMap[pc.course.id],
+        progressPercent: enrollmentMap[pc.course.id] || 0,
+      }));
+
+    return {
+      id: path.id,
+      name: path.name,
+      slug: path.slug,
+      description: path.description,
+      category: path.category,
+      courses,
+    };
+  }
+
+  /**
+   * Check if user can enroll in a course (level prerequisites)
+   */
+  async canEnrollCourse(userId, courseId) {
+    const course = await Course.findByPk(courseId, {
+      include: [
+        {
+          model: Category,
+          as: 'category',
+          attributes: ['cefrLevel', 'sortOrder'],
+        },
+      ],
+    });
+
+    if (!course) {
+      throw { status: 404, message: 'Không tìm thấy khóa học' };
+    }
+
+    // If no category/cefrLevel on course, allow freely
+    if (!course.category?.cefrLevel) {
+      return { allowed: true };
+    }
+
+    const userPath = await UserLearningPath.findOne({
+      where: { userId, status: 'active' },
+      include: [
+        {
+          model: LearningPath,
+          as: 'learningPath',
+          include: [
+            {
+              model: Category,
+              as: 'category',
+              attributes: ['cefrLevel', 'sortOrder'],
+            },
+          ],
+        },
+      ],
+    });
+
+    // If user has no path yet, only allow A1 courses
+    if (!userPath) {
+      const targetSort = course.category?.sortOrder || 999;
+      if (targetSort > 1) {
+        return {
+          allowed: false,
+          reason: 'Bạn cần hoàn thành bài kiểm tra đầu vào để xác định lộ trình phù hợp',
+        };
+      }
+      return { allowed: true };
+    }
+
+    const userLevelSort = userPath.learningPath?.category?.sortOrder || 1;
+    const targetLevelSort = course.category?.sortOrder || 999;
+
+    // Can always enroll in current level or below
+    if (targetLevelSort <= userLevelSort) {
+      return { allowed: true };
+    }
+
+    // For next level, require 80% completion of current level
+    if (targetLevelSort === userLevelSort + 1) {
+      const progress = await this.getMyProgress(userId);
+      const currentLevelData = progress?.levels?.find(
+        l => l.level === userPath.currentLevel
+      );
+      const levelProgress = currentLevelData?.progressPercent || 0;
+
+      if (levelProgress >= 80) {
+        return { allowed: true };
+      }
+      return {
+        allowed: false,
+        reason: `Bạn cần hoàn thành ít nhất 80% cấp độ ${userPath.currentLevel} trước khi học cấp độ tiếp theo`,
+        requiredProgress: 80,
+        currentProgress: levelProgress,
+      };
+    }
+
+    // Skip more than 1 level ahead — not allowed
+    return {
+      allowed: false,
+      reason: 'Bạn không thể nhảy quá nhiều cấp độ. Hãy hoàn thành từng cấp độ một.',
+    };
+  }
+
+  /**
+   * Update level progress after course completion
+   * Called when a course reaches 100%
+   */
+  async updateLevelProgress(userId, courseId) {
+    const course = await Course.findByPk(courseId, {
+      include: [{ model: Category, as: 'category' }],
+    });
+
+    if (!course?.category?.cefrLevel) return;
+
+    const userPath = await UserLearningPath.findOne({
+      where: { userId, status: 'active' },
+      include: [{ model: LearningPath, as: 'learningPath' }],
+    });
+
+    if (!userPath) return;
+
+    // Recalculate overall progress
+    const progress = await this.getMyProgress(userId);
+    if (progress) {
+      userPath.overallProgress = progress.overallProgress;
+      await userPath.save();
+    }
+
+    // Check if current level is complete (all required courses done)
+    const currentLevelData = progress?.levels?.find(
+      l => l.level === userPath.currentLevel
+    );
+
+    if (currentLevelData && currentLevelData.progressPercent >= 100) {
+      // Advance to next level
+      const levelOrder = ['A1', 'A2', 'B1', 'B2', 'C1', 'C2'];
+      const currentIndex = levelOrder.indexOf(userPath.currentLevel);
+      if (currentIndex >= 0 && currentIndex < levelOrder.length - 1) {
+        userPath.currentLevel = levelOrder[currentIndex + 1];
+        await userPath.save();
+      } else if (currentIndex === levelOrder.length - 1) {
+        // All levels complete
+        userPath.status = 'completed';
+        userPath.completedAt = new Date();
+        await userPath.save();
+      }
+    }
+
+    return progress;
+  }
+}
+
+module.exports = new LearningPathService();

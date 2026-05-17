@@ -40,6 +40,17 @@ module.exports = (sequelize) => {
         key: 'id',
       },
     },
+    skill: {
+      type: DataTypes.ENUM('listening', 'speaking', 'reading', 'writing', 'integrated'),
+      allowNull: true,
+      comment: 'Skill focus for this course within the CEFR level',
+    },
+    deletedAt: {
+      type: DataTypes.DATE,
+      allowNull: true,
+      field: 'deleted_at',
+      comment: 'Soft delete timestamp. If set, course is archived.',
+    },
     price: {
       type: DataTypes.DECIMAL(10,2),
       defaultValue: 0.0,

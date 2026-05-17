@@ -18,6 +18,7 @@ const trackingRoutes = require("./routes/tracking.routes");
 const progressRoutes = require("./routes/progress.routes");
 const scheduleRoutes = require("./routes/schedule.routes");
 const certificateRoutes = require("./routes/certificate.routes");
+const learningPathRoutes = require("./routes/learningPath.routes");
 const validateInput = require("./middlewares/validateInput");
 const { apiLimiter } = require("./middlewares/rateLimiter");
 const { randomUUID } = require("crypto");
@@ -178,6 +179,9 @@ app.use("/api", aiRoutes);
 
 // Placement test routes
 app.use("/api", placementRoutes);
+
+// Learning path routes
+app.use("/api/learning-paths", learningPathRoutes);
 
 // Schedule routes
 app.use("/api", scheduleRoutes);
