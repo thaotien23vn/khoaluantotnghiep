@@ -257,6 +257,7 @@ async function seedCategoriesAndCourses() {
             chapterId: chapter.id,
             courseId: course.id,
             status: 'published',
+            createdBy,
           });
         }
       } else {
