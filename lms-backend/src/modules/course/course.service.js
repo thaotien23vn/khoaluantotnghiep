@@ -45,27 +45,32 @@ const generateUniqueSlug = async (title) => {
 };
 
 // Format course for public listing
-const formatCourseForListing = (course) => ({
-  id: course.id.toString(),
-  title: course.title,
-  teacher: course.creator ? course.creator.name : 'Giảng viên',
-  teacherAvatar: `https://i.pravatar.cc/150?u=${course.creator?.username || 'teacher'}`,
-  image: course.imageUrl || '/elearning-1.jpg',
-  category: (course.Category || course.category)?.name || 'Khác',
-  rating: parseFloat(course.rating) || 0,
-  reviewCount: course.reviewCount || 0,
-  students: course.students || 0,
-  level: course.level || 'Mọi cấp độ',
-  totalLessons: course.totalLessons || 0,
-  duration: course.duration || '0 giờ',
-  description: course.description || '',
-  willLearn: course.willLearn || [],
-  requirements: course.requirements || [],
-  curriculum: [],
-  tags: course.tags || [],
-  price: parseFloat(course.price) || 0,
-  lastUpdated: course.lastUpdated || new Date().toISOString(),
-});
+const formatCourseForListing = (course) => {
+  const chapters = course.Chapters || course.chapters || [];
+  const totalLessons = chapters.reduce((sum, ch) => sum + (ch.lectures?.length || 0), 0);
+
+  return {
+    id: course.id.toString(),
+    title: course.title,
+    teacher: course.creator ? course.creator.name : 'Giảng viên',
+    teacherAvatar: `https://i.pravatar.cc/150?u=${course.creator?.username || 'teacher'}`,
+    image: course.imageUrl || '/elearning-1.jpg',
+    category: (course.Category || course.category)?.name || 'Khác',
+    rating: parseFloat(course.rating) || 0,
+    reviewCount: course.reviewCount || 0,
+    students: course.students || 0,
+    level: course.level || 'Mọi cấp độ',
+    totalLessons,
+    duration: course.duration || '0 giờ',
+    description: course.description || '',
+    willLearn: course.willLearn || [],
+    requirements: course.requirements || [],
+    curriculum: [],
+    tags: course.tags || [],
+    price: parseFloat(course.price) || 0,
+    lastUpdated: course.lastUpdated || new Date().toISOString(),
+  };
+};
 
 // Format course detail with curriculum
 const formatCourseDetail = (course) => {
@@ -295,6 +300,19 @@ class CourseService {
         {
           model: Category,
           attributes: ['id', 'name'],
+        },
+        {
+          model: Chapter,
+          as: 'Chapters',
+          required: false,
+          include: [
+            {
+              model: Lecture,
+              as: 'lectures',
+              required: false,
+              attributes: ['id'],
+            },
+          ],
         },
       ],
       limit: limitNum,

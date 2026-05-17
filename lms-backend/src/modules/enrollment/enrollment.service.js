@@ -1,6 +1,7 @@
 const db = require('../../models');
 const courseAggregatesService = require('../../services/courseAggregates.service');
 const notificationService = require('../notification/notification.service');
+const learningPathService = require('../learningPath/learningPath.service');
 const { Op } = require('sequelize');
 
 const { Enrollment, Course, User, Payment, LectureProgress } = db.models;
@@ -36,6 +37,12 @@ class EnrollmentService {
       if (!prerequisiteCompleted) {
         throw { status: 403, message: 'Bạn cần hoàn thành khóa học tiên quyết trước khi đăng ký khóa học này' };
       }
+    }
+
+    // Check CEFR level eligibility via learning path
+    const enrollCheck = await learningPathService.canEnrollCourse(userId, courseId);
+    if (!enrollCheck.allowed) {
+      throw { status: 403, message: enrollCheck.reason || 'Bạn không đủ điều kiện đăng ký khóa học này' };
     }
 
     const existing = await Enrollment.findOne({ where: { userId, courseId: Number(courseId) } });
