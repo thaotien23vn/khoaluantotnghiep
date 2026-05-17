@@ -61,8 +61,32 @@ async function runMigrations() {
         UNIQUE ("user_id", "path_id")
       )
     `);
+  }
+
+  // Always try to create level_certificates independently
+  const [levelCertExists] = await sequelize.query(
+    `SELECT EXISTS (
+      SELECT FROM information_schema.tables
+      WHERE table_name = 'level_certificates'
+    )`,
+    { type: sequelize.QueryTypes.SELECT }
+  );
+  if (!levelCertExists.exists) {
+    console.log('  Creating level_certificates table...');
+    await sequelize.query(`
+      CREATE TABLE IF NOT EXISTS "level_certificates" (
+        "id" SERIAL PRIMARY KEY,
+        "user_id" INTEGER NOT NULL REFERENCES "users"("id") ON DELETE CASCADE,
+        "level" VARCHAR(2) NOT NULL CHECK ("level" IN ('A1','A2','B1','B2','C1','C2')),
+        "issued_at" TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
+        "certificate_id" VARCHAR(255) NOT NULL UNIQUE,
+        "created_at" TIMESTAMP WITH TIME ZONE NOT NULL,
+        "updated_at" TIMESTAMP WITH TIME ZONE NOT NULL,
+        UNIQUE ("user_id", "level")
+      )
+    `);
   } else {
-    console.log('  Tables already exist, skipping creation');
+    console.log('  level_certificates already exists');
   }
 
   // Add columns if not exist
@@ -85,22 +109,26 @@ async function runMigrations() {
 
   // Seed path_courses for existing courses (idempotent)
   console.log('  Seeding path_courses...');
-  const seedPathCourses = await sequelize.query(`
-    INSERT INTO path_courses (path_id, course_id, order_index, is_required, created_at, updated_at)
-    SELECT lp.id, c.id,
-      ROW_NUMBER() OVER (PARTITION BY lp.id ORDER BY c.id) - 1,
-      true, NOW(), NOW()
-    FROM learning_paths lp
-    JOIN categories cat ON cat.id = lp.category_id
-    JOIN courses c ON c.category_id = cat.id
-    WHERE c.deleted_at IS NULL
-      AND NOT EXISTS (
-        SELECT 1 FROM path_courses pc
-        WHERE pc.path_id = lp.id AND pc.course_id = c.id
-      )
-    RETURNING path_id, course_id
-  `);
-  console.log(`    ✓ Linked ${seedPathCourses[0]?.length || 0} courses to paths`);
+  try {
+    const seedPathCourses = await sequelize.query(`
+      INSERT INTO path_courses (path_id, course_id, order_index, is_required, created_at, updated_at)
+      SELECT lp.id, c.id,
+        ROW_NUMBER() OVER (PARTITION BY lp.id ORDER BY c.id) - 1,
+        true, NOW(), NOW()
+      FROM learning_paths lp
+      JOIN categories cat ON cat.id = lp.category_id
+      JOIN courses c ON c."categoryId" = cat.id
+      WHERE c."deletedAt" IS NULL
+        AND NOT EXISTS (
+          SELECT 1 FROM path_courses pc
+          WHERE pc.path_id = lp.id AND pc.course_id = c.id
+        )
+      RETURNING path_id, course_id
+    `);
+    console.log(`    ✓ Linked ${seedPathCourses[0]?.length || 0} courses to paths`);
+  } catch (seedErr) {
+    console.warn('  ⚠️  path_courses seed skipped:', seedErr.message);
+  }
 
   console.log('✅ Migrations complete');
   process.exit(0);

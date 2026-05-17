@@ -18,6 +18,7 @@ const trackingRoutes = require("./routes/tracking.routes");
 const progressRoutes = require("./routes/progress.routes");
 const scheduleRoutes = require("./routes/schedule.routes");
 const certificateRoutes = require("./routes/certificate.routes");
+const levelCertificateRoutes = require("./modules/levelCertificate/levelCertificate.routes");
 const learningPathRoutes = require("./routes/learningPath.routes");
 const validateInput = require("./middlewares/validateInput");
 const { apiLimiter } = require("./middlewares/rateLimiter");
@@ -197,6 +198,7 @@ app.use("/api/tracking", trackingRoutes);
 
 // Protected routes (require authentication and authorization)
 app.use("/api/certificate", certificateRoutes);
+app.use("/api/level-certificate", levelCertificateRoutes);
 app.use("/api/progress", progressRoutes);
 app.use("/api/admin", protectedRoutes.adminRouter);
 app.use("/api/teacher", protectedRoutes.teacherRouter);

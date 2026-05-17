@@ -117,6 +117,7 @@ const models = {};
   'learningPath',
   'pathCourse',
   'userLearningPath',
+  'levelCertificate',
 ].forEach((name) => {
   models[name.charAt(0).toUpperCase() + name.slice(1)] = require(`./${name}.model`)(sequelize);
 });
@@ -172,6 +173,7 @@ const {
   LearningPath,
   PathCourse,
   UserLearningPath,
+  LevelCertificate,
 } = models;
 
 User.hasMany(Course, { foreignKey: 'createdBy', as: 'createdCourses' });
@@ -359,6 +361,10 @@ UserLearningPath.belongsTo(User, { foreignKey: 'userId', as: 'user' });
 
 LearningPath.hasMany(UserLearningPath, { foreignKey: 'pathId', as: 'userPaths' });
 UserLearningPath.belongsTo(LearningPath, { foreignKey: 'pathId', as: 'learningPath' });
+
+// Level Certificate associations
+User.hasMany(LevelCertificate, { foreignKey: 'userId', as: 'levelCertificates' });
+LevelCertificate.belongsTo(User, { foreignKey: 'userId', as: 'user' });
 
 const connectDB = async () => {
   await sequelize.authenticate();

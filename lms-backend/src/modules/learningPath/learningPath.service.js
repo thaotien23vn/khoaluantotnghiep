@@ -127,12 +127,18 @@ class LearningPathService {
           };
         });
 
-      const completed = courses.filter(c => c.progress >= 100).length;
+      // Skill-based completion: a level is done when each unique skill has >= 1 completed course.
+      // This prevents requiring students to complete duplicate courses from multiple teachers.
+      const uniqueSkills = [...new Set(courses.map(c => c.skill).filter(Boolean))];
+      const completedSkills = uniqueSkills.filter(skill =>
+        courses.some(c => c.skill === skill && c.progress >= 100)
+      );
+      const totalSkills = uniqueSkills.length || 1;
       return {
         level,
-        totalCourses: courses.length,
-        completedCourses: completed,
-        progressPercent: courses.length > 0 ? Math.round((completed / courses.length) * 100) : 0,
+        totalCourses: totalSkills,        // "slots" = number of distinct skills
+        completedCourses: completedSkills.length,
+        progressPercent: Math.round((completedSkills.length / totalSkills) * 100),
         courses,
       };
     });
