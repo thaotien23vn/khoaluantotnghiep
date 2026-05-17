@@ -376,7 +376,6 @@ class LearningPathService {
       include: [
         {
           model: Category,
-          as: 'category',
           attributes: ['cefrLevel', 'sortOrder'],
         },
       ],
@@ -387,7 +386,7 @@ class LearningPathService {
     }
 
     // If no category/cefrLevel on course, allow freely
-    if (!course.category?.cefrLevel) {
+    if (!course.Category?.cefrLevel) {
       return { allowed: true };
     }
 
@@ -410,7 +409,7 @@ class LearningPathService {
 
     // If user has no path yet, only allow A1 courses
     if (!userPath) {
-      const targetSort = course.category?.sortOrder || 999;
+      const targetSort = course.Category?.sortOrder || 999;
       if (targetSort > 1) {
         return {
           allowed: false,
@@ -421,7 +420,7 @@ class LearningPathService {
     }
 
     const userLevelSort = userPath.learningPath?.category?.sortOrder || 1;
-    const targetLevelSort = course.category?.sortOrder || 999;
+    const targetLevelSort = course.Category?.sortOrder || 999;
 
     // Can always enroll in current level or below
     if (targetLevelSort <= userLevelSort) {
@@ -460,10 +459,10 @@ class LearningPathService {
    */
   async updateLevelProgress(userId, courseId) {
     const course = await Course.findByPk(courseId, {
-      include: [{ model: Category, as: 'category' }],
+      include: [{ model: Category }],
     });
 
-    if (!course?.category?.cefrLevel) return;
+    if (!course?.Category?.cefrLevel) return;
 
     const userPath = await UserLearningPath.findOne({
       where: { userId, status: 'active' },

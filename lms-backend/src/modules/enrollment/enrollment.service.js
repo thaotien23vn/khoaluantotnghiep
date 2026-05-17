@@ -40,9 +40,15 @@ class EnrollmentService {
     }
 
     // Check CEFR level eligibility via learning path
-    const enrollCheck = await learningPathService.canEnrollCourse(userId, courseId);
-    if (!enrollCheck.allowed) {
-      throw { status: 403, message: enrollCheck.reason || 'Bạn không đủ điều kiện đăng ký khóa học này' };
+    try {
+      const enrollCheck = await learningPathService.canEnrollCourse(userId, courseId);
+      if (!enrollCheck.allowed) {
+        throw { status: 403, message: enrollCheck.reason || 'Bạn không đủ điều kiện đăng ký khóa học này' };
+      }
+    } catch (err) {
+      if (err.status) throw err;
+      console.error('[Enrollment] canEnrollCourse error:', err);
+      throw { status: 500, message: 'Lỗi kiểm tra điều kiện đăng ký: ' + (err.message || 'Unknown error') };
     }
 
     const existing = await Enrollment.findOne({ where: { userId, courseId: Number(courseId) } });
