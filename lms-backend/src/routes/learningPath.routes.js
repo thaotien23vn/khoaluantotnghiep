@@ -62,6 +62,13 @@ router.get(
 );
 
 /**
+ * @route   POST /api/learning-paths/advance
+ * @desc    Advance user to next CEFR level after completing all current level courses
+ * @access  Private
+ */
+router.post('/advance', authMiddleware, learningPathController.advanceLevel);
+
+/**
  * @route   POST /api/learning-paths/update-progress/:courseId
  * @desc    Update level progress after course completion
  * @access  Private

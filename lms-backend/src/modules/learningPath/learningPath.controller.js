@@ -62,6 +62,17 @@ class LearningPathController {
     }
   }
 
+  /** Advance user to next CEFR level */
+  async advanceLevel(req, res) {
+    try {
+      const { id: userId } = req.user;
+      const result = await learningPathService.advanceLevel(userId);
+      res.json({ success: true, message: `Đã lên cấp độ ${result.newLevel}`, data: result });
+    } catch (error) {
+      handleServiceError(error, res);
+    }
+  }
+
   /** Get single path detail */
   async getPathById(req, res) {
     try {

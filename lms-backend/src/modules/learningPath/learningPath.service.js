@@ -151,6 +151,89 @@ class LearningPathService {
   }
 
   /**
+   * Advance user to next CEFR level if all courses in current level are completed
+   */
+  async advanceLevel(userId) {
+    const userPath = await UserLearningPath.findOne({
+      where: { userId, status: { [Op.in]: ['active', 'completed'] } },
+      include: [
+        {
+          model: LearningPath,
+          as: 'learningPath',
+          include: [{ model: Category, as: 'category', attributes: ['id', 'cefrLevel'] }],
+        },
+      ],
+    });
+
+    if (!userPath) {
+      throw { status: 404, message: 'Bạn chưa có lộ trình học tập' };
+    }
+
+    const currentLevel = userPath.currentLevel;
+    if (!currentLevel) {
+      throw { status: 400, message: 'Không xác định được cấp độ hiện tại' };
+    }
+
+    // Get all courses in current level via LearningPath -> PathCourse -> Course
+    const currentPath = await LearningPath.findOne({
+      where: { isActive: true },
+      include: [
+        {
+          model: Category,
+          as: 'category',
+          where: { cefrLevel: currentLevel },
+        },
+        {
+          model: PathCourse,
+          as: 'pathCourses',
+          include: [{ model: Course, as: 'course', attributes: ['id'] }],
+        },
+      ],
+    });
+
+    if (!currentPath) {
+      throw { status: 404, message: `Không tìm thấy lộ trình cho cấp độ ${currentLevel}` };
+    }
+
+    const courseIds = (currentPath.pathCourses || [])
+      .map(pc => pc.course?.id)
+      .filter(Boolean);
+
+    if (courseIds.length === 0) {
+      throw { status: 404, message: `Không có khóa học nào trong cấp độ ${currentLevel}` };
+    }
+
+    // Check all courses have 100% progress
+    const enrollments = await Enrollment.findAll({
+      where: { userId, courseId: { [Op.in]: courseIds } },
+      attributes: ['courseId', 'progressPercent'],
+    });
+
+    const enrollmentMap = Object.fromEntries(
+      enrollments.map(e => [e.courseId, Number(e.progressPercent || 0)])
+    );
+
+    const allComplete = courseIds.every(id => enrollmentMap[id] >= 100);
+
+    if (!allComplete) {
+      throw { status: 403, message: 'Bạn chưa hoàn thành tất cả khóa học trong cấp độ hiện tại' };
+    }
+
+    // Advance to next level
+    const levels = ['A1', 'A2', 'B1', 'B2', 'C1', 'C2'];
+    const currentIdx = levels.indexOf(currentLevel);
+
+    if (currentIdx === -1 || currentIdx >= levels.length - 1) {
+      throw { status: 400, message: 'Bạn đã ở cấp độ cao nhất' };
+    }
+
+    const nextLevel = levels[currentIdx + 1];
+    await userPath.update({ currentLevel: nextLevel });
+
+    return { newLevel: nextLevel, previousLevel: currentLevel };
+  }
+
+  /**
    * Assign a learning path to user after placement test
    */
   async assignPath(userId, cefrLevel) {
