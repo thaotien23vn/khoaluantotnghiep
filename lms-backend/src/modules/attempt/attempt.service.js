@@ -11,13 +11,36 @@ function gradeAnswer(question, userAnswer) {
     let userVal = userAnswer !== undefined && userAnswer !== null ? String(userAnswer).trim() : '';
     let correctVal = question.correctAnswer !== undefined && question.correctAnswer !== null
       ? String(question.correctAnswer).trim() : '';
-    // Strip option prefix (A., B., C., D.) that frontend may include
-    userVal = userVal.replace(/^[A-D]\.\s*/, '').trim();
-    correctVal = correctVal.replace(/^[A-D]\.\s*/, '').trim();
-    // Strip wrapping quotes added during serialization
+
+    // Strip wrapping quotes added during serialization (from BOTH sides)
+    while (userVal.startsWith('"') && userVal.endsWith('"') && userVal.length >= 2) {
+      userVal = userVal.substring(1, userVal.length - 1);
+    }
     while (correctVal.startsWith('"') && correctVal.endsWith('"') && correctVal.length >= 2) {
       correctVal = correctVal.substring(1, correctVal.length - 1);
     }
+
+    // Extract option letter (A/B/C/D) from both sides if present
+    // Matches: "A.", "A. ", "A) ", "A)"
+    const userLetterMatch = userVal.match(/^([A-D])[.\s)]*\s*/i);
+    const correctLetterMatch = correctVal.match(/^([A-D])[.\s)]*\s*/i);
+
+    // Case 1: Both have letters → compare by letter
+    if (userLetterMatch && correctLetterMatch) {
+      const isCorrect = userLetterMatch[1].toUpperCase() === correctLetterMatch[1].toUpperCase();
+      return { isCorrect, pointsEarned: isCorrect ? question.points : 0 };
+    }
+
+    // Case 2: Correct is just a letter (A/B/C/D), user has full option text → compare letters
+    if (/^[A-D]$/i.test(correctVal) && userLetterMatch) {
+      const isCorrect = userLetterMatch[1].toUpperCase() === correctVal.toUpperCase();
+      return { isCorrect, pointsEarned: isCorrect ? question.points : 0 };
+    }
+
+    // Case 3: Fall back to text comparison (DB stores full text, strip prefixes)
+    userVal = userVal.replace(/^[A-D]\.\s*/, '').trim();
+    correctVal = correctVal.replace(/^[A-D]\.\s*/, '').trim();
+
     const isCorrect = userVal === correctVal;
     return { isCorrect, pointsEarned: isCorrect ? question.points : 0 };
   }
