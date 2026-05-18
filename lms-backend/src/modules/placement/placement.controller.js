@@ -74,6 +74,17 @@ class PlacementController {
         });
       }
 
+      // Demo mode: include correctAnswer so presenter can control the narrative
+      if (req.query.demo === '1' && result.questionId) {
+        const { PlacementQuestion } = require('../../models').models;
+        const pq = await PlacementQuestion.findByPk(result.questionId, {
+          attributes: ['correctAnswer'],
+        });
+        if (pq) {
+          result.correctAnswer = pq.correctAnswer;
+        }
+      }
+
       res.json({
         success: true,
         data: result,
