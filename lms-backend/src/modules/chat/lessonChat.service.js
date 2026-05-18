@@ -319,7 +319,7 @@ class LessonChatService {
       const response = await aiGateway.generateText({
         system: 'Bạn là trợ giảng AI. Trả lời câu hỏi dựa trên nội dung bài học. Nếu không chắc chắn, hãy nói rõ.',
         prompt,
-        maxOutputTokens: 800,
+        maxOutputTokens: 2000,
         temperature: 0.3,
         timeoutMs: 120000,
       });
