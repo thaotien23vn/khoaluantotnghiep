@@ -443,7 +443,7 @@ class LearningPathService {
       return { allowed: true };
     }
 
-    const userLevelSort = userPath.learningPath?.category?.sortOrder || 1;
+    const userLevelSort = CEFR_TO_SORT[userPath.currentLevel] || 1;
     const targetLevelSort = targetSortOrder;
 
     // Can always enroll in current level or below
