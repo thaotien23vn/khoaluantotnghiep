@@ -452,8 +452,9 @@ class PlacementService {
         userAnswerText = this.stripOptionPrefix(answer);
       }
 
-      // Evaluate answer
-      const isCorrect = this.evaluateAnswer(userAnswerText, question.correctAnswer, question.questionType);
+      // Evaluate answer (strip prefix from correctAnswer too for consistency)
+      const correctAnswerText = this.stripOptionPrefix(question.correctAnswer);
+      const isCorrect = this.evaluateAnswer(userAnswerText, correctAnswerText, question.questionType);
 
       // Save response within transaction
       await PlacementResponse.create({
@@ -1200,8 +1201,17 @@ class PlacementService {
   evaluateAnswer(userAnswer, correctAnswer, questionType) {
     if (!userAnswer) return false;
     
-    const normalizedUser = userAnswer.toString().trim().toUpperCase();
-    const normalizedCorrect = correctAnswer.toString().trim().toUpperCase();
+    let userVal = userAnswer.toString().trim();
+    let correctVal = correctAnswer ? correctAnswer.toString().trim() : '';
+    // Strip wrapping quotes from both sides
+    while (userVal.startsWith('"') && userVal.endsWith('"') && userVal.length >= 2) {
+      userVal = userVal.substring(1, userVal.length - 1);
+    }
+    while (correctVal.startsWith('"') && correctVal.endsWith('"') && correctVal.length >= 2) {
+      correctVal = correctVal.substring(1, correctVal.length - 1);
+    }
+    const normalizedUser = userVal.toUpperCase();
+    const normalizedCorrect = correctVal.toUpperCase();
     
     switch (questionType) {
       case 'multiple_choice':
