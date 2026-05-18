@@ -116,6 +116,40 @@ async function createQuizAttempts(userId, course, targetPercent) {
   }
 }
 
+async function createLevelCertificates(userId, level) {
+  const { LevelCertificate } = models;
+  const certificateId = `LEVEL-CERT-${level}-${userId}-${Date.now()}`;
+  await LevelCertificate.findOrCreate({
+    where: { userId, level },
+    defaults: {
+      userId,
+      level,
+      certificateId,
+      issuedAt: new Date(),
+    },
+  });
+}
+
+async function createQuizFailedAttempt(userId, course) {
+  const { Attempt } = models;
+  if (course.quizzes.length === 0) return;
+  // Fail the first quiz only
+  const quiz = course.quizzes[0];
+  await Attempt.findOrCreate({
+    where: { userId, quizId: quiz.id },
+    defaults: {
+      userId,
+      quizId: quiz.id,
+      answers: [],
+      score: 30, // below passing
+      percentageScore: 30,
+      passed: false,
+      startedAt: new Date(),
+      completedAt: new Date(),
+    },
+  });
+}
+
 async function createDemoUser(demo) {
   const { User, UserLearningPath, Enrollment } = models;
 
@@ -129,7 +163,7 @@ async function createDemoUser(demo) {
       name: demo.name,
       email: demo.email,
       passwordHash,
-      role: 'student',
+      role: demo.role || 'student',
       username: demo.email.split('@')[0],
       isActive: true,
       isEmailVerified: true,
@@ -186,7 +220,20 @@ async function createDemoUser(demo) {
     await createLectureProgress(user.id, course.id, course.lectures, enrollCfg.progress);
     // Create quiz attempts for 100% courses
     await createQuizAttempts(user.id, course, enrollCfg.progress);
+    // Create failed quiz attempt if specified
+    if (enrollCfg.quizFail) {
+      await createQuizFailedAttempt(user.id, course);
+      console.log(`  ❌ Quiz failed for ${course.title}`);
+    }
     console.log(`  ✓ ${course.title}: ${enrollCfg.progress}%`);
+  }
+
+  // 5. Create level certificates if specified
+  if (demo.levelCertificates) {
+    for (const certLevel of demo.levelCertificates) {
+      await createLevelCertificates(user.id, certLevel);
+      console.log(`  🏆 Level Certificate ${certLevel} created`);
+    }
   }
 
   console.log(`  ✅ Done — đăng nhập: ${demo.email} / ${DEMO_PASSWORD}`);
@@ -292,6 +339,61 @@ async function main() {
       level: 'A1',
       enrollments: [
         { courseIndex: 0, progress: 60, gracePeriod: true },
+      ],
+    },
+    {
+      name: 'Học viên A1 Hoàn thành + Cert',
+      email: 'student_a1_done@demo.com',
+      level: 'A1',
+      enrollments: [
+        { courseIndex: 0, progress: 100 },
+        { courseIndex: 1, progress: 100 },
+        { courseIndex: 2, progress: 100 },
+        { courseIndex: 3, progress: 100 },
+      ],
+      levelCertificates: ['A1'],
+    },
+    {
+      name: 'Học viên B2 Hoàn thành + Cert',
+      email: 'student_b2_done@demo.com',
+      level: 'B2',
+      enrollments: [
+        { courseIndex: 0, progress: 100 },
+        { courseIndex: 1, progress: 100 },
+        { courseIndex: 2, progress: 100 },
+        { courseIndex: 3, progress: 100 },
+      ],
+      levelCertificates: ['B2'],
+    },
+    {
+      name: 'Học viên C2 Hoàn thành + Cert',
+      email: 'student_c2_done@demo.com',
+      level: 'C2',
+      enrollments: [
+        { courseIndex: 0, progress: 100 },
+        { courseIndex: 1, progress: 100 },
+        { courseIndex: 2, progress: 100 },
+        { courseIndex: 3, progress: 100 },
+      ],
+      levelCertificates: ['C2'],
+    },
+    {
+      name: 'Học viên Nhiều chứng chỉ',
+      email: 'student_multi_cert@demo.com',
+      level: 'B1',
+      enrollments: [
+        { courseIndex: 0, progress: 100 },
+        { courseIndex: 1, progress: 100 },
+      ],
+      levelCertificates: ['A1', 'A2', 'B1'],
+    },
+    {
+      name: 'Học viên Quiz Failed',
+      email: 'student_quiz_fail@demo.com',
+      level: 'B1',
+      enrollments: [
+        { courseIndex: 0, progress: 80, quizFail: true },
+        { courseIndex: 1, progress: 60 },
       ],
     },
   ];

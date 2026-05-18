@@ -5,7 +5,8 @@ const db = require('../models');
 const authMiddleware = async (req, res, next) => {
   try {
     const authHeader = req.headers.authorization;
-    const token = authHeader && authHeader.startsWith('Bearer ') ? authHeader.slice('Bearer '.length) : null;
+    const token = (authHeader && authHeader.startsWith('Bearer ') ? authHeader.slice('Bearer '.length) : null)
+               || (req.query && req.query.token ? req.query.token : null);
 
     if (!token) {
       return res.status(401).json({
@@ -55,7 +56,8 @@ const authMiddleware = async (req, res, next) => {
 const optionalAuthMiddleware = async (req, res, next) => {
   try {
     const authHeader = req.headers.authorization;
-    const token = authHeader && authHeader.startsWith('Bearer ') ? authHeader.slice('Bearer '.length) : null;
+    const token = (authHeader && authHeader.startsWith('Bearer ') ? authHeader.slice('Bearer '.length) : null)
+               || (req.query && req.query.token ? req.query.token : null);
     if (!token) return next();
 
     const decoded = jwt.verify(token, jwtConfig.secret);

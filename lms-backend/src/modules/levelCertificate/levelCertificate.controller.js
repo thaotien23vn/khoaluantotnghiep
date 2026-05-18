@@ -12,7 +12,7 @@ class LevelCertificateController {
       const { doc, certificateId, isNew } = await levelCertificateService.generateLevelCertificate(userId, level);
 
       res.setHeader('Content-Type', 'application/pdf');
-      res.setHeader('Content-Disposition', `attachment; filename=Level_Certificate_${level}_${certificateId}.pdf`);
+      res.setHeader('Content-Disposition', `inline; filename=Level_Certificate_${level}_${certificateId}.pdf`);
 
       doc.on('error', (err) => {
         console.error('Level Certificate PDF Stream Error:', err);
