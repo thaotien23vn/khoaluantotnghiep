@@ -8,9 +8,12 @@ const { Attempt, Quiz, Question, Course, User, Enrollment } = db.models;
  */
 function gradeAnswer(question, userAnswer) {
   if (question.type === 'multiple_choice' || question.type === 'true_false') {
-    const userVal = userAnswer !== undefined && userAnswer !== null ? String(userAnswer).trim() : '';
+    let userVal = userAnswer !== undefined && userAnswer !== null ? String(userAnswer).trim() : '';
     let correctVal = question.correctAnswer !== undefined && question.correctAnswer !== null
       ? String(question.correctAnswer).trim() : '';
+    // Strip option prefix (A., B., C., D.) that frontend may include
+    userVal = userVal.replace(/^[A-D]\.\s*/, '').trim();
+    correctVal = correctVal.replace(/^[A-D]\.\s*/, '').trim();
     // Strip wrapping quotes added during serialization
     while (correctVal.startsWith('"') && correctVal.endsWith('"') && correctVal.length >= 2) {
       correctVal = correctVal.substring(1, correctVal.length - 1);

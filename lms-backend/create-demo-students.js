@@ -171,9 +171,24 @@ async function createDemoUser(demo) {
   });
 
   // 2. Find path & courses
-  const data = await findPathAndCourses(demo.level);
-  if (!data) return;
-  const { path, courses } = data;
+  const targetLevels = demo.allLevels ? ['A1', 'A2', 'B1', 'B2', 'C1', 'C2'] : [demo.level];
+  let path = null;
+  const allCourses = [];
+
+  for (const lvl of targetLevels) {
+    const data = await findPathAndCourses(lvl);
+    if (data) {
+      if (lvl === demo.level) path = data.path;
+      allCourses.push(...data.courses);
+    }
+  }
+
+  if (!path && allCourses.length > 0) {
+    const fallback = await findPathAndCourses(demo.level);
+    if (fallback) path = fallback.path;
+  }
+  if (!path) return;
+  const courses = allCourses;
 
   // 3. Create or update UserLearningPath (skip if demo.noPath)
   if (!demo.noPath) {
@@ -189,7 +204,11 @@ async function createDemoUser(demo) {
   }
 
   // 4. Create enrollments + progress
-  for (const enrollCfg of demo.enrollments) {
+  const enrollCfgs = demo.allLevels
+    ? allCourses.map((_, i) => ({ courseIndex: i, progress: 100 }))
+    : demo.enrollments;
+
+  for (const enrollCfg of enrollCfgs) {
     const course = courses[enrollCfg.courseIndex];
     if (!course) {
       console.warn(`  ⚠️  Không có course index ${enrollCfg.courseIndex}`);
@@ -282,6 +301,18 @@ async function main() {
       ],
     },
     {
+      name: 'Học viên B1 Hoàn thành + Cert',
+      email: 'student_b1_cert@demo.com',
+      level: 'B1',
+      enrollments: [
+        { courseIndex: 0, progress: 100 },
+        { courseIndex: 1, progress: 100 },
+        { courseIndex: 2, progress: 100 },
+        { courseIndex: 3, progress: 100 },
+      ],
+      levelCertificates: ['B1'],
+    },
+    {
       name: 'Học viên B2',
       email: 'student_b2@demo.com',
       level: 'B2',
@@ -366,16 +397,11 @@ async function main() {
       levelCertificates: ['B2'],
     },
     {
-      name: 'Học viên C2 Hoàn thành + Cert',
+      name: 'Học viên Full CEFR',
       email: 'student_c2_done@demo.com',
       level: 'C2',
-      enrollments: [
-        { courseIndex: 0, progress: 100 },
-        { courseIndex: 1, progress: 100 },
-        { courseIndex: 2, progress: 100 },
-        { courseIndex: 3, progress: 100 },
-      ],
-      levelCertificates: ['C2'],
+      allLevels: true,
+      levelCertificates: ['A1', 'A2', 'B1', 'B2', 'C1', 'C2'],
     },
     {
       name: 'Học viên Nhiều chứng chỉ',
