@@ -2,7 +2,8 @@ const db = require('../../models');
 const courseAggregatesService = require('../../services/courseAggregates.service');
 const mediaService = require('../../services/media.service');
 
-const { Chapter, Course, Lecture } = db.models;
+const { Chapter, Course, Lecture, LectureProgress } = db.models;
+const { Op } = require('sequelize');
 
 /**
  * Chapter Service - Business logic for chapter operations
