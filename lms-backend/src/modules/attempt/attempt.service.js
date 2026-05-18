@@ -1,6 +1,7 @@
 const { Op } = require('sequelize');
 const db = require('../../models');
 const EnrollmentAccess = require('../enrollment/enrollment.access');
+const quizService = require('../quiz/quiz.service');
 const { Attempt, Quiz, Question, Course, User, Enrollment } = db.models;
 
 /**
@@ -127,11 +128,10 @@ class AttemptService {
         { model: Course, as: 'course', attributes: ['id', 'title', 'published'] },
         { model: Question, as: 'questions', attributes: ['id', 'type', 'content', 'options', 'points'] },
       ],
-      attributes: ['id', 'title', 'description', 'timeLimit', 'maxScore', 'passingScore', 'maxAttempts', 'startTime', 'endTime', 'courseId'],
+      attributes: ['id', 'title', 'description', 'timeLimit', 'maxScore', 'passingScore', 'maxAttempts', 'startTime', 'endTime', 'courseId', 'isLevelFinal', 'level'],
     });
 
     if (!quiz) throw { status: 404, message: 'Không tìm thấy quiz' };
-    if (!quiz.course.published) throw { status: 400, message: 'Khóa học chưa được xuất bản' };
 
     const now = new Date();
     if (quiz.startTime && now < new Date(quiz.startTime)) {
@@ -141,11 +141,26 @@ class AttemptService {
       throw { status: 403, message: 'Bài thi đã hết thời gian thực hiện', data: { endTime: quiz.endTime } };
     }
 
-    // Check enrollment using unified access helper
-    if (userRole !== 'admin') {
-      const access = await EnrollmentAccess.checkAccess(userId, quiz.courseId, userRole);
-      if (!access.hasAccess) {
-        throw { status: 403, message: access.message || 'Bạn chưa đăng ký hoặc ghi danh đã hết hạn' };
+    if (quiz.isLevelFinal) {
+      // Final quiz: check unlock instead of enrollment
+      if (userRole !== 'admin') {
+        const unlock = await quizService.getUnlockStatus(userId, quiz.level);
+        if (!unlock.unlocked) {
+          throw {
+            status: 403,
+            message: 'Bạn cần hoàn thành tất cả khóa học bắt buộc trước khi làm bài kiểm tra.',
+            data: unlock,
+          };
+        }
+      }
+    } else {
+      if (!quiz.course.published) throw { status: 400, message: 'Khóa học chưa được xuất bản' };
+      // Check enrollment using unified access helper
+      if (userRole !== 'admin') {
+        const access = await EnrollmentAccess.checkAccess(userId, quiz.courseId, userRole);
+        if (!access.hasAccess) {
+          throw { status: 403, message: access.message || 'Bạn chưa đăng ký hoặc ghi danh đã hết hạn' };
+        }
       }
     }
 
@@ -269,7 +284,7 @@ class AttemptService {
         include: [{
           model: Quiz,
           as: 'quiz',
-          attributes: ['id', 'title', 'description', 'passingScore', 'showResults', 'timeLimit', 'courseId'],
+          attributes: ['id', 'title', 'description', 'passingScore', 'showResults', 'timeLimit', 'courseId', 'isLevelFinal', 'level'],
           include: [{ model: Question, as: 'questions' }],
         }],
         lock: {
@@ -285,11 +300,11 @@ class AttemptService {
           include: [{
             model: Quiz,
             as: 'quiz',
-            attributes: ['id', 'title', 'description', 'passingScore', 'showResults', 'timeLimit', 'courseId'],
+            attributes: ['id', 'title', 'description', 'passingScore', 'showResults', 'timeLimit', 'courseId', 'isLevelFinal', 'level'],
             include: [{ model: Question, as: 'questions' }],
           }],
         });
-        
+
         if (!existingAttempt) {
           throw { status: 404, message: 'Không tìm thấy lần làm bài' };
         }
@@ -415,14 +430,16 @@ class AttemptService {
       };
     }).then(async (result) => {
       // Non-critical: sync progress outside transaction
-      try {
-        const progressService = require('../progress/progress.service');
-        await progressService.getStudentCourseProgress(userId, result.courseId);
-      } catch (e) {
-        console.error('[Quiz] Lỗi đồng bộ tiến độ khóa học sau khi nộp bài:', e);
+      if (!result.quiz.isLevelFinal) {
+        try {
+          const progressService = require('../progress/progress.service');
+          await progressService.getStudentCourseProgress(userId, result.courseId);
+        } catch (e) {
+          console.error('[Quiz] Lỗi đồng bộ tiến độ khóa học sau khi nộp bài:', e);
+        }
       }
 
-      return {
+      const response = {
         attempt: {
           id: result.attemptId,
           score: result.score,
@@ -435,6 +452,19 @@ class AttemptService {
         quiz: { id: result.quizId, title: result.quizTitle },
         results: result.results,
       };
+
+      // Final quiz: award certificate and level up on pass
+      if (result.quiz.isLevelFinal && result.passed === true) {
+        try {
+          const { certificate, levelUp } = await quizService.awardCertificateAndLevelUp(userId, result.quiz.level);
+          response.certificate = certificate;
+          response.levelUp = levelUp;
+        } catch (e) {
+          console.error('[FinalQuiz] Lỗi cấp chứng chỉ/nâng cấp:', e);
+        }
+      }
+
+      return response;
     });
   }
 
@@ -447,14 +477,23 @@ class AttemptService {
     });
 
     if (!quiz) throw { status: 404, message: 'Không tìm thấy quiz' };
-    if (!quiz.course.published && userRole !== 'admin') {
-      throw { status: 403, message: 'Khóa học chưa được xuất bản' };
-    }
 
-    if (userRole !== 'admin') {
-      const access = await EnrollmentAccess.checkAccess(userId, quiz.courseId, userRole);
-      if (!access.hasAccess) {
-        throw { status: 403, message: access.message || 'Bạn chưa đăng ký hoặc ghi danh đã hết hạn' };
+    if (quiz.isLevelFinal) {
+      if (userRole !== 'admin') {
+        const unlock = await quizService.getUnlockStatus(userId, quiz.level);
+        if (!unlock.unlocked) {
+          throw { status: 403, message: 'Bạn chưa đủ điều kiện xem bài kiểm tra này', data: unlock };
+        }
+      }
+    } else {
+      if (!quiz.course.published && userRole !== 'admin') {
+        throw { status: 403, message: 'Khóa học chưa được xuất bản' };
+      }
+      if (userRole !== 'admin') {
+        const access = await EnrollmentAccess.checkAccess(userId, quiz.courseId, userRole);
+        if (!access.hasAccess) {
+          throw { status: 403, message: access.message || 'Bạn chưa đăng ký hoặc ghi danh đã hết hạn' };
+        }
       }
     }
 
@@ -475,8 +514,11 @@ class AttemptService {
       include: [{
         model: Quiz,
         as: 'quiz',
-        attributes: ['id', 'title', 'description', 'showResults', 'maxScore', 'passingScore'],
-        include: [{ model: Question, as: 'questions' }, { model: Course, as: 'course', attributes: ['id', 'title'] }],
+        attributes: ['id', 'title', 'description', 'showResults', 'maxScore', 'passingScore', 'isLevelFinal', 'level'],
+        include: [
+          { model: Question, as: 'questions' },
+          { model: Course, as: 'course', attributes: ['id', 'title'], required: false },
+        ],
       }],
     });
 

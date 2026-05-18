@@ -240,6 +240,50 @@ class QuizController {
       handleServiceError(error, res);
     }
   }
+
+  // ========== FINAL QUIZ (LEVEL EXAM) ==========
+
+  async createFinalQuiz(req, res) {
+    try {
+      const { id: userId, role } = req.user;
+      const result = await quizService.createQuiz(null, userId, role, { ...req.body, isLevelFinal: true });
+      res.status(201).json({ success: true, message: 'Tạo bài kiểm tra cuối trình độ thành công', data: result });
+    } catch (error) {
+      handleServiceError(error, res);
+    }
+  }
+
+  async listFinalQuizzes(req, res) {
+    try {
+      const { id: userId, role } = req.user;
+      const quizzes = await quizService.listFinalQuizzes(userId, role);
+      res.json({ success: true, data: { quizzes } });
+    } catch (error) {
+      handleServiceError(error, res);
+    }
+  }
+
+  async getStudentFinalQuiz(req, res) {
+    try {
+      const { level } = req.params;
+      const { id: userId } = req.user;
+      const result = await quizService.getStudentFinalQuiz(level, userId);
+      res.json({ success: true, data: result });
+    } catch (error) {
+      handleServiceError(error, res);
+    }
+  }
+
+  async getUnlockStatus(req, res) {
+    try {
+      const { level } = req.params;
+      const { id: userId } = req.user;
+      const status = await quizService.getUnlockStatus(userId, level);
+      res.json({ success: true, data: status });
+    } catch (error) {
+      handleServiceError(error, res);
+    }
+  }
 }
 
 module.exports = new QuizController();

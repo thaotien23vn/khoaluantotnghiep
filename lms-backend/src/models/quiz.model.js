@@ -39,8 +39,19 @@ module.exports = (sequelize) => {
     },
     courseId: {
       type: DataTypes.INTEGER.UNSIGNED,
-      allowNull: false,
+      allowNull: true,
       field: 'course_id',
+    },
+    level: {
+      type: DataTypes.ENUM('A1', 'A2', 'B1', 'B2', 'C1', 'C2'),
+      allowNull: true,
+      comment: 'CEFR level for final quiz (when isLevelFinal = true)',
+    },
+    isLevelFinal: {
+      type: DataTypes.BOOLEAN,
+      defaultValue: false,
+      field: 'is_level_final',
+      comment: 'If true, this quiz is a level-final exam not tied to a course',
     },
     createdBy: {
       type: DataTypes.INTEGER.UNSIGNED,

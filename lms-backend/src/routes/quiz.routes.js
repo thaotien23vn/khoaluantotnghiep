@@ -301,4 +301,55 @@ router.get(
   },
 );
 
+// ========== FINAL QUIZ (LEVEL EXAM) ROUTES ==========
+
+/**
+ * @route   POST /api/teacher/final-quizzes
+ * @desc    Create a final level quiz
+ * @access  Private (Teacher & Admin)
+ */
+router.post(
+  "/teacher/final-quizzes",
+  authMiddleware,
+  authorizeRole("teacher", "admin"),
+  createQuizValidation,
+  quizController.createFinalQuiz,
+);
+
+/**
+ * @route   GET /api/teacher/final-quizzes
+ * @desc    List all final level quizzes
+ * @access  Private (Teacher & Admin)
+ */
+router.get(
+  "/teacher/final-quizzes",
+  authMiddleware,
+  authorizeRole("teacher", "admin"),
+  quizController.listFinalQuizzes,
+);
+
+/**
+ * @route   GET /api/student/final-quizzes/:level
+ * @desc    Get final quiz for a level (if unlocked)
+ * @access  Private (Student & Admin)
+ */
+router.get(
+  "/student/final-quizzes/:level",
+  authMiddleware,
+  authorizeRole("student", "admin"),
+  quizController.getStudentFinalQuiz,
+);
+
+/**
+ * @route   GET /api/student/final-quizzes/:level/unlock-status
+ * @desc    Check unlock status for final quiz
+ * @access  Private (Student & Admin)
+ */
+router.get(
+  "/student/final-quizzes/:level/unlock-status",
+  authMiddleware,
+  authorizeRole("student", "admin"),
+  quizController.getUnlockStatus,
+);
+
 module.exports = router;

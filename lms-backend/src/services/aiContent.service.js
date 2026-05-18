@@ -439,40 +439,43 @@ Trả về danh sách các câu hỏi trong format JSON array.`;
         attributes: ['title', 'description'],
       });
 
-      const systemPrompt = `Bạn là một chuyên gia giáo dục trong việc tạo câu hỏi kiểm tra chất lượng cao. Tạo câu hỏi dựa trên nội dung được cung cấp.
+      const systemPrompt = `Bạn là chuyên gia giáo dục tạo câu hỏi kiểm tra chất lượng cao bám sát nội dung bài giảng.
 
-Yêu cầu:
-- Câu hỏi phải rõ ràng và không ambiguous
-- Đáp án phải chính xác
-- Phù hợp với mục tiêu learning objectives
-- Test cả comprehension và application`;
+QUY TẮC BẮT BUỘC:
+1. CHỈ trả về một JSON array thuần túy, không có text nào ngoài JSON
+2. Mỗi câu hỏi PHẢI có đủ 6 trường: type, question, options, correctAnswer, explanation, difficulty
+3. Loại multiple_choice: options là array 4 phần tử ["A. ...", "B. ...", "C. ...", "D. ..."], correctAnswer là "A", "B", "C" hoặc "D"
+4. Loại true_false: options PHẢI là ["A. True", "B. False"], correctAnswer là "A" hoặc "B"
+5. Câu hỏi phải bám sát NỘI DUNG được cung cấp, không tạo câu hỏi ngoài ngữ cảnh
+6. explanation phải giải thích rõ tại sao đáp án đúng dựa trên nội dung bài học`;
 
-      const prompt = `Tạo ${questionCount} câu hỏi quiz từ nội dung sau:
+      const prompt = `Tạo ${questionCount} câu hỏi quiz từ nội dung bài giảng sau:
 
 KHÓA HỌC: ${course?.title || 'N/A'}
 PHẠM VI: ${scope}
-SỐ CHUNKS: ${chunks.length}
+SỐ CHUNKS NGỮ CẢNH: ${chunks.length}
 
-NỘI DUNG:
+NỘI DUNG BÀI GIẢNG:
 ${context}
 
-Yêu cầu:
-- Số lượng câu hỏi: ${questionCount}
-- Loại câu hỏi: ${questionTypes.join(', ')}
+YÊU CẦU:
+- Số câu hỏi: ${questionCount}
+- Loại câu hỏi được phép: ${questionTypes.filter(t => t !== 'short_answer').join(', ')}
 - Độ khó: ${difficulty}
+- Câu hỏi multiple_choice PHẢI có đúng 4 lựa chọn
 
-Format mỗi câu hỏi như sau:
-{
-  "type": "multiple_choice|true_false|short_answer",
-  "question": "Nội dung câu hỏi",
-  "options": ["A. Option 1", "B. Option 2", "C. Option 3", "D. Option 4"],
-  "correctAnswer": "A hoặc true/false hoặc text answer",
-  "explanation": "Giải thích tại sao đáp án đúng",
-  "difficulty": "easy|medium|hard",
-  "topic": "Chủ đề liên quan"
-}
-
-Trả về danh sách các câu hỏi trong format JSON array.`;
+ĐỊNH DẠNG JSON BẮT BUỘC (trả về array, không có text ngoài JSON):
+[
+  {
+    "type": "multiple_choice",
+    "question": "Câu hỏi rõ ràng dựa trên nội dung bài học?",
+    "options": ["A. Lựa chọn 1", "B. Lựa chọn 2", "C. Lựa chọn 3", "D. Lựa chọn 4"],
+    "correctAnswer": "A",
+    "explanation": "Giải thích dựa trên nội dung bài học...",
+    "difficulty": "medium",
+    "topic": "Chủ đề"
+  }
+]`;
 
       let aiResponse;
       let retries = 0;
@@ -1113,13 +1116,29 @@ Hãy đánh giá và cho điểm theo các tiêu chí đã nêu.`;
         return false;
       }
 
-      if (question.type === 'multiple_choice' && 
-          (!question.options || question.options.length < 2)) {
-        logger.warn('INVALID_MULTIPLE_CHOICE', {
-          lectureId,
-          questionIndex: index,
-          question,
-        });
+      if (question.type === 'multiple_choice') {
+        if (!question.options || question.options.length < 2) {
+          logger.warn('INVALID_MULTIPLE_CHOICE', {
+            lectureId,
+            questionIndex: index,
+            question,
+          });
+          return false;
+        }
+      }
+
+      if (question.type === 'true_false') {
+        if (!question.options || question.options.length === 0) {
+          question.options = ['A. True', 'B. False'];
+        }
+      }
+
+      if (question.type === 'short_answer') {
+        return false;
+      }
+
+      if (!question.explanation) {
+        logger.warn('MISSING_EXPLANATION', { lectureId, questionIndex: index });
         return false;
       }
 

@@ -150,6 +150,12 @@ module.exports = (sequelize) => {
       type: DataTypes.JSON,
       defaultValue: [],
     },
+    isRequired: {
+      type: DataTypes.BOOLEAN,
+      defaultValue: false,
+      field: 'is_required',
+      comment: 'Whether this course is mandatory to complete the level',
+    },
     prerequisiteCourseId: {
       type: DataTypes.INTEGER.UNSIGNED,
       allowNull: true,

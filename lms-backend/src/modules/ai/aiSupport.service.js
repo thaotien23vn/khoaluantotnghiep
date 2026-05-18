@@ -2,6 +2,7 @@ const db = require('../../models/index');
 const aiGateway = require('../../services/aiGateway.service');
 const logger = require('../../utils/logger');
 const { Op } = require('sequelize');
+const crypto = require('crypto');
 
 const {
   AiConversation,
@@ -17,6 +18,33 @@ const {
 } = db.models;
 
 const MAX_CONTEXT_CHUNKS = 8;
+
+// Lightweight in-memory response cache to reduce LLM latency for repeated queries
+const RESPONSE_CACHE_TTL_MS = 5 * 60 * 1000; // 5 minutes
+const responseCache = new Map();
+
+function getCacheKey(query, cefrLevel) {
+  const normalized = query.trim().toLowerCase().replace(/\s+/g, ' ');
+  return crypto.createHash('md5').update(`${cefrLevel}:${normalized}`).digest('hex');
+}
+
+function getCachedResponse(key) {
+  const entry = responseCache.get(key);
+  if (!entry) return null;
+  if (Date.now() - entry.timestamp > RESPONSE_CACHE_TTL_MS) {
+    responseCache.delete(key);
+    return null;
+  }
+  return entry.data;
+}
+
+function setCachedResponse(key, data) {
+  responseCache.set(key, { data, timestamp: Date.now() });
+  if (responseCache.size > 200) {
+    const oldest = responseCache.keys().next().value;
+    responseCache.delete(oldest);
+  }
+}
 
 /**
  * AI Support 24/7 Service - Intelligent assistant with full system knowledge
@@ -252,6 +280,19 @@ class AiSupportService {
       // 1. Get user profile and placement data
       const userContext = await this.buildUserContext(userId);
 
+      // 1.5 Check response cache for identical/similar queries (skip for history-dependent queries)
+      const isSimpleQuery = history.length === 0 || history.length <= 2;
+      const cacheKey = isSimpleQuery
+        ? getCacheKey(query, userContext?.cefrLevel || 'unknown')
+        : null;
+      if (cacheKey) {
+        const cached = getCachedResponse(cacheKey);
+        if (cached) {
+          logger.info('AI_SUPPORT_CACHE_HIT', { userId, queryLength: query.length });
+          return cached;
+        }
+      }
+
       // 2. Get RAG context from all courses (unified knowledge base)
       const ragContext = await this.buildRagContext(query, {
         courseId,
@@ -275,7 +316,7 @@ class AiSupportService {
       const response = await aiGateway.generateText({
         prompt,
         temperature: 0.7,
-        maxOutputTokens: 2500,  // Đổi từ maxTokens sang maxOutputTokens
+        maxOutputTokens: 1800,
       });
 
       // 6. Post-process response
@@ -284,12 +325,19 @@ class AiSupportService {
         userContext,
       });
 
-      return {
+      const result = {
         content: processed.content,
         tokenUsage: response.tokenUsage,
         suggestions: processed.suggestions,
         quickActions: processed.quickActions,
       };
+
+      // Store in cache for future identical queries
+      if (cacheKey) {
+        setCachedResponse(cacheKey, result);
+      }
+
+      return result;
     } catch (error) {
       logger.error('AI_PROCESSING_FAILED', {
         userId,

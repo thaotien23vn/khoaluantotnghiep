@@ -313,6 +313,30 @@ async function main() {
       levelCertificates: ['B1'],
     },
     {
+      name: 'Học viên B1 Hoàn thành + Cert',
+      email: 'student_b1_cert1@demo.com',
+      level: 'B1',
+      enrollments: [
+        { courseIndex: 0, progress: 100 },
+        { courseIndex: 1, progress: 100 },
+        { courseIndex: 2, progress: 100 },
+        { courseIndex: 3, progress: 100 },
+      ],
+      levelCertificates: ['B1'],
+    },
+    {
+      name: 'Học viên B1 Hoàn thành + Cert',
+      email: 'student_b1_cert2@demo.com',
+      level: 'B1',
+      enrollments: [
+        { courseIndex: 0, progress: 100 },
+        { courseIndex: 1, progress: 100 },
+        { courseIndex: 2, progress: 100 },
+        { courseIndex: 3, progress: 100 },
+      ],
+      levelCertificates: ['B1'],
+    },
+    {
       name: 'Học viên B2',
       email: 'student_b2@demo.com',
       level: 'B2',
@@ -330,6 +354,14 @@ async function main() {
     {
       name: 'Học viên Hết hạn',
       email: 'student_expired@demo.com',
+      level: 'A1',
+      enrollments: [
+        { courseIndex: 0, progress: 40, expired: true },
+      ],
+    },
+    {
+      name: 'Học viên Hết hạn 2',
+      email: 'student_expired1@demo.com',
       level: 'A1',
       enrollments: [
         { courseIndex: 0, progress: 40, expired: true },

@@ -1,13 +1,24 @@
 const db = require('../../models');
 const EnrollmentAccess = require('../enrollment/enrollment.access');
-const { Quiz, Question, Attempt, Course } = db.models;
+const { Quiz, Question, Attempt, Course, Enrollment, UserLearningPath, LevelCertificate } = db.models;
+const { Op } = require('sequelize');
+
+const CEFR_SEQUENCE = ['A1', 'A2', 'B1', 'B2', 'C1', 'C2'];
+const CEFR_TO_COURSE_LEVEL = {
+  'A1': 'beginner',
+  'A2': 'elementary',
+  'B1': 'intermediate',
+  'B2': 'upper-intermediate',
+  'C1': 'advanced',
+  'C2': 'proficiency',
+};
 
 /**
  * Quiz Service - Business logic for quiz operations
  */
 class QuizService {
   /**
-   * Create a new quiz
+   * Create a new quiz (course or final level quiz)
    */
   async createQuiz(courseId, userId, userRole, quizData) {
     const {
@@ -20,7 +31,29 @@ class QuizService {
       endTime,
       showResults,
       chapterId,
+      level,
+      isLevelFinal,
     } = quizData;
+
+    if (isLevelFinal) {
+      // Final quiz: no course required
+      const quiz = await Quiz.create({
+        courseId: null,
+        title,
+        description,
+        maxScore: maxScore || 100,
+        timeLimit: timeLimit || 60,
+        passingScore: passingScore || 60,
+        startTime: startTime || null,
+        endTime: endTime || null,
+        showResults: showResults !== undefined ? showResults : true,
+        createdBy: userId,
+        level: level || null,
+        isLevelFinal: true,
+        chapterId: null,
+      });
+      return { quiz };
+    }
 
     const course = await Course.findByPk(courseId);
     if (!course) {
@@ -44,6 +77,8 @@ class QuizService {
       showResults: showResults !== undefined ? showResults : true,
       createdBy: userId,
       chapterId: chapterId || null,
+      level: null,
+      isLevelFinal: false,
     });
 
     return { quiz };
@@ -79,7 +114,7 @@ class QuizService {
     const quiz = await Quiz.findByPk(quizId, {
       include: [
         { model: Question, as: 'questions' },
-        { model: Course, as: 'course', attributes: ['id', 'title', 'createdBy'] },
+        { model: Course, as: 'course', attributes: ['id', 'title', 'createdBy'], required: false },
         {
           model: Attempt,
           as: 'attempts',
@@ -90,6 +125,14 @@ class QuizService {
 
     if (!quiz) {
       throw { status: 404, message: 'Không tìm thấy quiz' };
+    }
+
+    // Handle final quiz (no course)
+    if (quiz.isLevelFinal) {
+      if (Number(quiz.createdBy) !== Number(userId) && userRole !== 'admin') {
+        throw { status: 403, message: 'Bạn không có quyền xem quiz này' };
+      }
+      return { quiz };
     }
 
     // 🛡️ Fix: Use Number() for consistent comparison
@@ -108,15 +151,16 @@ class QuizService {
    */
   async updateQuiz(quizId, userId, userRole, updateData) {
     const quiz = await Quiz.findByPk(quizId, {
-      include: [{ model: Course, as: 'course', attributes: ['id', 'title', 'createdBy'] }],
+      include: [{ model: Course, as: 'course', attributes: ['id', 'title', 'createdBy'], required: false }],
     });
 
     if (!quiz) {
       throw { status: 404, message: 'Không tìm thấy quiz' };
     }
 
-    // 🛡️ Fix: Use Number() for consistent comparison
-    if (Number(quiz.course.createdBy) !== Number(userId) && userRole !== 'admin') {
+    // Handle final quiz (no course)
+    const ownerId = quiz.isLevelFinal ? quiz.createdBy : quiz.course?.createdBy;
+    if (Number(ownerId) !== Number(userId) && userRole !== 'admin') {
       throw { status: 403, message: 'Bạn không có quyền cập nhật quiz này' };
     }
 
@@ -129,15 +173,16 @@ class QuizService {
    */
   async deleteQuiz(quizId, userId, userRole) {
     const quiz = await Quiz.findByPk(quizId, {
-      include: [{ model: Course, as: 'course', attributes: ['id', 'title', 'createdBy'] }],
+      include: [{ model: Course, as: 'course', attributes: ['id', 'title', 'createdBy'], required: false }],
     });
 
     if (!quiz) {
       throw { status: 404, message: 'Không tìm thấy quiz' };
     }
 
-    // 🛡️ Fix: Use Number() for consistent comparison
-    if (Number(quiz.course.createdBy) !== Number(userId) && userRole !== 'admin') {
+    // Handle final quiz (no course)
+    const ownerId = quiz.isLevelFinal ? quiz.createdBy : quiz.course?.createdBy;
+    if (Number(ownerId) !== Number(userId) && userRole !== 'admin') {
       throw { status: 403, message: 'Bạn không có quyền xóa quiz này' };
     }
 
@@ -152,15 +197,16 @@ class QuizService {
     const { type, content, options, correctAnswer, points, explanation } = questionData;
 
     const quiz = await Quiz.findByPk(quizId, {
-      include: [{ model: Course, as: 'course', attributes: ['id', 'title', 'createdBy'] }],
+      include: [{ model: Course, as: 'course', attributes: ['id', 'title', 'createdBy'], required: false }],
     });
 
     if (!quiz) {
       throw { status: 404, message: 'Không tìm thấy quiz' };
     }
 
-    // 🛡️ Fix: Use Number() for consistent comparison
-    if (Number(quiz.course.createdBy) !== Number(userId) && userRole !== 'admin') {
+    // Handle final quiz (no course)
+    const ownerId = quiz.isLevelFinal ? quiz.createdBy : quiz.course?.createdBy;
+    if (Number(ownerId) !== Number(userId) && userRole !== 'admin') {
       throw { status: 403, message: 'Bạn không có quyền thêm câu hỏi cho quiz này' };
     }
 
@@ -203,7 +249,7 @@ class QuizService {
         {
           model: Quiz,
           as: 'quiz',
-          include: [{ model: Course, as: 'course', attributes: ['id', 'title', 'createdBy'] }],
+          include: [{ model: Course, as: 'course', attributes: ['id', 'title', 'createdBy'], required: false }],
         },
       ],
     });
@@ -212,8 +258,9 @@ class QuizService {
       throw { status: 404, message: 'Không tìm thấy câu hỏi' };
     }
 
-    // 🛡️ Fix: Use Number() for consistent comparison
-    if (Number(question.quiz.course.createdBy) !== Number(userId) && userRole !== 'admin') {
+    // Handle final quiz (no course)
+    const ownerId = question.quiz.isLevelFinal ? question.quiz.createdBy : question.quiz.course?.createdBy;
+    if (Number(ownerId) !== Number(userId) && userRole !== 'admin') {
       throw { status: 403, message: 'Bạn không có quyền cập nhật câu hỏi này' };
     }
 
@@ -236,7 +283,7 @@ class QuizService {
         {
           model: Quiz,
           as: 'quiz',
-          include: [{ model: Course, as: 'course', attributes: ['id', 'title', 'createdBy'] }],
+          include: [{ model: Course, as: 'course', attributes: ['id', 'title', 'createdBy'], required: false }],
         },
       ],
     });
@@ -245,8 +292,9 @@ class QuizService {
       throw { status: 404, message: 'Không tìm thấy câu hỏi' };
     }
 
-    // 🛡️ Fix: Use Number() for consistent comparison
-    if (Number(question.quiz.course.createdBy) !== Number(userId) && userRole !== 'admin') {
+    // Handle final quiz (no course)
+    const ownerId = question.quiz.isLevelFinal ? question.quiz.createdBy : question.quiz.course?.createdBy;
+    if (Number(ownerId) !== Number(userId) && userRole !== 'admin') {
       throw { status: 403, message: 'Bạn không có quyền xóa câu hỏi này' };
     }
 
@@ -420,6 +468,126 @@ class QuizService {
     } catch (error) {
       throw error;
     }
+  }
+
+  // ========== FINAL QUIZ (LEVEL EXAM) METHODS ==========
+
+  async listFinalQuizzes(userId, userRole) {
+    const where = { isLevelFinal: true };
+    if (userRole !== 'admin') {
+      where.createdBy = userId;
+    }
+    return Quiz.findAll({
+      where,
+      include: [
+        { model: Question, as: 'questions', attributes: ['id'] },
+        { model: db.models.User, as: 'creator', attributes: ['id', 'name'] },
+      ],
+      order: [['created_at', 'DESC']],
+    });
+  }
+
+  async getUnlockStatus(userId, level) {
+    const courseLevel = CEFR_TO_COURSE_LEVEL[level];
+    const requiredCourses = await Course.findAll({
+      where: {
+        level: courseLevel,
+        isRequired: true,
+        published: true,
+        deletedAt: null,
+      },
+      attributes: ['id', 'title'],
+    });
+
+    if (requiredCourses.length === 0) {
+      return { unlocked: true, requiredCourses: [], completedCourses: [] };
+    }
+
+    const requiredCourseIds = requiredCourses.map(c => c.id);
+    const enrollments = await Enrollment.findAll({
+      where: {
+        userId,
+        courseId: { [Op.in]: requiredCourseIds },
+        status: 'active',
+      },
+      attributes: ['courseId', 'progressPercent'],
+    });
+
+    const enrollmentMap = new Map();
+    enrollments.forEach(e => enrollmentMap.set(Number(e.courseId), Number(e.progressPercent)));
+
+    const completedCourseIds = requiredCourseIds.filter(id => {
+      const progress = enrollmentMap.get(Number(id));
+      return progress !== undefined && progress >= 100;
+    });
+
+    const unlocked = completedCourseIds.length >= requiredCourses.length;
+
+    return {
+      unlocked,
+      requiredCourses: requiredCourses.map(c => ({ id: c.id, title: c.title })),
+      completedCourses: completedCourseIds,
+    };
+  }
+
+  async getStudentFinalQuiz(level, userId) {
+    const quiz = await Quiz.findOne({
+      where: { level, isLevelFinal: true, status: 'published' },
+      include: [
+        {
+          model: Question,
+          as: 'questions',
+          attributes: ['id', 'type', 'content', 'options', 'points'],
+        },
+      ],
+    });
+
+    if (!quiz) {
+      throw { status: 404, message: 'Chưa có bài kiểm tra cuối trình độ cho cấp độ này' };
+    }
+
+    const unlock = await this.getUnlockStatus(userId, level);
+    if (!unlock.unlocked) {
+      throw {
+        status: 403,
+        message: 'Bạn cần hoàn thành tất cả khóa học bắt buộc của trình độ này trước khi làm bài kiểm tra.',
+        data: unlock,
+      };
+    }
+
+    return { quiz, unlockStatus: unlock };
+  }
+
+  async awardCertificateAndLevelUp(userId, level) {
+    let cert = await LevelCertificate.findOne({ where: { userId, level } });
+    let isNew = false;
+    if (!cert) {
+      const certificateId = `LEVEL-CERT-${level}-${userId}-${Date.now()}`;
+      cert = await LevelCertificate.create({
+        userId,
+        level,
+        certificateId,
+        issuedAt: new Date(),
+      });
+      isNew = true;
+    }
+
+    const idx = CEFR_SEQUENCE.indexOf(level);
+    let levelUp = null;
+    if (idx !== -1 && idx < CEFR_SEQUENCE.length - 1) {
+      const nextLevel = CEFR_SEQUENCE[idx + 1];
+      const userPath = await UserLearningPath.findOne({
+        where: { userId, status: { [Op.in]: ['active', 'completed'] } },
+      });
+      if (userPath) {
+        await userPath.update({ currentLevel: nextLevel });
+      }
+      levelUp = { leveledUp: true, newLevel: nextLevel };
+    } else {
+      levelUp = { leveledUp: false, message: 'Đã đạt trình độ cao nhất' };
+    }
+
+    return { certificate: { certificateId: cert.certificateId, issuedAt: cert.issuedAt, isNew }, levelUp };
   }
 }
 
