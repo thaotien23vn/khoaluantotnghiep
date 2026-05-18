@@ -724,11 +724,11 @@ class PlacementService {
    * Maps continuous ability to discrete CEFR level
    */
   getLevelFromAbility(abilityScore) {
-    if (abilityScore < 1.5) return 'A1';
-    if (abilityScore < 2.5) return 'A2';
-    if (abilityScore < 3.5) return 'B1';
-    if (abilityScore < 4.5) return 'B2';
-    if (abilityScore < 5.5) return 'C1';
+    if (abilityScore < 1.7) return 'A1';
+    if (abilityScore < 2.7) return 'A2';
+    if (abilityScore < 3.7) return 'B1';
+    if (abilityScore < 4.7) return 'B2';
+    if (abilityScore < 5.7) return 'C1';
     return 'C2';
   }
 
