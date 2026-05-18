@@ -62,7 +62,7 @@ class LevelCertificateService {
 
     const cert = await LevelCertificate.findOne({
       where: { certificateId },
-      include: [{ model: User, attributes: ['name'] }],
+      include: [{ model: User, as: 'user', attributes: ['name'] }],
     });
 
     if (!cert) {
@@ -72,7 +72,7 @@ class LevelCertificateService {
     return {
       certificateId: cert.certificateId,
       level: cert.level,
-      studentName: cert.User?.name || 'Học viên',
+      studentName: cert.user?.name || 'Học viên',
       issuedAt: cert.issuedAt,
       isValid: true,
     };
