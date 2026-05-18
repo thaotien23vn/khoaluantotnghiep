@@ -247,7 +247,7 @@ class CourseService {
       maxPrice,
       sort = 'newest',
       page = 1,
-      limit = 20,
+      limit = 100,
     } = query;
 
     const pageNum = Math.max(parseInt(page, 10) || 1, 1);
