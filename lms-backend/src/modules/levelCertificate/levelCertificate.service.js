@@ -55,6 +55,30 @@ class LevelCertificateService {
   }
 
   /**
+   * Publicly verify a level certificate by its ID
+   */
+  async verifyLevelCertificate(certificateId) {
+    const { LevelCertificate, User } = db.models;
+
+    const cert = await LevelCertificate.findOne({
+      where: { certificateId },
+      include: [{ model: User, attributes: ['name'] }],
+    });
+
+    if (!cert) {
+      throw { status: 404, message: 'Chứng chỉ không tồn tại' };
+    }
+
+    return {
+      certificateId: cert.certificateId,
+      level: cert.level,
+      studentName: cert.User?.name || 'Học viên',
+      issuedAt: cert.issuedAt,
+      isValid: true,
+    };
+  }
+
+  /**
    * Get all level certificates for a user
    */
   async getMyLevelCertificates(userId) {

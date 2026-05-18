@@ -4,6 +4,12 @@ const levelCertificateController = require('./levelCertificate.controller');
 const authMiddleware = require('../../middlewares/auth');
 const { authorizeRole } = require('../../middlewares/authorize');
 
+// Public verify endpoint (no authentication required)
+router.get(
+  '/verify/:certificateId',
+  levelCertificateController.verifyLevelCertificate
+);
+
 // Download Level Certificate PDF (Requires authentication and Student role)
 router.get(
   '/download/:level',

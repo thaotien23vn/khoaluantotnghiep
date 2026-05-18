@@ -36,6 +36,28 @@ class LevelCertificateController {
   }
 
   /**
+   * Publicly verify a level certificate by ID (no auth required)
+   */
+  async verifyLevelCertificate(req, res) {
+    try {
+      const { certificateId } = req.params;
+      const cert = await levelCertificateService.verifyLevelCertificate(certificateId);
+
+      res.json({
+        success: true,
+        data: cert,
+      });
+    } catch (error) {
+      console.error('Lỗi xác thực chứng chỉ cấp độ:', error);
+      const statusCode = error.status || 500;
+      res.status(statusCode).json({
+        success: false,
+        message: error.message || 'Lỗi hệ thống khi xác thực chứng chỉ',
+      });
+    }
+  }
+
+  /**
    * Get all level certificates for the logged-in student
    */
   async getMyLevelCertificates(req, res) {
