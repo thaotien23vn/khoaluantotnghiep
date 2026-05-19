@@ -441,6 +441,7 @@ class AttemptService {
         quizTitle: attempt.quiz.title,
         courseId: attempt.quiz.courseId,
         results,
+        quiz: attempt.quiz,
       };
     }).then(async (result) => {
       // Non-critical: sync progress outside transaction
@@ -468,11 +469,13 @@ class AttemptService {
       };
 
       // Final quiz: award certificate and level up on pass
-      if (result.quiz.isLevelFinal && result.passed === true) {
+      console.log(`[DEBUG FinalQuiz] isLevelFinal=${result.quiz?.isLevelFinal}, passed=${result.passed}, level=${result.quiz?.level}`);
+      if (result.quiz?.isLevelFinal && result.passed === true) {
         try {
           const { certificate, levelUp } = await quizService.awardCertificateAndLevelUp(userId, result.quiz.level);
           response.certificate = certificate;
           response.levelUp = levelUp;
+          console.log('[DEBUG FinalQuiz] Certificate awarded:', certificate, 'LevelUp:', levelUp);
         } catch (e) {
           console.error('[FinalQuiz] Lỗi cấp chứng chỉ/nâng cấp:', e);
         }
