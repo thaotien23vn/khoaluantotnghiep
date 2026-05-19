@@ -173,6 +173,7 @@ class AttemptService {
       // ENHANCED: Check if time limit has been exceeded for the active attempt
       if (quiz.timeLimit && quiz.timeLimit > 0) {
         const elapsedMinutes = (now - new Date(activeAttempt.startedAt)) / 60000;
+        console.log(`[DEBUG Backend] activeAttempt.id=${activeAttempt.id}, startedAt=${activeAttempt.startedAt}, elapsedMinutes=${elapsedMinutes}, timeLimit=${quiz.timeLimit}`);
         if (elapsedMinutes > quiz.timeLimit) {
           // Auto-submit the expired attempt
           const quizWithQuestions = await Quiz.findByPk(quizId, {
@@ -554,6 +555,10 @@ class AttemptService {
       };
     });
 
+    const timeLimit = attempt.quiz.timeLimit;
+    const elapsedMinutes = (new Date() - new Date(attempt.startedAt)) / 60000;
+    const remainingSeconds = attempt.completedAt ? 0 : Math.max(0, Math.round((timeLimit * 60) - (elapsedMinutes * 60)));
+
     return {
       attempt: {
         id: attempt.id,
@@ -563,6 +568,8 @@ class AttemptService {
         status: attempt.completedAt ? 'submitted' : 'in_progress',
         startedAt: attempt.startedAt,
         completedAt: attempt.completedAt,
+        timeLimit,
+        remainingSeconds,
         summary: attempt.completedAt ? { manualGradingCount: questions.filter(q => q.type === 'essay').length } : undefined,
       },
       quiz: { ...attempt.quiz.toJSON(), questions },
