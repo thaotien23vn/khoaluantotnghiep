@@ -62,6 +62,7 @@ const formatCourseForListing = (course) => {
     reviewCount: course.reviewCount || 0,
     students: course.students || 0,
     level: course.level || 'Mọi cấp độ',
+    isRequired: !!course.isRequired,
     totalLessons,
     duration: course.duration || '0 giờ',
     description: course.description || '',
@@ -157,6 +158,7 @@ const formatCourseDetail = (course) => {
     reviewCount: course.reviewCount || 0,
     students: course.students || 0,
     level: course.level || 'Mọi cấp độ',
+    isRequired: !!course.isRequired,
     totalLessons:
       course.totalLessons ||
       curriculum.reduce((acc, ch) => acc + ch.lessons.length, 0),

@@ -122,6 +122,7 @@ class LearningPathService {
             title: pc.course.title,
             slug: pc.course.slug,
             skill: pc.course.skill,
+            isRequired: !!pc.course.isRequired,
             progress,
             isEnrolled: !!enrollmentMap[pc.course.id],
           };
