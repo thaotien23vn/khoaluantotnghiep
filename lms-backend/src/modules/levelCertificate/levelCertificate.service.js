@@ -27,6 +27,20 @@ class LevelCertificateService {
       throw { status: 403, message: `Bạn chưa hoàn thành trình độ ${level}` };
     }
 
+    // 2b. Verify user passed the final quiz for this level
+    const { Quiz, Attempt } = db.models;
+    const finalQuiz = await Quiz.findOne({
+      where: { level, isLevelFinal: true, status: 'published' },
+    });
+    if (finalQuiz) {
+      const passedAttempt = await Attempt.findOne({
+        where: { userId, quizId: finalQuiz.id, passed: true },
+      });
+      if (!passedAttempt) {
+        throw { status: 403, message: `Bạn cần hoàn thành bài kiểm tra cuối trình độ ${level} để nhận chứng chỉ` };
+      }
+    }
+
     // 3. Check if certificate already exists
     let cert = await LevelCertificate.findOne({ where: { userId, level } });
     let isNew = false;
