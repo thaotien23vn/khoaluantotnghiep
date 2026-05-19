@@ -112,6 +112,29 @@ const getCourseQuizzesValidation = [
     .withMessage('Course ID phải là số nguyên dương'),
 ];
 
+const createFinalQuizValidation = [
+  body('title')
+    .notEmpty()
+    .withMessage('Tiêu đề quiz không được để trống'),
+  body('level')
+    .notEmpty()
+    .withMessage('Cấp độ không được để trống')
+    .isIn(['A1', 'A2', 'B1', 'B2', 'C1', 'C2'])
+    .withMessage('Cấp độ phải là A1, A2, B1, B2, C1 hoặc C2'),
+  body('maxScore')
+    .optional()
+    .isNumeric()
+    .withMessage('Điểm tối đa phải là số'),
+  body('timeLimit')
+    .optional()
+    .isNumeric()
+    .withMessage('Thời gian làm bài phải là số'),
+  body('passingScore')
+    .optional()
+    .isNumeric()
+    .withMessage('Điểm đạt phải là số'),
+];
+
 module.exports = {
   createQuizValidation,
   updateQuizValidation,
@@ -120,4 +143,5 @@ module.exports = {
   deleteQuestionValidation,
   getQuizValidation,
   getCourseQuizzesValidation,
+  createFinalQuizValidation,
 };

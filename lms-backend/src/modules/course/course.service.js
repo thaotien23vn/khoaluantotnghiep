@@ -229,6 +229,7 @@ const TEACHER_REVIEW_TRIGGER_FIELDS = [
   'willLearn',
   'requirements',
   'tags',
+  'isRequired',
 ];
 
 /**
@@ -465,6 +466,7 @@ class CourseService {
       durationUnit,
       renewalDiscountPercent,
       gracePeriodDays,
+      isRequired,
     } = courseData;
 
     const slug = await generateUniqueSlug(title);
@@ -490,6 +492,7 @@ class CourseService {
       willLearn: parseJsonField(willLearn),
       requirements: parseJsonField(requirements),
       tags: parseJsonField(tags),
+      isRequired: !!isRequired,
       // Duration settings
       durationType: durationType || 'lifetime',
       durationValue: durationValue || null,
@@ -562,7 +565,7 @@ class CourseService {
       throw { status: 403, message: 'Bạn không có quyền cập nhật khóa học này' };
     }
 
-    const { title, description, imageUrl, price, categoryId, published,
+    const { title, description, imageUrl, price, categoryId, published, isRequired,
       // Duration settings
       durationType, durationValue, durationUnit, renewalDiscountPercent, gracePeriodDays,
     } = updateData;
@@ -593,6 +596,9 @@ class CourseService {
     // Backward-compatible: silently ignore teacher attempts to set published.
     if (published !== undefined && role === 'admin') {
       course.published = !!published;
+    }
+    if (isRequired !== undefined) {
+      course.isRequired = !!isRequired;
     }
 
     // Duration settings

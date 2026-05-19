@@ -493,7 +493,7 @@ class QuizService {
       where: {
         level: courseLevel,
         isRequired: true,
-        published: true,
+        status: 'published',
         deletedAt: null,
       },
       attributes: ['id', 'title'],

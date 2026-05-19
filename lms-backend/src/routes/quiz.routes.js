@@ -5,6 +5,7 @@ const quizController = require("../modules/quiz/quiz.controller");
 const attemptController = require("../modules/attempt/attempt.controller");
 const {
   createQuizValidation,
+  createFinalQuizValidation,
   updateQuizValidation,
   addQuestionValidation,
   updateQuestionValidation,
@@ -312,7 +313,7 @@ router.post(
   "/teacher/final-quizzes",
   authMiddleware,
   authorizeRole("teacher", "admin"),
-  createQuizValidation,
+  createFinalQuizValidation,
   quizController.createFinalQuiz,
 );
 

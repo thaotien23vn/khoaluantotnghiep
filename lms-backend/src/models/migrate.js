@@ -107,6 +107,19 @@ async function runMigrations() {
   await addColumnIfNotExists('courses', 'skill', 'VARCHAR(20)');
   await addColumnIfNotExists('courses', 'deleted_at', 'TIMESTAMP WITH TIME ZONE');
 
+  // Final quiz refactor columns
+  await addColumnIfNotExists('courses', 'is_required', 'BOOLEAN DEFAULT false');
+  await addColumnIfNotExists('quizzes', 'level', "VARCHAR(2) CHECK (\"level\" IN ('A1','A2','B1','B2','C1','C2'))");
+  await addColumnIfNotExists('quizzes', 'is_level_final', 'BOOLEAN DEFAULT false');
+
+  // Allow course_id on quizzes to be nullable (if it has NOT NULL constraint from before)
+  try {
+    await sequelize.query(`ALTER TABLE "quizzes" ALTER COLUMN "course_id" DROP NOT NULL`);
+    console.log('  Made course_id nullable on quizzes');
+  } catch (e) {
+    // May already be nullable or column name differs; ignore
+  }
+
   // Seed path_courses for existing courses (idempotent)
   console.log('  Seeding path_courses...');
   try {
