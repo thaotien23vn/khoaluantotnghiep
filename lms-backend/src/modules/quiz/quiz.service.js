@@ -562,12 +562,26 @@ class QuizService {
       order: [['completedAt', 'DESC']],
     });
 
+    // Fetch all attempts history for this user + quiz
+    const attempts = await Attempt.findAll({
+      where: { userId, quizId: quiz.id },
+      order: [['startedAt', 'DESC']],
+      attributes: ['id', 'score', 'percentageScore', 'passed', 'startedAt', 'completedAt'],
+    });
+
     return { quiz, unlockStatus: unlock, passedAttempt: passedAttempt ? {
       id: passedAttempt.id,
       score: passedAttempt.score,
       percentageScore: passedAttempt.percentageScore,
       completedAt: passedAttempt.completedAt,
-    } : null };
+    } : null, attempts: attempts.map(a => ({
+      id: a.id,
+      score: a.score,
+      percentageScore: a.percentageScore,
+      passed: a.passed,
+      startedAt: a.startedAt,
+      completedAt: a.completedAt,
+    })), maxAttempts: quiz.maxAttempts };
   }
 
   async awardCertificateAndLevelUp(userId, level) {

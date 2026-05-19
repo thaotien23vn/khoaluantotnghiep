@@ -4,6 +4,25 @@ const { sequelize, models } = require('./src/models');
 
 const DEMO_PASSWORD = 'demo123';
 
+async function cleanupDemoUsers(demoEmails) {
+  const { User, UserLearningPath, Enrollment, LectureProgress, Attempt, LevelCertificate } = models;
+
+  const users = await User.findAll({ where: { email: demoEmails }, attributes: ['id'] });
+  const userIds = users.map(u => u.id);
+  if (userIds.length === 0) return;
+
+  console.log(`🧹 Xóa dữ liệu ${userIds.length} demo user(s)...`);
+
+  await LectureProgress.destroy({ where: { userId: userIds } });
+  await Attempt.destroy({ where: { userId: userIds } });
+  await Enrollment.destroy({ where: { userId: userIds } });
+  await UserLearningPath.destroy({ where: { userId: userIds } });
+  await LevelCertificate.destroy({ where: { userId: userIds } });
+  await User.destroy({ where: { id: userIds } });
+
+  console.log('🧹 Đã reset xong demo users');
+}
+
 async function findPathAndCourses(cefrLevel) {
   const { LearningPath, PathCourse, Course, Category, Chapter, Lecture, Quiz } = models;
 
@@ -455,6 +474,9 @@ async function main() {
       ],
     },
   ];
+
+  const demoEmails = demos.map(d => d.email);
+  await cleanupDemoUsers(demoEmails);
 
   for (const demo of demos) {
     await createDemoUser(demo);
