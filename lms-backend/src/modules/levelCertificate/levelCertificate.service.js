@@ -4,7 +4,8 @@ const learningPathService = require('../learningPath/learningPath.service');
 
 class LevelCertificateService {
   /**
-   * Generate or retrieve a level certificate PDF.
+   * Generate or retrieve a course path completion certificate PDF.
+   * This is an internal platform certificate of achievement, not an official language proficiency certificate.
    * Returns { doc, certificateId, isNew }
    */
   async generateLevelCertificate(userId, level) {
@@ -69,7 +70,8 @@ class LevelCertificateService {
   }
 
   /**
-   * Publicly verify a level certificate by its ID
+   * Publicly verify a course completion certificate by its ID.
+   * This verifies internal platform achievement only - not official language proficiency.
    */
   async verifyLevelCertificate(certificateId) {
     const { LevelCertificate, User, Quiz, Attempt } = db.models;
@@ -141,7 +143,7 @@ class LevelCertificateService {
     doc.opacity(0.03);
     doc.fontSize(100).font('Helvetica-Bold').fillColor('#1a365d');
     doc.rotate(-30, { origin: [width / 2, height / 2] });
-    doc.text('CEFR CERTIFIED', 0, height / 2 - 50, { align: 'center' });
+    doc.text('COURSE COMPLETED', 0, height / 2 - 50, { align: 'center' });
     doc.restore();
 
     // 2. Border
@@ -168,7 +170,7 @@ class LevelCertificateService {
     doc.fontSize(16)
        .font('Helvetica')
        .fillColor('#7c3aed')
-       .text('OF CEFR LEVEL ACHIEVEMENT', 0, 130, { align: 'center', characterSpacing: 8 });
+       .text('OF COURSE PATH COMPLETION', 0, 130, { align: 'center', characterSpacing: 8 });
 
     // 4. Body
     doc.fontSize(14)
@@ -189,7 +191,7 @@ class LevelCertificateService {
     doc.fontSize(14)
        .font('Helvetica')
        .fillColor('#4a5568')
-       .text('has successfully achieved CEFR Level', 0, 310, { align: 'center' });
+       .text('has successfully completed the course path level', 0, 310, { align: 'center' });
 
     doc.font('Helvetica-Bold')
        .fontSize(36)
@@ -199,7 +201,7 @@ class LevelCertificateService {
     doc.fontSize(12)
        .font('Helvetica')
        .fillColor('#4a5568')
-       .text('as recognized by the Common European Framework of Reference for Languages', 0, 400, { align: 'center' });
+       .text('(Internal platform curriculum - not an official language proficiency certificate)', 0, 400, { align: 'center' });
 
     // 5. Date & Signature
     const dateStr = new Date(issuedAt).toLocaleDateString('vi-VN', {

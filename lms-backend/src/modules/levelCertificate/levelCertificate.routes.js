@@ -4,13 +4,14 @@ const levelCertificateController = require('./levelCertificate.controller');
 const authMiddleware = require('../../middlewares/auth');
 const { authorizeRole } = require('../../middlewares/authorize');
 
-// Public verify endpoint (no authentication required)
+// Public verify endpoint - verify course completion certificate (no authentication required)
+// Note: This verifies internal platform achievement only, not official language proficiency
 router.get(
   '/verify/:certificateId',
   levelCertificateController.verifyLevelCertificate
 );
 
-// Download Level Certificate PDF (Requires authentication and Student role)
+// Download Course Path Completion Certificate PDF (Requires authentication and Student role)
 router.get(
   '/download/:level',
   authMiddleware,
@@ -18,7 +19,7 @@ router.get(
   levelCertificateController.downloadLevelCertificate
 );
 
-// Get My Level Certificates (Requires authentication and Student role)
+// Get My Course Path Completion Certificates (Requires authentication and Student role)
 router.get(
   '/my-certificates',
   authMiddleware,

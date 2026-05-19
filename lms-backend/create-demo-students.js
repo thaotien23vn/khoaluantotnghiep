@@ -5,7 +5,7 @@ const { sequelize, models } = require('./src/models');
 const DEMO_PASSWORD = 'demo123';
 
 async function cleanupDemoUsers(demoEmails) {
-  const { User, UserLearningPath, Enrollment, LectureProgress, Attempt, LevelCertificate } = models;
+  const { User, UserLearningPath, Enrollment, LectureProgress, Attempt, LevelCertificate, Notification, LessonMessage, ChatEscalation, ChatParticipant } = models;
 
   const users = await User.findAll({ where: { email: demoEmails }, attributes: ['id'] });
   const userIds = users.map(u => u.id);
@@ -13,6 +13,16 @@ async function cleanupDemoUsers(demoEmails) {
 
   console.log(`🧹 Xóa dữ liệu ${userIds.length} demo user(s)...`);
 
+  await ChatParticipant.destroy({ where: { userId: userIds } });
+
+  // Get lesson message IDs first to clean up escalations
+  const lessonMsgs = await LessonMessage.findAll({ where: { senderId: userIds }, attributes: ['id'] });
+  const lessonMsgIds = lessonMsgs.map(m => m.id);
+  if (lessonMsgIds.length > 0) {
+    await ChatEscalation.destroy({ where: { messageId: lessonMsgIds } });
+  }
+  await LessonMessage.destroy({ where: { senderId: userIds } });
+  await Notification.destroy({ where: { userId: userIds } });
   await LectureProgress.destroy({ where: { userId: userIds } });
   await Attempt.destroy({ where: { userId: userIds } });
   await Enrollment.destroy({ where: { userId: userIds } });

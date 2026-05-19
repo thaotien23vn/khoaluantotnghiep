@@ -2,7 +2,8 @@ const levelCertificateService = require('./levelCertificate.service');
 
 class LevelCertificateController {
   /**
-   * Generate and stream PDF level certificate
+   * Generate and stream PDF course path completion certificate.
+   * This is an internal platform certificate of achievement, not an official language proficiency certificate.
    */
   async downloadLevelCertificate(req, res) {
     try {
@@ -12,7 +13,7 @@ class LevelCertificateController {
       const { doc, certificateId, isNew } = await levelCertificateService.generateLevelCertificate(userId, level);
 
       res.setHeader('Content-Type', 'application/pdf');
-      res.setHeader('Content-Disposition', `inline; filename=Level_Certificate_${level}_${certificateId}.pdf`);
+      res.setHeader('Content-Disposition', `inline; filename=Course_Path_Completion_Certificate_${level}_${certificateId}.pdf`);
 
       doc.on('error', (err) => {
         console.error('Level Certificate PDF Stream Error:', err);
@@ -24,19 +25,21 @@ class LevelCertificateController {
       doc.pipe(res);
       doc.end();
     } catch (error) {
-      console.error('Lỗi cấp chứng chỉ cấp độ:', error);
+      console.error('Lỗi tạo chứng chỉ hoàn thành khóa học:', error);
       if (!res.headersSent) {
         const statusCode = error.status || 500;
         res.status(statusCode).json({
           success: false,
-          message: error.message || 'Lỗi hệ thống khi sinh chứng chỉ cấp độ',
+          message: error.message || 'Lỗi hệ thống khi tạo chứng chỉ hoàn thành khóa học',
         });
       }
     }
   }
 
   /**
-   * Publicly verify a level certificate by ID (no auth required)
+   * Publicly verify a course completion certificate by ID.
+   * This verifies internal platform achievement only - not official language proficiency.
+   * No authentication required.
    */
   async verifyLevelCertificate(req, res) {
     try {
@@ -48,7 +51,7 @@ class LevelCertificateController {
         data: cert,
       });
     } catch (error) {
-      console.error('Lỗi xác thực chứng chỉ cấp độ:', error);
+      console.error('Lỗi xác thực chứng chỉ hoàn thành khóa học:', error);
       const statusCode = error.status || 500;
       res.status(statusCode).json({
         success: false,
@@ -58,7 +61,7 @@ class LevelCertificateController {
   }
 
   /**
-   * Get all level certificates for the logged-in student
+   * Get all course completion certificates for the logged-in student
    */
   async getMyLevelCertificates(req, res) {
     try {
@@ -70,10 +73,10 @@ class LevelCertificateController {
         data: certificates,
       });
     } catch (error) {
-      console.error('Lỗi lấy danh sách chứng chỉ cấp độ:', error);
+      console.error('Lỗi lấy danh sách chứng chỉ hoàn thành khóa học:', error);
       res.status(500).json({
         success: false,
-        message: error.message || 'Lỗi hệ thống khi lấy danh sách chứng chỉ cấp độ',
+        message: error.message || 'Lỗi hệ thống khi lấy danh sách chứng chỉ hoàn thành khóa học',
       });
     }
   }
