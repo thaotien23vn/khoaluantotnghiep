@@ -135,10 +135,11 @@ class LearningPathService {
         courses.some(c => c.skill === skill && c.progress >= 100)
       );
       const totalSkills = uniqueSkills.length || 1;
+      const completedCourses = courses.filter(c => c.progress >= 100).length;
       return {
         level,
-        totalCourses: totalSkills,        // "slots" = number of distinct skills
-        completedCourses: completedSkills.length,
+        totalCourses: courses.length,
+        completedCourses,
         progressPercent: Math.round((completedSkills.length / totalSkills) * 100),
         courses,
       };
