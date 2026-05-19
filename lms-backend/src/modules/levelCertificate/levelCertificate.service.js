@@ -72,7 +72,7 @@ class LevelCertificateService {
    * Publicly verify a level certificate by its ID
    */
   async verifyLevelCertificate(certificateId) {
-    const { LevelCertificate, User } = db.models;
+    const { LevelCertificate, User, Quiz, Attempt } = db.models;
 
     const cert = await LevelCertificate.findOne({
       where: { certificateId },
@@ -83,12 +83,33 @@ class LevelCertificateService {
       throw { status: 404, message: 'Chứng chỉ không tồn tại' };
     }
 
+    // Find the passed final-quiz attempt that earned this certificate
+    const finalQuiz = await Quiz.findOne({
+      where: { level: cert.level, isLevelFinal: true },
+      attributes: ['id'],
+    });
+    let attemptId = null;
+    let quizId = null;
+    if (finalQuiz) {
+      const passedAttempt = await Attempt.findOne({
+        where: { userId: cert.userId, quizId: finalQuiz.id, passed: true },
+        order: [['completedAt', 'DESC']],
+        attributes: ['id', 'quizId'],
+      });
+      if (passedAttempt) {
+        attemptId = passedAttempt.id;
+        quizId = passedAttempt.quizId;
+      }
+    }
+
     return {
       certificateId: cert.certificateId,
       level: cert.level,
       studentName: cert.user?.name || 'Học viên',
       issuedAt: cert.issuedAt,
       isValid: true,
+      attemptId,
+      quizId,
     };
   }
 
