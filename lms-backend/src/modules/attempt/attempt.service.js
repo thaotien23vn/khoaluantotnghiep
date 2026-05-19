@@ -514,7 +514,7 @@ class AttemptService {
       include: [{
         model: Quiz,
         as: 'quiz',
-        attributes: ['id', 'title', 'description', 'showResults', 'maxScore', 'passingScore', 'isLevelFinal', 'level'],
+        attributes: ['id', 'title', 'description', 'showResults', 'maxScore', 'passingScore', 'timeLimit', 'isLevelFinal', 'level'],
         include: [
           { model: Question, as: 'questions' },
           { model: Course, as: 'course', attributes: ['id', 'title'], required: false },
@@ -661,7 +661,7 @@ class AttemptService {
         {
           model: Quiz,
           as: 'quiz',
-          attributes: ['id', 'title', 'description', 'showResults', 'maxScore', 'passingScore'],
+          attributes: ['id', 'title', 'description', 'showResults', 'maxScore', 'passingScore', 'timeLimit'],
           include: [
             { model: Question, as: 'questions' },
             { model: Course, as: 'course', attributes: ['id', 'title', 'createdBy'] },
