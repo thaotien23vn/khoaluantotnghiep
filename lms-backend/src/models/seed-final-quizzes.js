@@ -271,7 +271,7 @@ async function seed() {
       createdBy: adminUser.id,
       startTime: null,
       endTime: null,
-      maxAttempts: 3,
+      maxAttempts: null,
     });
     console.log(`   ✅ Created ${quizDef.level} quiz (#${quiz.id})`);
 

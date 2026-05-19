@@ -560,6 +560,7 @@ class AttemptService {
         score: attempt.score,
         percentageScore: attempt.percentageScore,
         passed: attempt.passed,
+        status: attempt.completedAt ? 'submitted' : 'in_progress',
         startedAt: attempt.startedAt,
         completedAt: attempt.completedAt,
         summary: attempt.completedAt ? { manualGradingCount: questions.filter(q => q.type === 'essay').length } : undefined,
