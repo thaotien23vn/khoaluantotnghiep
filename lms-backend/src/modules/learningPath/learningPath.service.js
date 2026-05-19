@@ -32,7 +32,7 @@ class LearningPathService {
             {
               model: Course,
               as: 'course',
-              attributes: ['id', 'title', 'slug', 'imageUrl', 'skill', 'level', 'status'],
+              attributes: ['id', 'title', 'slug', 'imageUrl', 'skill', 'level', 'status', 'isRequired'],
               where: { deletedAt: null },
               required: false,
             },
@@ -85,7 +85,7 @@ class LearningPathService {
             {
               model: Course,
               as: 'course',
-              attributes: ['id', 'title', 'slug', 'imageUrl', 'skill', 'level', 'status'],
+              attributes: ['id', 'title', 'slug', 'imageUrl', 'skill', 'level', 'status', 'isRequired'],
               where: { deletedAt: null },
               required: false,
             },
@@ -324,7 +324,7 @@ class LearningPathService {
             {
               model: Course,
               as: 'course',
-              attributes: ['id', 'title', 'slug', 'imageUrl', 'skill', 'level', 'price', 'status'],
+              attributes: ['id', 'title', 'slug', 'imageUrl', 'skill', 'level', 'price', 'status', 'isRequired'],
               where: { deletedAt: null },
               required: false,
             },
