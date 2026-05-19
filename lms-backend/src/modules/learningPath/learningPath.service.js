@@ -95,32 +95,7 @@ class LearningPathService {
       order: [[{ model: Category, as: 'category' }, 'sortOrder', 'ASC']],
     });
 
-    // 3. Get ALL courses for all CEFR levels (including extra courses not in any path)
-    const CEFR_TO_DB_LEVEL = {
-      'A1': 'Beginner',
-      'A2': 'Elementary',
-      'B1': 'Intermediate',
-      'B2': 'Upper-Intermediate',
-      'C1': 'Advanced',
-      'C2': 'Proficiency',
-    };
-    const allCoursesForLevels = await Course.findAll({
-      where: {
-        level: { [Op.in]: Object.values(CEFR_TO_DB_LEVEL) },
-        deletedAt: null,
-      },
-      attributes: ['id', 'title', 'slug', 'imageUrl', 'skill', 'level', 'status', 'isRequired'],
-    });
-    const extraCoursesByLevel = {};
-    for (const c of allCoursesForLevels) {
-      const mappedCefr = Object.entries(CEFR_TO_DB_LEVEL).find(([_, db]) => db === c.level)?.[0];
-      if (mappedCefr) {
-        if (!extraCoursesByLevel[mappedCefr]) extraCoursesByLevel[mappedCefr] = [];
-        extraCoursesByLevel[mappedCefr].push(c);
-      }
-    }
-
-    // 4. Get ALL user enrollments across all courses
+    // 3. Get ALL user enrollments across all courses
     const allEnrollments = await Enrollment.findAll({
       where: { userId },
       attributes: ['courseId', 'progressPercent', 'status'],
@@ -130,7 +105,7 @@ class LearningPathService {
       allEnrollments.map(e => [e.courseId, Number(e.progressPercent || 0)])
     );
 
-    // 5. Build all 6 CEFR levels
+    // 4. Build all 6 CEFR levels
     const cefrLevels = ['A1', 'A2', 'B1', 'B2', 'C1', 'C2'];
     const levelProgress = cefrLevels.map(level => {
       const path = allPaths.find(p => p.category?.cefrLevel === level);
@@ -138,7 +113,7 @@ class LearningPathService {
         return { level, totalCourses: 0, completedCourses: 0, progressPercent: 0, courses: [] };
       }
 
-      const pathCourses = (path.pathCourses || [])
+      const courses = (path.pathCourses || [])
         .filter(pc => pc.course)
         .map(pc => {
           const progress = enrollmentMap[pc.course.id] || 0;
@@ -152,21 +127,6 @@ class LearningPathService {
             isEnrolled: !!enrollmentMap[pc.course.id],
           };
         });
-
-      // Merge with extra courses at this level not in the learning path
-      const pathCourseIds = new Set(pathCourses.map(c => c.courseId));
-      const extraCourses = (extraCoursesByLevel[level] || [])
-        .filter(c => !pathCourseIds.has(c.id))
-        .map(c => ({
-          courseId: c.id,
-          title: c.title,
-          slug: c.slug,
-          skill: c.skill,
-          isRequired: !!c.isRequired,
-          progress: enrollmentMap[c.id] || 0,
-          isEnrolled: !!enrollmentMap[c.id],
-        }));
-      const courses = [...pathCourses, ...extraCourses];
 
       // Skill-based completion: a level is done when each unique skill has >= 1 completed course.
       // This prevents requiring students to complete duplicate courses from multiple teachers.
