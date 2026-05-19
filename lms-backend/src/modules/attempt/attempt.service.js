@@ -316,7 +316,20 @@ class AttemptService {
         }
         
         if (existingAttempt.completedAt) {
-          throw { status: 409, message: 'Lần làm bài này đã được nộp' };
+          // Return result of already submitted attempt
+          return {
+            attempt: {
+              id: existingAttempt.id,
+              score: existingAttempt.score,
+              percentageScore: existingAttempt.percentageScore,
+              passed: existingAttempt.passed,
+              completedAt: existingAttempt.completedAt,
+              summary: { totalQuestions: existingAttempt.quiz.questions.length, correctCount: 0, incorrectCount: 0, manualGradingCount: 0 },
+            },
+            quiz: { id: existingAttempt.quiz.id, title: existingAttempt.quiz.title },
+            results: [],
+            alreadySubmitted: true,
+          };
         }
         
         // Trả về attempt nếu đã được xử lý
