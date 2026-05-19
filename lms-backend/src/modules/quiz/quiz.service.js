@@ -555,7 +555,19 @@ class QuizService {
       };
     }
 
-    return { quiz, unlockStatus: unlock };
+    // Check if user already passed this final quiz
+    const { Attempt } = db.models;
+    const passedAttempt = await Attempt.findOne({
+      where: { userId, quizId: quiz.id, passed: true },
+      order: [['completedAt', 'DESC']],
+    });
+
+    return { quiz, unlockStatus: unlock, passedAttempt: passedAttempt ? {
+      id: passedAttempt.id,
+      score: passedAttempt.score,
+      percentageScore: passedAttempt.percentageScore,
+      completedAt: passedAttempt.completedAt,
+    } : null };
   }
 
   async awardCertificateAndLevelUp(userId, level) {
