@@ -104,6 +104,7 @@ class LearningPathService {
     const enrollmentMap = Object.fromEntries(
       allEnrollments.map(e => [e.courseId, Number(e.progressPercent || 0)])
     );
+    const enrolledCourseIds = new Set(allEnrollments.map(e => e.courseId));
 
     // 4. Build all 6 CEFR levels
     const cefrLevels = ['A1', 'A2', 'B1', 'B2', 'C1', 'C2'];
@@ -124,7 +125,7 @@ class LearningPathService {
             skill: pc.course.skill,
             isRequired: !!pc.course.isRequired,
             progress,
-            isEnrolled: !!enrollmentMap[pc.course.id],
+            isEnrolled: enrolledCourseIds.has(pc.course.id),
           };
         });
 
@@ -355,6 +356,7 @@ class LearningPathService {
     const enrollmentMap = Object.fromEntries(
       enrollments.map(e => [e.courseId, Number(e.progressPercent || 0)])
     );
+    const enrolledCourseIds = new Set(enrollments.map(e => e.courseId));
 
     const courses = (path.pathCourses || [])
       .filter(pc => pc.course)
@@ -362,7 +364,7 @@ class LearningPathService {
         ...pc.course.toJSON(),
         orderIndex: pc.orderIndex,
         isRequired: pc.isRequired,
-        isEnrolled: !!enrollmentMap[pc.course.id],
+        isEnrolled: enrolledCourseIds.has(pc.course.id),
         progressPercent: enrollmentMap[pc.course.id] || 0,
       }));
 
