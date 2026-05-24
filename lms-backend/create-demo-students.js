@@ -5,7 +5,13 @@ const { sequelize, models } = require('./src/models');
 const DEMO_PASSWORD = 'demo123';
 
 async function cleanupDemoUsers(demoEmails) {
-  const { User, UserLearningPath, Enrollment, LectureProgress, Attempt, LevelCertificate, Notification, LessonMessage, ChatEscalation, ChatParticipant } = models;
+  const {
+    User, UserLearningPath, Enrollment, LectureProgress, Attempt, LevelCertificate,
+    Notification, LessonMessage, ChatEscalation, ChatParticipant,
+    AiMessage, AiConversation, PlacementResponse, PlacementSession,
+    LearningAnalytics, UserLearningProfile, AiRecommendation,
+    Review, Payment, ScheduleEvent, ForumPost, ForumReport, ForumTopic, Tracking,
+  } = models;
 
   const users = await User.findAll({ where: { email: demoEmails }, attributes: ['id'] });
   const userIds = users.map(u => u.id);
@@ -13,21 +19,55 @@ async function cleanupDemoUsers(demoEmails) {
 
   console.log(`🧹 Xóa dữ liệu ${userIds.length} demo user(s)...`);
 
+  // Chat & messaging
   await ChatParticipant.destroy({ where: { userId: userIds } });
-
-  // Get lesson message IDs first to clean up escalations
   const lessonMsgs = await LessonMessage.findAll({ where: { senderId: userIds }, attributes: ['id'] });
   const lessonMsgIds = lessonMsgs.map(m => m.id);
   if (lessonMsgIds.length > 0) {
     await ChatEscalation.destroy({ where: { messageId: lessonMsgIds } });
   }
   await LessonMessage.destroy({ where: { senderId: userIds } });
-  await Notification.destroy({ where: { userId: userIds } });
+
+  // AI
+  const aiConvs = await AiConversation.findAll({ where: { userId: userIds }, attributes: ['id'] });
+  const aiConvIds = aiConvs.map(c => c.id);
+  if (aiConvIds.length > 0) await AiMessage.destroy({ where: { conversationId: aiConvIds } });
+  await AiConversation.destroy({ where: { userId: userIds } });
+  await AiRecommendation.destroy({ where: { userId: userIds } });
+
+  // Placement
+  const plSessions = await PlacementSession.findAll({ where: { userId: userIds }, attributes: ['id'] });
+  const plSessionIds = plSessions.map(s => s.id);
+  if (plSessionIds.length > 0) await PlacementResponse.destroy({ where: { sessionId: plSessionIds } });
+  await PlacementSession.destroy({ where: { userId: userIds } });
+
+  // Learning & progress
+  await LearningAnalytics.destroy({ where: { userId: userIds } });
+  await UserLearningProfile.destroy({ where: { userId: userIds } });
   await LectureProgress.destroy({ where: { userId: userIds } });
   await Attempt.destroy({ where: { userId: userIds } });
+  await Tracking.destroy({ where: { userId: userIds } });
+
+  // Enrollments & certificates
   await Enrollment.destroy({ where: { userId: userIds } });
   await UserLearningPath.destroy({ where: { userId: userIds } });
   await LevelCertificate.destroy({ where: { userId: userIds } });
+
+  // Reviews, payments, notifications, schedule, forum
+  await Review.destroy({ where: { userId: userIds } });
+  await Payment.destroy({ where: { userId: userIds } });
+  await Notification.destroy({ where: { userId: userIds } });
+  await ScheduleEvent.destroy({ where: { createdBy: userIds } });
+  const forumPosts = await ForumPost.findAll({ where: { userId: userIds }, attributes: ['id'] });
+  const forumPostIds = forumPosts.map(p => p.id);
+  if (forumPostIds.length > 0) {
+    await ForumReport.destroy({ where: { postId: forumPostIds } });
+  }
+  await ForumPost.destroy({ where: { userId: userIds } });
+  await ForumTopic.destroy({ where: { userId: userIds } });
+  await ForumReport.destroy({ where: { reporterId: userIds } });
+
+  // User
   await User.destroy({ where: { id: userIds } });
 
   console.log('🧹 Đã reset xong demo users');
@@ -179,6 +219,178 @@ async function createQuizFailedAttempt(userId, course) {
   });
 }
 
+async function createPlacementSession(userId, level) {
+  const { PlacementSession } = models;
+  const levelScore = { A1: 1, A2: 2, B1: 3, B2: 4, C1: 5, C2: 6 };
+  const score = levelScore[level] || 3;
+  await PlacementSession.findOrCreate({
+    where: { userId, finalCefrLevel: level },
+    defaults: {
+      userId,
+      selfAssessedLevel: level,
+      status: 'completed',
+      currentCefrLevel: level,
+      abilityScore: score,
+      questionCount: 20 + Math.floor(Math.random() * 10),
+      correctCount: 15 + Math.floor(Math.random() * 8),
+      streakCorrect: 5 + Math.floor(Math.random() * 5),
+      streakWrong: Math.floor(Math.random() * 3),
+      finalCefrLevel: level,
+      confidenceScore: 0.7 + Math.random() * 0.25,
+      startedAt: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000),
+      completedAt: new Date(Date.now() - 6 * 24 * 60 * 60 * 1000),
+      lastActivityAt: new Date(Date.now() - 6 * 24 * 60 * 60 * 1000),
+    },
+  });
+}
+
+async function createUserLearningProfile(userId, courseId, progress) {
+  const { UserLearningProfile } = models;
+  const styles = ['visual', 'auditory', 'kinesthetic', 'reading'];
+  const style = styles[Math.floor(Math.random() * styles.length)];
+  const studyTime = progress === 100 ? 1200 + Math.floor(Math.random() * 800) : Math.floor((progress / 100) * 1200);
+  await UserLearningProfile.findOrCreate({
+    where: { userId, courseId },
+    defaults: {
+      userId,
+      courseId,
+      learningStyle: style,
+      difficultyPreference: 'adaptive',
+      averageScore: progress >= 80 ? 75 + Math.random() * 20 : 50 + Math.random() * 25,
+      totalStudyTime: studyTime,
+      completedLectures: Math.floor((progress / 100) * 10),
+      totalLectures: 10,
+      lastActivityAt: new Date(),
+      preferredStudyTime: ['morning', 'afternoon', 'evening', 'night'][Math.floor(Math.random() * 4)],
+      weakTopics: progress < 60 ? JSON.stringify(['grammar', 'vocabulary']) : JSON.stringify([]),
+      strongTopics: progress > 70 ? JSON.stringify(['listening', 'speaking']) : JSON.stringify([]),
+      goals: JSON.stringify({ weeklyHours: 5, targetLevel: 'B2' }),
+      preferences: JSON.stringify({ subtitles: true, speed: 'normal' }),
+    },
+  });
+}
+
+async function createLearningAnalytics(userId, courseId, lectures, progress) {
+  const { LearningAnalytics } = models;
+  if (progress <= 0 || lectures.length === 0) return;
+  const count = Math.ceil((lectures.length * progress) / 100);
+  const completedLectures = lectures.slice(0, count);
+  for (let i = 0; i < completedLectures.length; i++) {
+    const lec = completedLectures[i];
+    await LearningAnalytics.create({
+      userId,
+      courseId,
+      lectureId: lec.id,
+      eventType: 'lecture_complete',
+      duration: 300 + Math.floor(Math.random() * 600),
+      score: null,
+      maxScore: null,
+      attempts: 1,
+      difficulty: ['easy', 'medium', 'hard'][Math.floor(Math.random() * 3)],
+      deviceType: ['desktop', 'mobile', 'tablet'][Math.floor(Math.random() * 3)],
+      sessionId: `demo-session-${userId}-${courseId}`,
+    });
+    if (i % 3 === 0) {
+      await LearningAnalytics.create({
+        userId,
+        courseId,
+        lectureId: lec.id,
+        eventType: 'quiz_complete',
+        duration: 120 + Math.floor(Math.random() * 300),
+        score: 70 + Math.floor(Math.random() * 30),
+        maxScore: 100,
+        attempts: 1 + Math.floor(Math.random() * 2),
+        difficulty: ['easy', 'medium', 'hard'][Math.floor(Math.random() * 3)],
+        deviceType: ['desktop', 'mobile', 'tablet'][Math.floor(Math.random() * 3)],
+        sessionId: `demo-session-${userId}-${courseId}`,
+      });
+    }
+  }
+}
+
+async function createNotifications(userId, courseTitle) {
+  const { Notification } = models;
+  const notifs = [
+    { type: 'enrollment', title: 'Đăng ký khóa học thành công', message: `Bạn đã đăng ký thành công khóa học ${courseTitle}.` },
+    { type: 'study_reminder', title: 'Nhắc nhở học tập', message: 'Đừng quên học bài hôm nay để duy trì tiến độ!' },
+    { type: 'course_update', title: 'Khóa học có cập nhật mới', message: `Khóa học ${courseTitle} vừa có bài giảng mới.` },
+  ];
+  for (const n of notifs) {
+    await Notification.create({
+      userId,
+      type: n.type,
+      title: n.title,
+      message: n.message,
+      payload: {},
+      read: Math.random() > 0.5,
+    });
+  }
+}
+
+async function createReviews(userId, courseId, progress) {
+  const { Review } = models;
+  if (progress < 100) return;
+  const comments = [
+    'Khóa học rất hữu ích, giáo viên giảng dạy dễ hiểu và nội dung phong phú.',
+    'Nội dung bài học được trình bày rõ ràng, phù hợp với trình độ của tôi.',
+    'Rất thích cách học tập trên nền tảng này, sẽ giới thiệu cho bạn bè.',
+    'Bài tập và quiz giúp củng cố kiến thức rất tốt.',
+  ];
+  await Review.findOrCreate({
+    where: { userId, courseId },
+    defaults: {
+      userId,
+      courseId,
+      rating: 4 + Math.floor(Math.random() * 2),
+      comment: comments[Math.floor(Math.random() * comments.length)],
+    },
+  });
+}
+
+async function createPayments(userId, courseId, courseTitle) {
+  const { Payment } = models;
+  await Payment.findOrCreate({
+    where: { userId, courseId, provider: 'vnpay' },
+    defaults: {
+      userId,
+      courseId,
+      amount: 299000 + Math.floor(Math.random() * 200000),
+      currency: 'VND',
+      provider: 'vnpay',
+      providerTxn: `DEMO-${Date.now()}-${userId}`,
+      status: 'completed',
+      paymentDetails: { courseTitle, method: 'VNPAY', demo: true },
+    },
+  });
+}
+
+async function createAiConversation(userId, courseId, courseTitle) {
+  const { AiConversation, AiMessage } = models;
+  const [conv] = await AiConversation.findOrCreate({
+    where: { userId, courseId, role: 'student' },
+    defaults: {
+      userId,
+      role: 'student',
+      courseId,
+      lectureId: null,
+      title: `Hỏi đáp: ${courseTitle}`,
+    },
+  });
+  const existingMsgs = await AiMessage.count({ where: { conversationId: conv.id } });
+  if (existingMsgs === 0) {
+    await AiMessage.create({
+      conversationId: conv.id,
+      sender: 'user',
+      content: 'Tôi không hiểu phần ngữ pháp này lắm, bạn có thể giải thích không?',
+    });
+    await AiMessage.create({
+      conversationId: conv.id,
+      sender: 'ai',
+      content: `Chào bạn! Ngữ pháp trong bài học này tập trung vào cấu trúc thì hiện tại đơn. Bạn có thể nghĩ đơn giản là hành động xảy ra thường xuyên. Nếu cần ví dụ cụ thể, hãy cho tôi biết nhé!`,
+    });
+  }
+}
+
 async function createDemoUser(demo) {
   const { User, UserLearningPath, Enrollment } = models;
 
@@ -273,6 +485,21 @@ async function createDemoUser(demo) {
       await createQuizFailedAttempt(user.id, course);
       console.log(`  ❌ Quiz failed for ${course.title}`);
     }
+
+    // New: learning profile, analytics, reviews, payments, AI chat
+    await createUserLearningProfile(user.id, course.id, enrollCfg.progress);
+    await createLearningAnalytics(user.id, course.id, course.lectures, enrollCfg.progress);
+    await createReviews(user.id, course.id, enrollCfg.progress);
+    if (!enrollCfg.expired && !enrollCfg.gracePeriod) {
+      await createPayments(user.id, course.id, course.title);
+    }
+    if (enrollCfg.progress > 0) {
+      await createAiConversation(user.id, course.id, course.title);
+    }
+    if (enrollCfg.progress > 0) {
+      await createNotifications(user.id, course.title);
+    }
+
     console.log(`  ✓ ${course.title}: ${enrollCfg.progress}%`);
   }
 
@@ -284,6 +511,14 @@ async function createDemoUser(demo) {
     }
   }
 
+  // 6. Placement test session (skip if explicitly disabled)
+  if (!demo.noPlacement) {
+    await createPlacementSession(user.id, demo.level);
+    console.log(`  📝 Placement test: ${demo.level}`);
+  } else {
+    console.log(`  ⏭️  Bỏ qua placement test (noPlacement=true)`);
+  }
+
   console.log(`  ✅ Done — đăng nhập: ${demo.email} / ${DEMO_PASSWORD}`);
 }
 
@@ -292,12 +527,80 @@ async function main() {
   console.log('✅ DB connected');
 
   const demos = [
+    // ========== A1 ==========
+    // 2 học viên chưa làm placement test
     {
-      name: 'Học viên A1 Mới',
-      email: 'student_a1@demo.com',
+      name: 'Học viên A1 Chưa placement (1)',
+      email: 'student_a1_noplace1@demo.com',
       level: 'A1',
-      enrollments: [{ courseIndex: 0, progress: 0 }],
+      noPlacement: true,
+      enrollments: [],
     },
+    {
+      name: 'Học viên A1 Chưa placement (2)',
+      email: 'student_a1_noplace2@demo.com',
+      level: 'A1',
+      noPlacement: true,
+      enrollments: [],
+    },
+    // Học viên xong 4 môn bắt buộc A1, chờ làm final test
+    {
+      name: 'Học viên A1 Xong 4 môn chờ Final',
+      email: 'student_a1_final@demo.com',
+      level: 'A1',
+      enrollments: [
+        { courseIndex: 0, progress: 100 },
+        { courseIndex: 1, progress: 100 },
+        { courseIndex: 2, progress: 100 },
+        { courseIndex: 3, progress: 100 },
+      ],
+      // Chưa có levelCertificates — sẽ làm final test sau
+    },
+    // Học viên hết hạn khóa học
+    {
+      name: 'Học viên A1 Hết hạn',
+      email: 'student_a1_expired@demo.com',
+      level: 'A1',
+      enrollments: [
+        { courseIndex: 0, progress: 40, expired: true },
+      ],
+    },
+
+    // ========== A2 ==========
+    {
+      name: 'Học viên A2 Đang học',
+      email: 'student_a2_half@demo.com',
+      level: 'A2',
+      enrollments: [
+        { courseIndex: 0, progress: 30 },
+        { courseIndex: 1, progress: 10 },
+      ],
+    },
+    {
+      name: 'Học viên A2 Sẵn sàng lên B1',
+      email: 'student_a2_ready@demo.com',
+      level: 'A2',
+      enrollments: [
+        { courseIndex: 0, progress: 100 },
+        { courseIndex: 1, progress: 100 },
+        { courseIndex: 2, progress: 100 },
+        { courseIndex: 3, progress: 70 },
+      ],
+    },
+    {
+      name: 'Học viên A2 Hoàn thành',
+      email: 'student_a2_done@demo.com',
+      level: 'A2',
+      enrollments: [
+        { courseIndex: 0, progress: 100 },
+        { courseIndex: 1, progress: 100 },
+        { courseIndex: 2, progress: 100 },
+        { courseIndex: 3, progress: 100 },
+      ],
+      levelCertificates: ['A2'],
+    },
+
+    // ========== B1 ==========
     {
       name: 'Học viên B1 Đang học',
       email: 'student_b1_half@demo.com',
@@ -319,17 +622,6 @@ async function main() {
       ],
     },
     {
-      name: 'Học viên B1 Hoàn thành 2',
-      email: 'student_b1_done2@demo.com',
-      level: 'B1',
-      enrollments: [
-        { courseIndex: 0, progress: 100 },
-        { courseIndex: 1, progress: 100 },
-        { courseIndex: 2, progress: 100 },
-        { courseIndex: 3, progress: 100 },
-      ],
-    },
-    {
       name: 'Học viên B1 Hoàn thành + Cert',
       email: 'student_b1_cert@demo.com',
       level: 'B1',
@@ -340,79 +632,6 @@ async function main() {
         { courseIndex: 3, progress: 100 },
       ],
       levelCertificates: ['B1'],
-    },
-    {
-      name: 'Học viên B1 Hoàn thành + Cert',
-      email: 'student_b1_cert1@demo.com',
-      level: 'B1',
-      enrollments: [
-        { courseIndex: 0, progress: 100 },
-        { courseIndex: 1, progress: 100 },
-        { courseIndex: 2, progress: 100 },
-        { courseIndex: 3, progress: 100 },
-      ],
-      levelCertificates: ['B1'],
-    },
-    {
-      name: 'Học viên B1 Hoàn thành + Cert',
-      email: 'student_b1_cert2@demo.com',
-      level: 'B1',
-      enrollments: [
-        { courseIndex: 0, progress: 100 },
-        { courseIndex: 1, progress: 100 },
-        { courseIndex: 2, progress: 100 },
-        { courseIndex: 3, progress: 100 },
-      ],
-      levelCertificates: ['B1'],
-    },
-    {
-      name: 'Học viên B2',
-      email: 'student_b2@demo.com',
-      level: 'B2',
-      enrollments: [{ courseIndex: 0, progress: 25 }],
-    },
-    {
-      name: 'Học viên C1',
-      email: 'student_c1@demo.com',
-      level: 'C1',
-      enrollments: [
-        { courseIndex: 0, progress: 60 },
-        { courseIndex: 1, progress: 10 },
-      ],
-    },
-    {
-      name: 'Học viên Hết hạn',
-      email: 'student_expired@demo.com',
-      level: 'A1',
-      enrollments: [
-        { courseIndex: 0, progress: 40, expired: true },
-      ],
-    },
-    {
-      name: 'Học viên Hết hạn 2',
-      email: 'student_expired1@demo.com',
-      level: 'A1',
-      enrollments: [
-        { courseIndex: 0, progress: 40, expired: true },
-      ],
-    },
-    {
-      name: 'Chưa có lộ trình',
-      email: 'student_no_path@demo.com',
-      level: 'A1',
-      noPath: true,
-      enrollments: [],
-    },
-    {
-      name: 'Học viên A2 Sẵn sàng lên B1',
-      email: 'student_a2_ready@demo.com',
-      level: 'A2',
-      enrollments: [
-        { courseIndex: 0, progress: 100 },
-        { courseIndex: 1, progress: 100 },
-        { courseIndex: 2, progress: 100 },
-        { courseIndex: 3, progress: 70 },
-      ],
     },
     {
       name: 'Học viên B1 Sẵn sàng lên B2',
@@ -426,27 +645,43 @@ async function main() {
       ],
     },
     {
-      name: 'Học viên Grace Period',
-      email: 'student_grace@demo.com',
-      level: 'A1',
+      name: 'Học viên B1 Hết hạn',
+      email: 'student_b1_expired@demo.com',
+      level: 'B1',
+      enrollments: [
+        { courseIndex: 0, progress: 60, expired: true },
+      ],
+    },
+    {
+      name: 'Học viên B1 Grace Period',
+      email: 'student_b1_grace@demo.com',
+      level: 'B1',
       enrollments: [
         { courseIndex: 0, progress: 60, gracePeriod: true },
       ],
     },
     {
-      name: 'Học viên A1 Hoàn thành + Cert',
-      email: 'student_a1_done@demo.com',
-      level: 'A1',
+      name: 'Học viên B1 Quiz Failed',
+      email: 'student_b1_quizfail@demo.com',
+      level: 'B1',
       enrollments: [
-        { courseIndex: 0, progress: 100 },
-        { courseIndex: 1, progress: 100 },
-        { courseIndex: 2, progress: 100 },
-        { courseIndex: 3, progress: 100 },
+        { courseIndex: 0, progress: 80, quizFail: true },
+        { courseIndex: 1, progress: 60 },
       ],
-      levelCertificates: ['A1'],
+    },
+
+    // ========== B2 ==========
+    {
+      name: 'Học viên B2 Đang học',
+      email: 'student_b2_half@demo.com',
+      level: 'B2',
+      enrollments: [
+        { courseIndex: 0, progress: 25 },
+        { courseIndex: 1, progress: 10 },
+      ],
     },
     {
-      name: 'Học viên B2 Hoàn thành + Cert',
+      name: 'Học viên B2 Hoàn thành',
       email: 'student_b2_done@demo.com',
       level: 'B2',
       enrollments: [
@@ -458,11 +693,61 @@ async function main() {
       levelCertificates: ['B2'],
     },
     {
-      name: 'Học viên Full CEFR',
-      email: 'student_c2_done@demo.com',
+      name: 'Học viên B2 Hết hạn',
+      email: 'student_b2_expired@demo.com',
+      level: 'B2',
+      enrollments: [
+        { courseIndex: 0, progress: 30, expired: true },
+      ],
+    },
+
+    // ========== C1 ==========
+    {
+      name: 'Học viên C1 Đang học',
+      email: 'student_c1_half@demo.com',
+      level: 'C1',
+      enrollments: [
+        { courseIndex: 0, progress: 60 },
+        { courseIndex: 1, progress: 10 },
+      ],
+    },
+    {
+      name: 'Học viên C1 Hoàn thành',
+      email: 'student_c1_done@demo.com',
+      level: 'C1',
+      enrollments: [
+        { courseIndex: 0, progress: 100 },
+        { courseIndex: 1, progress: 100 },
+        { courseIndex: 2, progress: 100 },
+        { courseIndex: 3, progress: 100 },
+      ],
+      levelCertificates: ['C1'],
+    },
+
+    // ========== C2 ==========
+    {
+      name: 'Học viên C2 Đang học',
+      email: 'student_c2_half@demo.com',
+      level: 'C2',
+      enrollments: [
+        { courseIndex: 0, progress: 10 },
+      ],
+    },
+    {
+      name: 'Học viên C2 Full CEFR',
+      email: 'student_c2_full@demo.com',
       level: 'C2',
       allLevels: true,
       levelCertificates: ['A1', 'A2', 'B1', 'B2', 'C1', 'C2'],
+    },
+
+    // ========== Edge Cases ==========
+    {
+      name: 'Chưa có lộ trình',
+      email: 'student_no_path@demo.com',
+      level: 'A1',
+      noPath: true,
+      enrollments: [],
     },
     {
       name: 'Học viên Nhiều chứng chỉ',
@@ -473,15 +758,6 @@ async function main() {
         { courseIndex: 1, progress: 100 },
       ],
       levelCertificates: ['A1', 'A2', 'B1'],
-    },
-    {
-      name: 'Học viên Quiz Failed',
-      email: 'student_quiz_fail@demo.com',
-      level: 'B1',
-      enrollments: [
-        { courseIndex: 0, progress: 80, quizFail: true },
-        { courseIndex: 1, progress: 60 },
-      ],
     },
   ];
 

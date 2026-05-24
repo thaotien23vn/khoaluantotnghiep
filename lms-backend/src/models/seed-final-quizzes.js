@@ -233,14 +233,11 @@ async function seed() {
     }
   }
 
-  // 2. Find or create admin user
-  console.log('\n2. Finding admin user...');
-  let adminUser = await User.findOne({ where: { role: 'admin' }, order: [['id', 'ASC']] });
+  // 2. Use teacher user ID = 5 as the creator
+  console.log('\n2. Finding teacher user (id = 5)...');
+  const adminUser = await User.findByPk(5);
   if (!adminUser) {
-    adminUser = await User.findOne({ order: [['id', 'ASC']] });
-  }
-  if (!adminUser) {
-    console.log('   ❌ No users found. Cannot create quizzes.');
+    console.log('   ❌ Teacher user #5 not found. Cannot create quizzes.');
     process.exit(1);
   }
   console.log(`   Found user #${adminUser.id} (${adminUser.role})`);

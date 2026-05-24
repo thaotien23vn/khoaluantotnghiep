@@ -748,7 +748,7 @@ class PlacementService {
    * @returns {number} new ability score (clamped 1-6)
    */
   updateAbility(theta, b, correct) {
-    const LEARNING_RATE = 0.8; // More responsive than 0.5
+    const LEARNING_RATE = 0.4; 
     
     // IRT: probability of correct answer
     const p = 1 / (1 + Math.exp(-(theta - b)));

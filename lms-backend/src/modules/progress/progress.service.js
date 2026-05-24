@@ -80,40 +80,13 @@ class ProgressService {
       },
     });
 
-    // 🛡️ FIX E5: Rate limiting - không cho phép cập nhật quá nhanh (tối thiểu 8 giây)
-    // Skip rate limit if: already completed, or reaching completion threshold (80%+)
-    const MIN_UPDATE_INTERVAL = 8; // seconds
-    const isCompletionUpdate = watched >= 80 || progress.isCompleted;
-    if (!created && !isCompletionUpdate && lecture.type === 'video' && process.env.NODE_ENV !== 'test') {
-      const now = new Date();
-      const prevLastAccessedAt = progress.lastAccessedAt ? new Date(progress.lastAccessedAt) : null;
-      const elapsedSeconds = prevLastAccessedAt ? Math.max(0, (now - prevLastAccessedAt) / 1000) : null;
-      
-      if (elapsedSeconds !== null && elapsedSeconds < MIN_UPDATE_INTERVAL) {
-        throw { status: 429, message: 'Cập nhật tiến độ quá nhanh. Vui lòng chờ một chút.' };
-      }
-    }
+    // 🛡️ FIX E5: Rate limiting - disabled
+    // const MIN_UPDATE_INTERVAL = 8;
+    // const isCompletionUpdate = watched >= 80 || progress.isCompleted;
+    // if (!created && !isCompletionUpdate && lecture.type === 'video' && process.env.NODE_ENV !== 'test') { ... }
 
-    // Anti-cheat (safe timestamps): do not rely on createdAt (LectureProgress timestamps:false).
-    // Use previous lastAccessedAt for incremental progress jumps.
-    if (!created && lecture.type === 'video' && Number(lecture.duration || 0) > 0 && process.env.NODE_ENV !== 'test') {
-      const now = new Date();
-      const prevLastAccessedAt = progress.lastAccessedAt ? new Date(progress.lastAccessedAt) : null;
-      const elapsedSeconds = prevLastAccessedAt ? Math.max(0, (now - prevLastAccessedAt) / 1000) : null;
-      const prevWatched = Number(progress.watchedPercent || 0);
-      const deltaWatched = Math.max(0, watched - prevWatched);
-      const claimedDeltaSeconds = (deltaWatched / 100) * Number(lecture.duration || 0);
-
-      if (
-        elapsedSeconds !== null &&
-        !progress.isCompleted &&
-        watched > 50 &&
-        deltaWatched >= 30 &&
-        elapsedSeconds < Math.max(10, claimedDeltaSeconds * 0.05)
-      ) {
-        throw { status: 400, message: 'Phát hiện thao tác bỏ qua video bất thường. Vui lòng học đúng tiến trình.' };
-      }
-    }
+    // Anti-cheat - disabled
+    // if (!created && lecture.type === 'video' && Number(lecture.duration || 0) > 0 && process.env.NODE_ENV !== 'test') { ... }
 
     if (!created) {
       // Only advance watchedPercent, never regress
