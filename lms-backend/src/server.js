@@ -2,7 +2,7 @@ require('dotenv').config();
 const app = require('./app');
 const { sequelize } = require('./models');
 const { connectDB } = require('./models');
-const { autoSeed } = require('./models/seed');
+const { autoSeed } = require('./models/seed-rich');
 const emailService = require('./services/email.service');
 const http = require('http');
 const { initSocket } = require('./socket');

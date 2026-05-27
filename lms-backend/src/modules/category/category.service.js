@@ -11,8 +11,8 @@ class CategoryService {
    */
   async getCategories() {
     const categories = await Category.findAll({
-      attributes: ['id', 'name', 'menuSection'],
-      order: [['name', 'ASC']],
+      attributes: ['id', 'name', 'description', 'icon', 'sortOrder', 'isActive'],
+      order: [['sortOrder', 'ASC']],
     });
 
     return { categories };
