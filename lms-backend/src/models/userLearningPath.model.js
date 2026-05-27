@@ -28,10 +28,10 @@ module.exports = (sequelize) => {
         },
       },
       currentLevel: {
-        type: DataTypes.ENUM('A1', 'A2', 'B1', 'B2', 'C1', 'C2'),
+        type: DataTypes.STRING,
         allowNull: true,
         field: 'current_level',
-        comment: 'CEFR level assigned after placement test',
+        comment: 'Current level the user is working on within this learning path',
       },
       overallProgress: {
         type: DataTypes.DECIMAL(5, 2),

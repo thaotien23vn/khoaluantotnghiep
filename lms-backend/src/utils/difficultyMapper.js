@@ -1,50 +1,49 @@
 /**
- * Difficulty to CEFR level mapping utility
+ * Difficulty to generic level mapping utility
  * 
- * Easy -> A1/A2
- * Medium -> B1/B2
- * Hard -> C1/C2
+ * Easy -> beginner
+ * Medium -> intermediate
+ * Hard -> advanced
  */
 
-const difficultyToCefrMap = {
-  easy: ['A1', 'A2'],
-  medium: ['B1', 'B2'],
-  hard: ['C1', 'C2'],
+const difficultyToLevelMap = {
+  easy: ['beginner'],
+  medium: ['intermediate'],
+  hard: ['advanced'],
 };
 
 /**
- * Get random CEFR level based on difficulty
+ * Get generic level based on difficulty
  * @param {string} difficulty - 'easy' | 'medium' | 'hard'
- * @returns {string} CEFR level (A1, A2, B1, B2, C1, C2)
+ * @returns {string} Generic level (beginner, intermediate, advanced)
  */
-function getCefrLevel(difficulty) {
-  const levels = difficultyToCefrMap[difficulty] || difficultyToCefrMap.easy;
-  // Randomly select one level from the range
-  return levels[Math.floor(Math.random() * levels.length)];
+function getGenericLevel(difficulty) {
+  const levels = difficultyToLevelMap[difficulty] || difficultyToLevelMap.easy;
+  return levels[0];
 }
 
 /**
- * Map quiz difficulty to CEFR for question bank storage
+ * Map quiz difficulty to generic level
  * @param {string} difficulty - Quiz difficulty level
- * @returns {string} CEFR level
+ * @returns {string} Generic level
  */
-function mapQuizDifficultyToCefr(difficulty) {
+function mapQuizDifficultyToLevel(difficulty) {
   const normalized = difficulty?.toLowerCase() || 'medium';
-  return getCefrLevel(normalized);
+  return getGenericLevel(normalized);
 }
 
 /**
- * Get CEFR range for difficulty
+ * Get level range for difficulty
  * @param {string} difficulty 
- * @returns {string[]} Array of CEFR levels
+ * @returns {string[]} Array of levels
  */
-function getCefrRange(difficulty) {
-  return difficultyToCefrMap[difficulty?.toLowerCase()] || difficultyToCefrMap.medium;
+function getLevelRange(difficulty) {
+  return difficultyToLevelMap[difficulty?.toLowerCase()] || difficultyToLevelMap.medium;
 }
 
 module.exports = {
-  getCefrLevel,
-  mapQuizDifficultyToCefr,
-  getCefrRange,
-  difficultyToCefrMap,
+  getGenericLevel,
+  mapQuizDifficultyToLevel,
+  getLevelRange,
+  difficultyToLevelMap,
 };

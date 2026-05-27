@@ -41,9 +41,9 @@ module.exports = (sequelize) => {
       },
     },
     skill: {
-      type: DataTypes.ENUM('listening', 'speaking', 'reading', 'writing', 'integrated'),
+      type: DataTypes.STRING,
       allowNull: true,
-      comment: 'Skill focus for this course within the CEFR level',
+      comment: 'Skill/tag focus for this course (e.g. Python, Photoshop, Communication)',
     },
     deletedAt: {
       type: DataTypes.DATE,

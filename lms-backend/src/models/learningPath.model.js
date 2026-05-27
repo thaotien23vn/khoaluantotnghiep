@@ -30,7 +30,7 @@ module.exports = (sequelize) => {
           model: 'categories',
           key: 'id',
         },
-        comment: 'Optional: if this path maps to a single CEFR category',
+        comment: 'Optional: links this path to a specific category',
       },
       isActive: {
         type: DataTypes.BOOLEAN,

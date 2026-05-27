@@ -10,7 +10,6 @@ const {
   AiChunk,
   Course,
   User,
-  PlacementSession,
   UserLearningProfile,
   Enrollment,
   Quiz,
@@ -23,9 +22,9 @@ const MAX_CONTEXT_CHUNKS = 8;
 const RESPONSE_CACHE_TTL_MS = 5 * 60 * 1000; // 5 minutes
 const responseCache = new Map();
 
-function getCacheKey(query, cefrLevel) {
+function getCacheKey(query) {
   const normalized = query.trim().toLowerCase().replace(/\s+/g, ' ');
-  return crypto.createHash('md5').update(`${cefrLevel}:${normalized}`).digest('hex');
+  return crypto.createHash('md5').update(normalized).digest('hex');
 }
 
 function getCachedResponse(key) {
@@ -117,24 +116,11 @@ class AiSupportService {
         attributes: ['id', 'username', 'role'],
       });
 
-      const placement = await PlacementSession.findOne({
-        where: { userId, status: 'completed' },
-        order: [['completedAt', 'DESC']],
-      });
-
       const enrolledCount = await Enrollment.count({
         where: { userId, status: 'active' },
       });
 
       let welcomeParts = [`Xin chào ${user?.username || 'bạn'}! 👋`];
-
-      // Add proficiency info
-      if (placement?.finalCefrLevel) {
-        welcomeParts.push(`\n\n🎯 Trình độ hiện tại của bạn: **${placement.finalCefrLevel}**`);
-        if (placement.confidenceScore) {
-          welcomeParts.push(` (độ tin cậy: ${Math.round(placement.confidenceScore * 100)}%)`);
-        }
-      }
 
       // Add enrollment info
       welcomeParts.push(`\n📚 Bạn đang tham gia **${enrolledCount}** khóa học.`);
@@ -282,9 +268,7 @@ class AiSupportService {
 
       // 1.5 Check response cache for identical/similar queries (skip for history-dependent queries)
       const isSimpleQuery = history.length === 0 || history.length <= 2;
-      const cacheKey = isSimpleQuery
-        ? getCacheKey(query, userContext?.cefrLevel || 'unknown')
-        : null;
+      const cacheKey = isSimpleQuery ? getCacheKey(query) : null;
       if (cacheKey) {
         const cached = getCachedResponse(cacheKey);
         if (cached) {
@@ -362,12 +346,6 @@ class AiSupportService {
         attributes: ['id', 'username', 'role', 'email'],
       });
 
-      // Get placement data
-      const placement = await PlacementSession.findOne({
-        where: { userId, status: 'completed' },
-        order: [['completedAt', 'DESC']],
-      });
-
       // Get active enrollments
       const enrollments = await Enrollment.findAll({
         where: { userId, status: 'active' },
@@ -412,11 +390,7 @@ class AiSupportService {
           username: user?.username,
           role: user?.role,
         },
-        proficiency: placement ? {
-          level: placement.finalCefrLevel,
-          confidence: placement.confidenceScore,
-          selfAssessed: placement.selfAssessedLevel,
-        } : null,
+        proficiency: null,
         enrollments: enrollments.map(e => ({
           courseId: e.courseId,
           title: e.course?.title,
@@ -605,28 +579,18 @@ class AiSupportService {
       const isCourseQuery = courseKeywords.some(k => queryLower.includes(k));
 
       if (isCourseQuery) {
-        // Get placement level
-        const placement = await PlacementSession.findOne({
-          where: { userId, status: 'completed' },
-          order: [['completedAt', 'DESC']],
-        });
-
-        const level = placement?.finalCefrLevel || 'B1';
-
-        // Find suitable courses
+        // Find popular courses
         const suggestedCourses = await Course.findAll({
-          where: {
-            published: true,
-            level: this.mapCefrToCourseLevel(level),
-          },
+          where: { published: true },
           attributes: ['id', 'title', 'description', 'level', 'imageUrl', 'students'],
+          order: [['students', 'DESC']],
           limit: 3,
         });
 
         if (suggestedCourses.length) {
           recommendations.push({
             type: 'course_suggestion',
-            title: 'Khóa học phù hợp với trình độ của bạn',
+            title: 'Các khóa học phổ biến',
             items: suggestedCourses.map(c => ({
               id: c.id,
               title: c.title,
@@ -680,18 +644,13 @@ class AiSupportService {
   }
 
   /**
-   * Map CEFR level to course level
+   * Normalize level string for course lookup
    */
-  mapCefrToCourseLevel(cefr) {
-    const mapping = {
-      'A1': 'beginner',
-      'A2': 'elementary',
-      'B1': 'intermediate',
-      'B2': 'upper-intermediate',
-      'C1': 'advanced',
-      'C2': 'proficiency',
-    };
-    return mapping[cefr] || 'all-levels';
+  normalizeCourseLevel(level) {
+    if (!level) return 'all-levels';
+    const normalized = level.toLowerCase().trim();
+    const validLevels = ['beginner', 'elementary', 'intermediate', 'upper-intermediate', 'advanced', 'proficiency', 'all-levels'];
+    return validLevels.includes(normalized) ? normalized : 'all-levels';
   }
 
   /**
@@ -713,7 +672,7 @@ NHIỆM VỤ:
 
 QUY TẮC VỀ FORMAT GỢI Ý KHÓA HỌC:
 Khi gợi ý khóa học cụ thể, hãy sử dụng format: COURSE_CARD(id|tên khóa học|trình độ)
-Ví dụ: COURSE_CARD(123|Mastering C2 English|C2)
+Ví dụ: COURSE_CARD(123|Mastering Advanced English|advanced)
 
 QUAN TRỌNG - LUÔN TUÂN THỦ:
 - Sử dụng CHỈ id (số) từ dữ liệu được cung cấp trong format COURSE_CARD
@@ -723,10 +682,10 @@ QUAN TRỌNG - LUÔN TUÂN THỦ:
 VÍ DỤ MẪU - CÁCH TRẢ LỜI:
 
 User: "Tôi muốn học tiếng Anh giao tiếp"
-AI: "Tôi gợi ý khóa học COURSE_CARD(123|Tiếng Anh Giao tiếp B1|B1) cho bạn. Khóa học này tập trung vào kỹ năng nói và phản xạ trong giao tiếp hàng ngày."
+AI: "Tôi gợi ý khóa học COURSE_CARD(123|Tiếng Anh Giao tiếp intermediate|intermediate) cho bạn. Khóa học này tập trung vào kỹ năng nói và phản xạ trong giao tiếp hàng ngày."
 
 User: "Khóa học nào phù hợp cho người mới bắt đầu?"
-AI: "Với người mới bắt đầu, tôi đề xuất COURSE_CARD(456|Tiếng Anh Cơ bản A1|A1). Đây là khóa học xây dựng nền tảng vững chắc từ đầu."
+AI: "Với người mới bắt đầu, tôi đề xuất COURSE_CARD(456|Tiếng Anh Cơ bản beginner|beginner). Đây là khóa học xây dựng nền tảng vững chắc từ đầu."
 
 QUY TẮC CHUNG:
 1. Trả lời bằng tiếng Việt, thân thiện và chuyên nghiệp
@@ -854,12 +813,6 @@ QUY TẮC CHUNG:
         action: 'find_courses',
       });
     }
-
-    quickActions.push({
-      type: 'placement_test',
-      label: '🎯 Làm bài test trình độ',
-      action: 'start_placement',
-    });
 
     return {
       content: text,
@@ -993,19 +946,6 @@ QUY TẮC CHUNG:
       const suggestions = [];
       const { currentPage } = context;
 
-      // Check if user has placement
-      const hasPlacement = await PlacementSession.count({
-        where: { userId, status: 'completed' },
-      });
-
-      if (!hasPlacement) {
-        suggestions.push({
-          text: 'Làm bài test trình độ',
-          action: 'start_placement',
-          icon: '🎯',
-        });
-      }
-
       // Check enrollments
       const enrollmentCount = await Enrollment.count({
         where: { userId, status: 'active' },
@@ -1062,8 +1002,7 @@ QUY TẮC CHUNG:
           return this.handleFindCourses(userId);
         case 'show_recommendations':
           return this.handleShowRecommendations(userId);
-        case 'start_placement':
-          return { type: 'redirect', url: '/placement-test', message: 'Đang chuyển đến bài test...' };
+        // Removed placement test
         case 'continue_learning':
           return this.handleContinueLearning(userId);
         case 'practice_quiz':
@@ -1084,14 +1023,8 @@ QUY TẮC CHUNG:
    */
   async handleFindCourses(userId) {
     try {
-      // Get placement level
-      const placement = await PlacementSession.findOne({
-        where: { userId, status: 'completed' },
-        order: [['completedAt', 'DESC']],
-      });
-
-      const level = placement?.finalCefrLevel;
-      const courseLevel = level ? this.mapCefrToCourseLevel(level) : null;
+      const level = null;
+      const courseLevel = level ? this.normalizeCourseLevel(level) : null;
 
       const where = { published: true };
       if (courseLevel) {

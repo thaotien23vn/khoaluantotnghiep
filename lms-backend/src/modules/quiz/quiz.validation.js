@@ -119,8 +119,8 @@ const createFinalQuizValidation = [
   body('level')
     .notEmpty()
     .withMessage('Cấp độ không được để trống')
-    .isIn(['A1', 'A2', 'B1', 'B2', 'C1', 'C2'])
-    .withMessage('Cấp độ phải là A1, A2, B1, B2, C1 hoặc C2'),
+    .isIn(['beginner', 'elementary', 'intermediate', 'upper-intermediate', 'advanced', 'proficiency', 'all-levels'])
+    .withMessage('Cấp độ không hợp lệ'),
   body('maxScore')
     .optional()
     .isNumeric()

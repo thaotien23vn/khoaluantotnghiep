@@ -39,35 +39,10 @@ class LearningPathController {
         return res.json({
           success: true,
           data: null,
-          message: 'Bạn chưa có lộ trình học tập. Hãy làm bài kiểm tra đầu vào.',
+          message: 'Bạn chưa có lộ trình học tập. Hãy khám phá các khóa học phù hợp.',
         });
       }
       res.json({ success: true, data: progress });
-    } catch (error) {
-      handleServiceError(error, res);
-    }
-  }
-
-  /** Assign learning path to user after placement test */
-  async assignPath(req, res) {
-    try {
-      const validationError = handleValidationErrors(req, res);
-      if (validationError) return;
-      const { id: userId } = req.user;
-      const { cefrLevel } = req.body;
-      const result = await learningPathService.assignPath(userId, cefrLevel);
-      res.json({ success: true, message: 'Đã gán lộ trình học tập', data: result });
-    } catch (error) {
-      handleServiceError(error, res);
-    }
-  }
-
-  /** Advance user to next CEFR level */
-  async advanceLevel(req, res) {
-    try {
-      const { id: userId } = req.user;
-      const result = await learningPathService.advanceLevel(userId);
-      res.json({ success: true, message: `Đã lên cấp độ ${result.newLevel}`, data: result });
     } catch (error) {
       handleServiceError(error, res);
     }

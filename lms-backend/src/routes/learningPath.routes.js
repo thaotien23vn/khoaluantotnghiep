@@ -20,24 +20,6 @@ router.get('/', learningPathController.getAllPaths);
 router.get('/my-progress', authMiddleware, learningPathController.getMyProgress);
 
 /**
- * @route   POST /api/learning-paths/assign
- * @desc    Assign learning path to user (after placement test)
- * @access  Private
- */
-router.post(
-  '/assign',
-  authMiddleware,
-  [
-    body('cefrLevel')
-      .notEmpty()
-      .withMessage('CEFR level là bắt buộc')
-      .isIn(['A1', 'A2', 'B1', 'B2', 'C1', 'C2'])
-      .withMessage('CEFR level không hợp lệ'),
-  ],
-  learningPathController.assignPath
-);
-
-/**
  * @route   GET /api/learning-paths/:pathId
  * @desc    Get single learning path detail with courses
  * @access  Private
@@ -60,13 +42,6 @@ router.get(
   [param('courseId').isInt().withMessage('Course ID phải là số')],
   learningPathController.canEnrollCourse
 );
-
-/**
- * @route   POST /api/learning-paths/advance
- * @desc    Advance user to next CEFR level after completing all current level courses
- * @access  Private
- */
-router.post('/advance', authMiddleware, learningPathController.advanceLevel);
 
 /**
  * @route   POST /api/learning-paths/update-progress/:courseId

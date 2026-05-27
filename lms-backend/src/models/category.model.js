@@ -13,22 +13,30 @@ module.exports = (sequelize) => {
         type: DataTypes.STRING,
         allowNull: false,
       },
-      // Tùy chọn: gắn category này với một mục trên menu ngang FE
-      // Ví dụ: 'Bứt phá điểm số', 'Combo bứt phá', 'Luyện thi'
-      menuSection: {
+      description: {
+        type: DataTypes.TEXT,
+        allowNull: true,
+      },
+      icon: {
         type: DataTypes.STRING,
         allowNull: true,
+        comment: 'Icon name or URL for UI display',
       },
       sortOrder: {
         type: DataTypes.INTEGER.UNSIGNED,
         allowNull: false,
         defaultValue: 0,
-        comment: 'Order for CEFR levels: A1=1, A2=2, B1=3, B2=4, C1=5, C2=6',
+        comment: 'Display order in lists and menus',
       },
-      cefrLevel: {
-        type: DataTypes.ENUM('A1', 'A2', 'B1', 'B2', 'C1', 'C2'),
+      isActive: {
+        type: DataTypes.BOOLEAN,
+        allowNull: false,
+        defaultValue: true,
+      },
+      parentId: {
+        type: DataTypes.INTEGER.UNSIGNED,
         allowNull: true,
-        comment: 'CEFR level mapping for learning path',
+        comment: 'Support hierarchical categories (sub-categories)',
       },
     },
     {

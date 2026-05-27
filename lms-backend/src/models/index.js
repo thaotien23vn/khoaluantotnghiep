@@ -97,10 +97,6 @@ const models = {};
   'aiRecommendation',
   'learningAnalytics',
   'contentQualityScore',
-  'placementSession',
-  'placementQuestion',
-  'placementResponse',
-  'placementQuestionBank',
   'lessonChat',
   'lessonMessage',
   'chatParticipant',
@@ -153,10 +149,6 @@ const {
   AiRecommendation,
   LearningAnalytics,
   ContentQualityScore,
-  PlacementSession,
-  PlacementQuestion,
-  PlacementResponse,
-  PlacementQuestionBank,
   LessonChat,
   LessonMessage,
   ChatParticipant,
@@ -300,19 +292,6 @@ LearningAnalytics.belongsTo(Course, { foreignKey: 'courseId', as: 'course' });
 
 Lecture.hasMany(LearningAnalytics, { foreignKey: 'lectureId', as: 'learningEvents' });
 LearningAnalytics.belongsTo(Lecture, { foreignKey: 'lectureId', as: 'lecture' });
-
-// Placement Test Associations
-User.hasMany(PlacementSession, { foreignKey: 'userId', as: 'placementSessions' });
-PlacementSession.belongsTo(User, { foreignKey: 'userId', as: 'user' });
-
-PlacementSession.hasMany(PlacementQuestion, { foreignKey: 'sessionId', as: 'questions' });
-PlacementQuestion.belongsTo(PlacementSession, { foreignKey: 'sessionId', as: 'session' });
-
-PlacementSession.hasMany(PlacementResponse, { foreignKey: 'sessionId', as: 'responses' });
-PlacementResponse.belongsTo(PlacementSession, { foreignKey: 'sessionId', as: 'session' });
-
-PlacementQuestion.hasMany(PlacementResponse, { foreignKey: 'questionId', as: 'responses' });
-PlacementResponse.belongsTo(PlacementQuestion, { foreignKey: 'questionId', as: 'question' });
 
 // Lesson Chat Associations
 for (const model of [LessonChat, LessonMessage, ChatParticipant, ChatEscalation, ChatAnalytics]) {

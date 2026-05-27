@@ -43,9 +43,9 @@ module.exports = (sequelize) => {
       field: 'course_id',
     },
     level: {
-      type: DataTypes.ENUM('A1', 'A2', 'B1', 'B2', 'C1', 'C2'),
+      type: DataTypes.STRING,
       allowNull: true,
-      comment: 'CEFR level for final quiz (when isLevelFinal = true)',
+      comment: 'Difficulty level (e.g. beginner, intermediate, advanced)',
     },
     isLevelFinal: {
       type: DataTypes.BOOLEAN,

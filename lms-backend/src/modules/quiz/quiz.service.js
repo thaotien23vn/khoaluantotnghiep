@@ -3,16 +3,6 @@ const EnrollmentAccess = require('../enrollment/enrollment.access');
 const { Quiz, Question, Attempt, Course, Enrollment, UserLearningPath, LevelCertificate } = db.models;
 const { Op } = require('sequelize');
 
-const CEFR_SEQUENCE = ['A1', 'A2', 'B1', 'B2', 'C1', 'C2'];
-const CEFR_TO_COURSE_LEVEL = {
-  'A1': 'beginner',
-  'A2': 'elementary',
-  'B1': 'intermediate',
-  'B2': 'upper-intermediate',
-  'C1': 'advanced',
-  'C2': 'proficiency',
-};
-
 /**
  * Quiz Service - Business logic for quiz operations
  */
@@ -488,10 +478,9 @@ class QuizService {
   }
 
   async getUnlockStatus(userId, level) {
-    const courseLevel = CEFR_TO_COURSE_LEVEL[level];
     const requiredCourses = await Course.findAll({
       where: {
-        level: courseLevel,
+        level,
         isRequired: true,
         status: 'published',
         deletedAt: null,
@@ -598,20 +587,8 @@ class QuizService {
       isNew = true;
     }
 
-    const idx = CEFR_SEQUENCE.indexOf(level);
-    let levelUp = null;
-    if (idx !== -1 && idx < CEFR_SEQUENCE.length - 1) {
-      const nextLevel = CEFR_SEQUENCE[idx + 1];
-      const userPath = await UserLearningPath.findOne({
-        where: { userId, status: { [Op.in]: ['active', 'completed'] } },
-      });
-      if (userPath) {
-        await userPath.update({ currentLevel: nextLevel });
-      }
-      levelUp = { leveledUp: true, newLevel: nextLevel };
-    } else {
-      levelUp = { leveledUp: false, message: 'Đã đạt trình độ cao nhất' };
-    }
+    // No automatic level-up sequence (removed CEFR hardcoding)
+    const levelUp = { leveledUp: false };
 
     return { certificate: { certificateId: cert.certificateId, issuedAt: cert.issuedAt, isNew }, levelUp };
   }

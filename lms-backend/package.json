@@ -10,6 +10,7 @@
     "db:sync:prod": "node src/models/migrate.js",
     "db:migrate": "node src/models/migrate.js",
     "db:seed": "node src/models/seed.js",
+    "db:seed:final-quizzes": "node src/models/seed-final-quizzes.js",
     "db:reset": "set CLEANUP_DB=true&& node src/models/seed.js",
     "security-test": "bash test-security.sh",
     "test": "jest --runInBand",

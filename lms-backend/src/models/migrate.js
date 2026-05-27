@@ -51,7 +51,7 @@ async function runMigrations() {
         "id" SERIAL PRIMARY KEY,
         "user_id" INTEGER NOT NULL REFERENCES "users"("id") ON DELETE CASCADE,
         "path_id" INTEGER NOT NULL REFERENCES "learning_paths"("id") ON DELETE CASCADE,
-        "current_level" VARCHAR(2) CHECK ("current_level" IN ('A1','A2','B1','B2','C1','C2')),
+        "current_level" VARCHAR(50),
         "overall_progress" DECIMAL(5,2) NOT NULL DEFAULT 0.0,
         "started_at" TIMESTAMP WITH TIME ZONE,
         "completed_at" TIMESTAMP WITH TIME ZONE,
@@ -77,7 +77,7 @@ async function runMigrations() {
       CREATE TABLE IF NOT EXISTS "level_certificates" (
         "id" SERIAL PRIMARY KEY,
         "user_id" INTEGER NOT NULL REFERENCES "users"("id") ON DELETE CASCADE,
-        "level" VARCHAR(2) NOT NULL CHECK ("level" IN ('A1','A2','B1','B2','C1','C2')),
+        "level" VARCHAR(50) NOT NULL,
         "issued_at" TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
         "certificate_id" VARCHAR(255) NOT NULL UNIQUE,
         "created_at" TIMESTAMP WITH TIME ZONE NOT NULL,
@@ -103,13 +103,12 @@ async function runMigrations() {
   };
 
   await addColumnIfNotExists('categories', 'sort_order', 'INTEGER NOT NULL DEFAULT 0');
-  await addColumnIfNotExists('categories', 'cefr_level', 'VARCHAR(2)');
-  await addColumnIfNotExists('courses', 'skill', 'VARCHAR(20)');
+  await addColumnIfNotExists('courses', 'skill', 'VARCHAR(100)');
   await addColumnIfNotExists('courses', 'deleted_at', 'TIMESTAMP WITH TIME ZONE');
 
   // Final quiz refactor columns
   await addColumnIfNotExists('courses', 'is_required', 'BOOLEAN DEFAULT false');
-  await addColumnIfNotExists('quizzes', 'level', "VARCHAR(2) CHECK (\"level\" IN ('A1','A2','B1','B2','C1','C2'))");
+  await addColumnIfNotExists('quizzes', 'level', 'VARCHAR(50)');
   await addColumnIfNotExists('quizzes', 'is_level_final', 'BOOLEAN DEFAULT false');
 
   // Allow course_id on quizzes to be nullable (if it has NOT NULL constraint from before)

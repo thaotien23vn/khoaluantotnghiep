@@ -11,7 +11,6 @@ const notificationRoutes = require("./routes/notification.routes");
 const forumRoutes = require("./routes/forum.routes");
 const aiRoutes = require("./routes/ai.routes");
 const teacherStatisticsRoutes = require("./routes/teacher_statistics.routes");
-const placementRoutes = require("./routes/placement.routes");
 const chatRoutes = require("./routes/chat.routes");
 const protectedRoutes = require("./routes/protected.routes");
 const trackingRoutes = require("./routes/tracking.routes");
@@ -177,9 +176,6 @@ app.use("/api", quizRoutes);
 
 app.use("/api/teacher", teacherStatisticsRoutes);
 app.use("/api", aiRoutes);
-
-// Placement test routes
-app.use("/api", placementRoutes);
 
 // Learning path routes
 app.use("/api/learning-paths", learningPathRoutes);

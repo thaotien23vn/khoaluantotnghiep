@@ -39,7 +39,7 @@ class EnrollmentService {
       }
     }
 
-    // Check CEFR level eligibility via learning path
+    // Check learning path eligibility
     try {
       const enrollCheck = await learningPathService.canEnrollCourse(userId, courseId);
       if (!enrollCheck.allowed) {

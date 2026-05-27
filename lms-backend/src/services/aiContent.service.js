@@ -4,7 +4,6 @@ const aiGateway = require('./aiGateway.service');
 const aiRagService = require('./aiRag.service');
 const logger = require('../utils/logger');
 const { safeAiCall } = require('../utils/aiSafeCaller');
-const { mapQuizDifficultyToCefr } = require('../utils/difficultyMapper');
 
 // Content cleaning utility
 function cleanContent(content) {
@@ -35,7 +34,6 @@ const {
   Question,
   UserLearningProfile,
   LearningAnalytics,
-  PlacementQuestionBank,
 } = db.models;
 
 class AiContentService {
@@ -639,11 +637,8 @@ YÊU CẦU:
 
       // Create questions in Question table (for quiz functionality)
       const questionRecords = [];
-      // Also save to PlacementQuestionBank with CEFR mapping
-      const bankQuestions = [];
-      
+
       for (const q of generatedQuestions.questions) {
-        // Save to Question table
         const question = await Question.create({
           quizId: quiz.id,
           type: q.type,
@@ -655,34 +650,6 @@ YÊU CẦU:
           order: q.order,
         }, { transaction });
         questionRecords.push(question);
-        
-        // Map difficulty to CEFR level and save to bank
-        // Wrap in try-catch so if bank save fails, quiz still succeeds
-        try {
-          const cefrLevel = mapQuizDifficultyToCefr(q.difficulty || options.difficulty || 'medium');
-          const bankQuestion = await PlacementQuestionBank.create({
-            cefrLevel,
-            skillType: this.inferSkillType(q.type),
-            questionType: this.mapQuestionType(q.type),
-            content: q.question,
-            options: q.options || null,
-            correctAnswer: q.correctAnswer,
-            explanation: q.explanation || null,
-            sourceType: 'quiz',
-            courseId,
-            lectureId,
-            aiGenerated: true,
-            isActive: true,
-          }, { transaction });
-          bankQuestions.push(bankQuestion);
-        } catch (bankError) {
-          logger.warn('QUESTION_BANK_SAVE_FAILED_DURING_QUIZ_GEN', {
-            lectureId,
-            question: q.question?.substring(0, 50),
-            error: bankError.message,
-          });
-          // Do NOT throw here, we want the quiz to be saved even if bank fails
-        }
       }
 
       await transaction.commit();

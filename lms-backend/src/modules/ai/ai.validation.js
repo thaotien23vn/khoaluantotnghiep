@@ -793,7 +793,7 @@ const handleQuickActionValidation = [
     .withMessage('action là bắt buộc')
     .isString()
     .trim()
-    .isIn(['find_courses', 'show_recommendations', 'start_placement', 'continue_learning', 'practice_quiz', 'show_quizzes', 'explain_lesson', 'tech_support'])
+    .isIn(['find_courses', 'show_recommendations', 'continue_learning', 'practice_quiz', 'show_quizzes', 'explain_lesson', 'tech_support'])
     .withMessage('action không hợp lệ'),
   body('context')
     .optional()

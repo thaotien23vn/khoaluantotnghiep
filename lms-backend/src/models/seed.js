@@ -133,104 +133,91 @@ async function seedCategoriesAndCourses() {
 
   console.log('📚 Đang seed Categories & Courses...');
 
-  const cefrLevels = [
-    { name: 'Level A1', sortOrder: 1, cefrLevel: 'A1', desc: 'Mới bắt đầu học tiếng Anh' },
-    { name: 'Level A2', sortOrder: 2, cefrLevel: 'A2', desc: 'Cơ bản' },
-    { name: 'Level B1', sortOrder: 3, cefrLevel: 'B1', desc: 'Trung cấp' },
-    { name: 'Level B2', sortOrder: 4, cefrLevel: 'B2', desc: 'Trung cấp cao' },
-    { name: 'Level C1', sortOrder: 5, cefrLevel: 'C1', desc: 'Nâng cao' },
-    { name: 'Level C2', sortOrder: 6, cefrLevel: 'C2', desc: 'Thành thạo' },
+  const categoriesData = [
+    { name: 'Lập trình Web', sortOrder: 1, desc: 'HTML, CSS, JavaScript, React, Node.js và các framework hiện đại', icon: 'Globe' },
+    { name: 'Khoa học Dữ liệu', sortOrder: 2, desc: 'Python, Machine Learning, AI, Phân tích dữ liệu', icon: 'Database' },
+    { name: 'Thiết kế & UX/UI', sortOrder: 3, desc: 'Figma, Adobe XD, nguyên tắc thiết kế, trải nghiệm người dùng', icon: 'Palette' },
+    { name: 'Marketing Digital', sortOrder: 4, desc: 'SEO, Content Marketing, Social Media, Google Ads', icon: 'TrendingUp' },
+    { name: 'Kinh doanh & Khởi nghiệp', sortOrder: 5, desc: 'Quản trị doanh nghiệp, lập kế hoạch, tài chính cơ bản', icon: 'Briefcase' },
+    { name: 'Ngoại ngữ', sortOrder: 6, desc: 'Tiếng Anh, tiếng Nhật, tiếng Hàn và các ngôn ngữ khác', icon: 'Languages' },
+    { name: 'Kỹ năng mềm', sortOrder: 7, desc: 'Giao tiếp, thuyết trình, làm việc nhóm, quản lý thời gian', icon: 'Users' },
+    { name: 'CNTT & Bảo mật', sortOrder: 8, desc: 'Mạng máy tính, bảo mật, DevOps, Cloud Computing', icon: 'Shield' },
   ];
-
-  const skills = ['listening', 'speaking', 'reading', 'writing'];
-
-  // CEFR to Course level ENUM mapping
-  const cefrToLevel = {
-    A1: 'beginner',
-    A2: 'elementary',
-    B1: 'intermediate',
-    B2: 'upper-intermediate',
-    C1: 'advanced',
-    C2: 'proficiency',
-  };
 
   // Get or create admin as course creator
   const admin = await models.User.findOne({ where: { role: 'admin' } });
   const createdBy = admin?.id || null;
 
-  for (const level of cefrLevels) {
-    // Try find by cefrLevel first
-    let category = await Category.findOne({ where: { cefrLevel: level.cefrLevel } });
+  for (let catIndex = 0; catIndex < categoriesData.length; catIndex++) {
+    const catData = categoriesData[catIndex];
 
-    // If not found, try patch existing category by name (case-insensitive)
-    if (!category) {
-      const existingByName = await Category.findOne({
-        where: { name: { [require('sequelize').Op.like]: `%${level.cefrLevel}%` } },
-      });
-      if (existingByName) {
-        await existingByName.update({
-          sortOrder: level.sortOrder,
-          cefrLevel: level.cefrLevel,
-        });
-        category = existingByName;
-        console.log(`  ✓ Updated Category: ${existingByName.name} → ${level.cefrLevel}`);
-      }
-    }
-
-    // Create if truly not exists
+    let category = await Category.findOne({ where: { name: catData.name } });
     if (!category) {
       category = await Category.create({
-        name: level.name,
-        sortOrder: level.sortOrder,
-        cefrLevel: level.cefrLevel,
+        name: catData.name,
+        description: catData.desc,
+        icon: catData.icon,
+        sortOrder: catData.sortOrder,
+        isActive: true,
       });
-      console.log(`  ✓ Created Category: ${level.name}`);
+      console.log(`  ✓ Created Category: ${catData.name}`);
+    } else {
+      await category.update({
+        description: catData.desc,
+        icon: catData.icon,
+        sortOrder: catData.sortOrder,
+        isActive: true,
+      });
+      console.log(`  ✓ Updated Category: ${catData.name}`);
     }
 
     // Create learning path for this category
     let path = await LearningPath.findOne({ where: { categoryId: category.id } });
     if (!path) {
       path = await LearningPath.create({
-        name: `Lộ trình ${level.name}`,
-        slug: `path-${level.cefrLevel.toLowerCase()}`,
-        description: level.desc,
+        name: `Lộ trình ${catData.name}`,
+        slug: `path-${catData.name.toLowerCase().replace(/[^a-z0-9]+/g, '-')}`,
+        description: catData.desc,
         categoryId: category.id,
         isActive: true,
       });
       console.log(`    ✓ LearningPath: ${path.name}`);
     }
 
-    // Create 4 courses per level
-    for (let i = 0; i < skills.length; i++) {
-      const skill = skills[i];
-      const skillLabel = skill.charAt(0).toUpperCase() + skill.slice(1);
-      const courseTitle = `${level.cefrLevel} ${skillLabel}`;
-      const slug = `${level.cefrLevel.toLowerCase()}-${skill}`;
+    // Create 3 courses per category with generic names
+    const courseTitles = [
+      { title: `Nhập môn ${catData.name}`, level: 'beginner' },
+      { title: `${catData.name} nâng cao`, level: 'intermediate' },
+      { title: `Chuyên gia ${catData.name}`, level: 'advanced' },
+    ];
+
+    for (let i = 0; i < courseTitles.length; i++) {
+      const courseInfo = courseTitles[i];
+      const slug = `${category.id}-${courseInfo.level}-${i + 1}`;
 
       let course = await Course.findOne({ where: { slug } });
       if (!course) {
         course = await Course.create({
-          title: courseTitle,
+          title: courseInfo.title,
           slug,
-          description: `Khóa học ${skillLabel} cho trình độ ${level.name}. ${level.desc}`,
-          imageUrl: `/courses/${skill}.jpg`,
-          level: cefrToLevel[level.cefrLevel],
+          description: `Khóa học ${courseInfo.title} thuộc lĩnh vực ${catData.name}. ${catData.desc}`,
+          imageUrl: `/courses/default.jpg`,
+          level: courseInfo.level,
           categoryId: category.id,
-          skill,
           price: 0,
           status: 'published',
           published: true,
           createdBy,
-          duration: '10 giờ',
-          totalLessons: 8,
+          duration: '12 giờ',
+          totalLessons: 10,
         });
-        console.log(`      ✓ Course: ${courseTitle}`);
+        console.log(`      ✓ Course: ${courseInfo.title}`);
 
         // Create 2 chapters with lectures
         for (let ch = 1; ch <= 2; ch++) {
           const chapter = await Chapter.create({
-            title: `Chương ${ch}: ${skillLabel} cơ bản`,
-            description: `Nội dung chương ${ch}`,
+            title: `Chương ${ch}: Kiến thức cơ bản`,
+            description: `Nội dung chương ${ch} - ${courseInfo.title}`,
             courseId: course.id,
             order: ch,
           });
@@ -238,10 +225,10 @@ async function seedCategoriesAndCourses() {
           // 2 lectures per chapter
           for (let lec = 1; lec <= 2; lec++) {
             await Lecture.create({
-              title: `Bài ${lec}: ${skillLabel} - Phần ${lec}`,
+              title: `Bài ${lec}: ${courseInfo.title} - Phần ${lec}`,
               type: 'video',
               duration: 600,
-              content: `Nội dung bài học ${lec} về ${skillLabel}`,
+              content: `Nội dung bài học ${lec} về ${courseInfo.title}`,
               chapterId: chapter.id,
               order: lec,
               isPreview: lec === 1,
@@ -251,7 +238,7 @@ async function seedCategoriesAndCourses() {
           // 1 quiz per chapter
           await Quiz.create({
             title: `Quiz Chương ${ch}`,
-            description: `Kiểm tra ${skillLabel} chương ${ch}`,
+            description: `Kiểm tra kiến thức chương ${ch} - ${courseInfo.title}`,
             passingScore: 70,
             timeLimit: 10,
             chapterId: chapter.id,
@@ -261,9 +248,9 @@ async function seedCategoriesAndCourses() {
           });
         }
       } else {
-        // Update existing course to ensure it has correct category and skill
-        if (course.categoryId !== category.id || course.skill !== skill) {
-          await course.update({ categoryId: category.id, skill });
+        // Update existing course to ensure correct category
+        if (course.categoryId !== category.id) {
+          await course.update({ categoryId: category.id });
         }
       }
 
@@ -279,7 +266,7 @@ async function seedCategoriesAndCourses() {
             orderIndex: i,
             isRequired: true,
           });
-          console.log(`      ✓ PathCourse: ${courseTitle} -> ${path.name}`);
+          console.log(`      ✓ PathCourse: ${courseInfo.title} -> ${path.name}`);
         }
       }
     }

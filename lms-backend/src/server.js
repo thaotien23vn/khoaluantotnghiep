@@ -7,7 +7,6 @@ const emailService = require('./services/email.service');
 const http = require('http');
 const { initSocket } = require('./socket');
 const notificationCron = require('./modules/notification/notification.cron');
-const placementQuestionCron = require('./modules/placement/placementQuestion.cron');
 const logger = require('./utils/logger');
 
 require('./modules/notification/notification.worker');
@@ -97,7 +96,6 @@ const validateEnv = () => {
       });
 
       notificationCron.start();
-      placementQuestionCron.start();
     });
 
   } catch (error) {
