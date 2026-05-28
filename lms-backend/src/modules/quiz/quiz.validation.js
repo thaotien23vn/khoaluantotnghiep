@@ -20,6 +20,10 @@ const createQuizValidation = [
     .optional()
     .isNumeric()
     .withMessage('Điểm đạt phải là số'),
+  body('type')
+    .optional()
+    .isIn(['chapter', 'final'])
+    .withMessage('Loại quiz phải là chapter hoặc final'),
 ];
 
 const updateQuizValidation = [
@@ -42,6 +46,10 @@ const updateQuizValidation = [
     .optional()
     .isNumeric()
     .withMessage('Điểm đạt phải là số'),
+  body('type')
+    .optional()
+    .isIn(['chapter', 'final'])
+    .withMessage('Loại quiz phải là chapter hoặc final'),
 ];
 
 const addQuestionValidation = [

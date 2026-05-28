@@ -3,29 +3,32 @@ require('dotenv').config({ path: path.resolve(__dirname, '../../.env') });
 const bcrypt = require('bcryptjs');
 const { sequelize, connectDB, models } = require('./index');
 
-// Danh sách URL YouTube embed đã kiểm tra còn hoạt động
-const SAFE_YOUTUBE_URLS = [
-  'https://www.youtube.com/embed/pQN-pnXPaVg',
-  'https://www.youtube.com/embed/yfoY53QX3Oo',
-  'https://www.youtube.com/embed/JJSoEo8JSnc',
-  'https://www.youtube.com/embed/jS4aFq5v9do',
-  'https://www.youtube.com/embed/bMknfKXIFA8',
-  'https://www.youtube.com/embed/rfscVS0vtbw',
-  'https://www.youtube.com/embed/i_LwzRVP7bg',
-  'https://www.youtube.com/embed/nU-IIXBWlFw',
-  'https://www.youtube.com/embed/FTFaQ1O3nHQ',
-  'https://www.youtube.com/embed/W0zLllV8b1c',
-  'https://www.youtube.com/embed/ZtqBQ68AwJU',
-  'https://www.youtube.com/embed/M7lc1TVf24Q',
-  'https://www.youtube.com/embed/PkZNo7MFNFg',
-  'https://www.youtube.com/embed/9zBudxeYIH4',
-  'https://www.youtube.com/embed/2uvysTqdh-U',
-  'https://www.youtube.com/embed/ycXq8AhJWbc',
-  'https://www.youtube.com/embed/4zfkehO2hDM',
-  'https://www.youtube.com/embed/1nXzzBg8g8U',
-  'https://www.youtube.com/embed/WtlvKp1lRLk',
-  'https://www.youtube.com/embed/9jR6mL1TN0A',
+// Danh sách video YouTube IDs (public/educational, chắc chắn embed được)
+const SAFE_YOUTUBE_IDS = [
+  'pQN-pnXPaVg', // freeCodeCamp HTML/CSS
+  'yfoY53QX3Oo', // freeCodeCamp Flexbox
+  'JJSoEo8JSnc', // freeCodeCamp CSS Grid
+  'jS4aFq5v9do', // freeCodeCamp CSS
+  'bMknfKXIFA8', // freeCodeCamp React
+  'rfscVS0vtbw', // freeCodeCamp Python
+  'i_LwzRVP7bg', // freeCodeCamp JS
+  'nU-IIXBWlFw', // freeCodeCamp Git
+  'FTFaQ1O3nHQ', // freeCodeCamp APIs
+  'W0zLllV8b1c', // freeCodeCamp SQL
+  'ZtqBQ68AwJU', // freeCodeCamp ML
+  'M7lc1UVf-VE', // YouTube embed demo (public)
+  'PkZNo7MFNFg', // freeCodeCamp JS Full
+  '9zBudxeYIH4', // freeCodeCamp Data Structures
+  '2uvysTqdh-U', // freeCodeCamp Portfolio
+  'ycXq8AhJWbc', // freeCodeCamp Python ML
+  '4zfkehO2hDM', // freeCodeCamp Neural Networks
+  '1nXzzBg8g8U', // freeCodeCamp NLP
+  'WtlvKp1lRLk', // freeCodeCamp Pandas
+  '9jR6mL1TN0A', // freeCodeCamp Linux
 ];
+
+const buildYouTubeWatchUrl = (id) => `https://www.youtube.com/watch?v=${id}`;
+const buildYouTubeEmbedUrl = (id) => `https://www.youtube.com/embed/${id}`;
 
 // ============================================================================
 // 1. CATEGORIES WITH UNSPLASH THUMBNAILS
@@ -1097,6 +1100,238 @@ const COURSES_DATA = [
 ];
 
 // ============================================================================
+// 3b. QUESTION TEMPLATES BY SUBJECT
+// ============================================================================
+const QT = (content, options, correctAnswer, points = 10) => ({ content, type: 'multiple_choice', options: JSON.stringify(options), correctAnswer, points });
+
+const QUESTION_TEMPLATES = {
+  html: [
+    QT('Thẻ <header> trong HTML5 dùng để làm gì?',['A. Hiển thị phần đầu trang','B. Tạo tiêu đề lớn nhất','C. Chứa metadata','D. Tạo thanh điều hướng'],'A'),
+    QT('Thẻ nào dùng để tạo liên kết trong HTML?',['A. <link>','B. <a>','C. <href>','D. <url>'],'B'),
+    QT('Thuộc tính nào của <input> dùng để nhập email?',['A. type="email"','B. type="mail"','C. name="email"','D. pattern="email"'],'A'),
+    QT('Thẻ nào định nghĩa nội dung chính của trang web?',['A. <section>','B. <main>','C. <article>','D. <div>'],'B'),
+    QT('Thẻ <form> dùng để làm gì?',['A. Tạo bảng','B. Tạo biểu mẫu nhập liệu','C. Tạo danh sách','D. Tạo khung hình'],'B'),
+  ],
+  css: [
+    QT('Thuộc tính nào thay đổi màu chữ trong CSS?',['A. text-color','B. font-color','C. color','D. foreground'],'C'),
+    QT('Giá trị nào của display tạo layout 1 chiều linh hoạt?',['A. grid','B. block','C. flex','D. inline'],'C'),
+    QT('justify-content: center dùng để làm gì?',['A. Căn giữa theo chiều dọc','B. Căn giữa theo chiều ngang','C. Căn trái','D. Căn phải'],'B'),
+    QT('Thuộc tính nào tạo khoảng cách bên trong phần tử?',['A. margin','B. padding','C. border','D. spacing'],'B'),
+    QT('CSS Grid dùng thuộc tính nào để chia cột?',['A. grid-template-columns','B. grid-columns','C. column-count','D. flex-columns'],'A'),
+  ],
+  responsive: [
+    QT('Media queries trong CSS dùng để làm gì?',['A. Thêm âm thanh','B. Responsive theo kích thước màn hình','C. Tải video','D. Gửi tin nhắn'],'B'),
+    QT('Mobile-first nghĩa là gì?',['A. Thiết kế cho mobile trước','B. Ưu tiên desktop','C. Chỉ hỗ trợ mobile','D. Không hỗ trợ tablet'],'A'),
+    QT('Đơn vị nào phù hợp nhất cho responsive font size?',['A. px','B. rem/em','C. pt','D. cm'],'B'),
+  ],
+  javascript: [
+    QT('let và const khác gì nhau?',['A. Không khác','B. const không thể gán lại','C. let không có scope','D. const là hàm'],'B'),
+    QT('Arrow function có đặc điểm gì nổi bật?',['A. Không có this','B. Luôn async','C. Không nhận tham số','D. Chỉ dùng trong class'],'A'),
+    QT('Destructuring trong JS dùng để làm gì?',['A. Rút gọn cú pháp trích xuất giá trị','B. Xóa biến','C. Tạo vòng lặp','D. Khai báo hàm'],'A'),
+    QT('Promise có các trạng thái nào?',['A. pending, resolved, rejected','B. start, end, error','C. wait, done, fail','D. open, close, error'],'A'),
+    QT('async/await là syntax sugar của gì?',['A. Callbacks','B. Promises','C. Events','D. Generators'],'B'),
+  ],
+  dom: [
+    QT('document.querySelector dùng để làm gì?',['A. Chọn tất cả phần tử','B. Chọn phần tử đầu tiên khớp selector','C. Tạo phần tử mới','D. Xóa phần tử'],'B'),
+    QT('addEventListener dùng để làm gì?',['A. Thêm style','B. Gắn sự kiện','C. Thêm class','D. Thêm thuộc tính'],'B'),
+    QT('event.preventDefault() dùng để làm gì?',['A. Dừng animation','B. Ngăn hành vi mặc định','C. Xóa event','D. Tạo event mới'],'B'),
+  ],
+  react: [
+    QT('useState trong React trả về gì?',['A. Một giá trị','B. Một mảng [state, setState]','C. Một hàm','D. Một object'],'B'),
+    QT('JSX là gì?',['A. JavaScript XML','B. JSON extension','C. Java Syntax eXtension','D. Java Server eXtension'],'A'),
+    QT('useEffect dùng để làm gì?',['A. Quản lý state','B. Xử lý side effects','C. Tạo component','D. Render UI'],'B'),
+    QT('Props trong React là gì?',['A. Dữ liệu truyền từ cha xuống con','B. State nội bộ','C. Hàm callback','D. CSS class'],'A'),
+    QT('Virtual DOM có tác dụng gì?',['A. Tăng tốc render','B. Giảm thao tác với DOM thật','C. Lưu trữ state','D. Quản lý routing'],'B'),
+  ],
+  redux: [
+    QT('Redux store chứa gì?',['A. Toàn bộ state ứng dụng','B. Chỉ state local','C. CSS styles','D. API endpoints'],'A'),
+    QT('Action trong Redux là gì?',['A. Mô tả sự kiện xảy ra','B. Hàm render','C. Component UI','D. Database query'],'A'),
+    QT('Reducer trong Redux là gì?',['A. Hàm pure cập nhật state','B. Hàm gọi API','C. Component hiển thị','D. Middleware'],'A'),
+  ],
+  python: [
+    QT('List comprehension trong Python dùng để làm gì?',['A. Tạo danh sách ngắn gọn','B. Sắp xếp list','C. Xóa phần tử','D. Đọc file'],'A'),
+    QT('dict trong Python là kiểu dữ liệu gì?',['A. Danh sách','B. Từ điển key-value','C. Tuple','D. Set'],'B'),
+    QT('Hàm nào đọc file trong Python?',['A. read()','B. open()','C. file()','D. load()'],'B'),
+    QT('len() dùng để làm gì?',['A. Tính độ dài','B. Chuyển chữ hoa','C. Tạo số ngẫu nhiên','D. Cắt chuỗi'],'A'),
+    QT('Module nào dùng để phân tích dữ liệu bảng?',['A. NumPy','B. Pandas','C. Matplotlib','D. Requests'],'B'),
+  ],
+  pandas: [
+    QT('DataFrame trong Pandas là gì?',['A. Mảng 1 chiều','B. Bảng dữ liệu 2 chiều','C. Hình ảnh','D. File text'],'B'),
+    QT('groupby() dùng để làm gì?',['A. Sắp xếp','B. Gom nhóm và tính toán','C. Lọc dữ liệu','D. Merge bảng'],'B'),
+    QT('fillna() dùng để làm gì?',['A. Xóa dòng null','B. Thay thế giá trị null','C. Tìm max','D. Đổi tên cột'],'B'),
+  ],
+  'machine-learning': [
+    QT('Overfitting là gì?',['A. Model quá khớp với training data','B. Model không học được','C. Lỗi dữ liệu','D. Chạy chậm'],'A'),
+    QT('Train/Test Split dùng để làm gì?',['A. Đánh giá model trên unseen data','B. Tăng dữ liệu','C. Giảm noise','D. Chọn feature'],'A'),
+    QT('Random Forest là gì?',['A. Một thuật toán ensemble','B. Một loại cây quyết định đơn','C. Mạng neural','D. K-means'],'A'),
+    QT('Feature Scaling cần thiết vì sao?',['A. Các feature có đơn vị khác nhau','B. Giảm số feature','C. Tăng tốc độc lập','D. Tạo feature mới'],'A'),
+    QT('Cross-validation dùng để làm gì?',['A. Đánh giá model ổn định hơn','B. Tăng data training','C. Giảm overfitting','D. Chọn thuật toán'],'A'),
+  ],
+  pytorch: [
+    QT('Tensor trong PyTorch tương đương gì trong NumPy?',['A. DataFrame','B. ndarray','C. Series','D. dict'],'B'),
+    QT('autograd trong PyTorch dùng để làm gì?',['A. Tự động tính gradient','B. Tự động lưu model','C. Tự động tải data','D. Tự động deploy'],'A'),
+    QT('nn.Module dùng để làm gì?',['A. Định nghĩa neural network','B. Load dataset','C. Tối ưu optimizer','D. Vẽ biểu đồ'],'A'),
+  ],
+  figma: [
+    QT('Auto Layout trong Figma dùng để làm gì?',['A. Tạo animation','B. Responsive layout tự động','C. Xuất code','D. Chụp màn hình'],'B'),
+    QT('Component và Instance khác nhau thế nào?',['A. Instance kế thừa từ Component','B. Không khác','C. Component nhỏ hơn','D. Instance không chỉnh sửa được'],'A'),
+    QT('Frame trong Figma tương đương gì?',['A. Artboard/Canvas','B. Layer','C. Group','D. Shape'],'A'),
+  ],
+  'ux-research': [
+    QT('User Persona dùng để làm gì?',['A. Mô tả đại diện người dùng mục tiêu','B. Thiết kế UI','C. Viết code','D. Test hiệu năng'],'A'),
+    QT('Journey Map thể hiện điều gì?',['A. Hành trình trải nghiệm người dùng','B. Bản đồ trang web','C. Sitemap','D. Wireframe'],'A'),
+    QT('Usability Testing là gì?',['A. Kiểm tra khả năng sử dụng','B. Kiểm tra bảo mật','C. Kiểm tra tốc độ','D. Kiểm tra SEO'],'A'),
+  ],
+  seo: [
+    QT('Backlink là gì?',['A. Liên kết từ trang khác trỏ về trang mình','B. Liên kết nội bộ','C. Liên kết hỏng','D. Link quảng cáo'],'A'),
+    QT('Meta Description dùng để làm gì?',['A. Mô tả ngắn trong kết quả tìm kiếm','B. Tiêu đề trang','C. Từ khóa chính','D. URL ảnh'],'A'),
+    QT('Keyword Stuffing là gì?',['A. Nhồi nhét từ khóa spam','B. Nghiên cứu từ khóa','C. Tối ưu từ khóa','D. Ẩn từ khóa'],'A'),
+  ],
+  'content-marketing': [
+    QT('Content Pillars là gì?',['A. Chủ đề trụ cột của content strategy','B. Cột viết bài','C. Công cụ viết lách','D. Trang landing'],'A'),
+    QT('Hook trong copywriting là gì?',['A. Câu mở đầu thu hút','B. Kết bài','C. Hashtag','D. CTA'],'A'),
+    QT('CTA viết tắt của gì?',['A. Call To Action','B. Content Target Audience','C. Create Text Article','D. Content To Advertise'],'A'),
+  ],
+  'google-ads': [
+    QT('Quality Score ảnh hưởng đến điều gì?',['A. Vị trí hiển thị & CPC','B. Chỉ số lượt xem','C. Thời gian quảng cáo','D. Độ tuổi người xem'],'A'),
+    QT('Remarketing là gì?',['A. Quảng cáo lại cho người đã tương tác','B. Marketing lần đầu','C. Email marketing','D. SEO'],'A'),
+    QT('Keyword Match Type nào chính xác nhất?',['A. Broad Match','B. Phrase Match','C. Exact Match','D. Negative Match'],'C'),
+  ],
+  'lean-startup': [
+    QT('MVP là gì?',['A. Minimum Viable Product','B. Maximum Value Product','C. Marketing Value Plan','D. Most Viewed Product'],'A'),
+    QT('Business Model Canvas gồm bao nhiêu khối?',['A. 7','B. 9','C. 12','D. 5'],'B'),
+    QT('Product-Market Fit là gì?',['A. Sản phẩm phù hợp thị trường','B. Sản phẩm hoàn thiện','C. Chiến lược marketing','D. Định giá'],'A'),
+  ],
+  'business-management': [
+    QT('KPI là gì?',['A. Key Performance Indicator','B. Knowledge Process Index','C. Keep Product Inventory','D. Key Product Idea'],'A'),
+    QT('OKR khác gì so với KPI?',['A. OKR hướng đến mục tiêu đột phá','B. Không khác','C. OKR chỉ dùng cho cá nhân','D. KPI chỉ dùng cho doanh nghiệp'],'A'),
+    QT('Churn Rate là gì?',['A. Tỷ lệ rời bỏ khách hàng','B. Tỷ lệ chuyển đổi','C. Lợi nhuận','D. Chi phí'],'A'),
+  ],
+  'ielts': [
+    QT('IELTS Academic có bao nhiêu phần Listening?',['A. 3','B. 4','C. 5','D. 6'],'B'),
+    QT('Task 2 Writing yêu cầu viết tối thiểu bao nhiêu từ?',['A. 150','B. 200','C. 250','D. 300'],'C'),
+    QT('Skimming trong Reading là gì?',['A. Đọc lướt nắm ý chính','B. Đọc chi tiết','C. Tìm từ khóa','D. Dịch từng câu'],'A'),
+  ],
+  'business-english': [
+    QT('"ASAP" viết tắt của gì?',['A. As Soon As Possible','B. At Some Any Place','C. Always Say A Promise','D. Ask Soon Ask Possible'],'A'),
+    QT('Email formal thường bắt đầu bằng gì?',['A. Dear Mr./Ms.','B. Hi buddy','C. Yo','D. Hey there'],'A'),
+    QT('"Please find attached" dùng khi nào?',['A. Gửi file đính kèm','B. Yêu cầu gặp mặt','C. Hẹn lịch họp','D. Từ chối đề nghị'],'A'),
+  ],
+  'communication-skills': [
+    QT('Active Listening là gì?',['A. Lắng nghe chủ động và phản hồi','B. Nghe nhạc','C. Nghe passively','D. Ghi âm'],'A'),
+    QT('Non-verbal Communication bao gồm gì?',['A. Ngôn ngữ cơ thể, ánh mắt, giọng điệu','B. Chỉ lời nói','C. Viết email','D. Đọc sách'],'A'),
+    QT('Feedback SBI model là gì?',['A. Situation-Behavior-Impact','B. Say-Be-Impact','C. Strategy-Business-Impact','D. Situation-Body-Impact'],'A'),
+  ],
+  teamwork: [
+    QT('Belbin Team Roles gồm mấy vai trò?',['A. 5','B. 7','C. 9','D. 12'],'C'),
+    QT('Brainstorming quy tắc quan trọng nhất là gì?',['A. Không phán xét ý tưởng','B. Chỉ ý tưởng thực tế','C. Không ghi chép','D. Chỉ leader nói'],'A'),
+    QT('Remote Teamwork cần công cụ gì quan trọng nhất?',['A. Giao tiếp async rõ ràng','B. Máy tính đắt tiền','C. Văn phòng sang trọng','D. Lịch trống'],'A'),
+  ],
+  'time-management': [
+    QT('Eisenhower Matrix chia công việc thành mấy nhóm?',['A. 2','B. 3','C. 4','D. 5'],'C'),
+    QT('Pomodoro Technique làm việc bao lâu rồi nghỉ?',['A. 25 phút làm, 5 phút nghỉ','B. 50 phút làm, 10 phút nghỉ','C. 1 tiếng làm, 15 phút nghỉ','D. 15 phút làm, 5 phút nghỉ'],'A'),
+    QT('Deep Work theo Cal Newport là gì?',['A. Làm việc tập trung sâu không bị gián đoạn','B. Làm nhiều việc cùng lúc','C. Làm việc ban đêm','D. Làm việc nhóm'],'A'),
+  ],
+  networking: [
+    QT('OSI Model có bao nhiêu tầng?',['A. 5','B. 6','C. 7','D. 8'],'C'),
+    QT('TCP và UDP khác nhau thế nào?',['A. TCP có kiểm soát lỗi, UDP không','B. Không khác','C. UDP nhanh hơn TCP','D. Cả A và C'],'D'),
+    QT('DNS dùng để làm gì?',['A. Phân giải tên miền thành IP','B. Mã hóa dữ liệu','C. Kiểm tra virus','D. Quản lý file'],'A'),
+  ],
+  linux: [
+    QT('Lệnh nào liệt kê file trong Linux?',['A. dir','B. ls','C. list','D. show'],'B'),
+    QT('chmod 755 nghĩa là gì?',['A. Owner đọc-ghi-thực thi, group/other đọc-thực thi','B. Tất cả đều đọc-ghi','C. Chỉ owner đọc','D. Không ai truy cập'],'A'),
+    QT('cron job trong Linux là gì?',['A. Lập lịch chạy tác vụ tự động','B. Xem thời gian','C. Quản lý user','D. Cài đặt phần mềm'],'A'),
+  ],
+  'ethical-hacking': [
+    QT('OWASP Top 10 là gì?',['A. Danh sách 10 lỗ hổng web phổ biến nhất','B. 10 công cụ hacking','C. 10 ngôn ngữ lập trình','D. 10 framework bảo mật'],'A'),
+    QT('SQL Injection khai thác điều gì?',['A. Lỗi nhập liệu trong truy vấn SQL','B. Lỗi phần cứng','C. Lỗi mạng','D. Lỗi hệ điều hành'],'A'),
+    QT('Burp Suite chủ yếu dùng để làm gì?',['A. Pentest ứng dụng web','B. Dọn rác hệ thống','C. Tối ưu database','D. Thiết kế UI'],'A'),
+  ],
+  'cloud-security': [
+    QT('Shared Responsibility Model nghĩa là gì?',['A. CSP và khách hàng cùng chịu trách nhiệm bảo mật','B. Chỉ CSP chịu trách nhiệm','C. Chỉ khách hàng chịu trách nhiệm','D. Không ai chịu trách nhiệm'],'A'),
+    QT('IAM trong cloud dùng để làm gì?',['A. Quản lý quyền truy cập','B. Lưu trữ file','C. Tính toán','D. Monitor network'],'A'),
+    QT('Encryption at Rest là gì?',['A. Mã hóa dữ liệu khi lưu trữ','B. Mã hóa khi truyền tải','C. Xóa dữ liệu','D. Nén dữ liệu'],'A'),
+  ],
+  devsecops: [
+    QT('SAST là gì?',['A. Static Application Security Testing','B. Server Auto Security Test','C. System Admin Security Tool','D. Secure API Scan Test'],'A'),
+    QT('DevSecOps khác DevOps ở điểm nào?',['A. Tích hợp bảo mật vào pipeline','B. Không khác','C. Chỉ dùng cho mobile','D. Nhanh hơn DevOps'],'A'),
+    QT('Container Security quan tâm điều gì?',['A. Bảo mật image và runtime','B. Chỉ bảo mật host','C. Chỉ bảo mật network','D. Không cần bảo mật'],'A'),
+  ],
+  general: [
+    QT('Mục tiêu chính của khóa học này là gì?',['A. Cung cấp kiến thức nền tảng','B. Chỉ dạy lý thuyết','C. Không có mục tiêu cụ thể','D. Dành cho chuyên gia'],'A'),
+    QT('Phương pháp học tập được khuyến khích trong khóa học là gì?',['A. Học thuộc lòng','B. Học kết hợp thực hành','C. Chỉ xem video','D. Đọc tài liệu'],'B'),
+    QT('Yếu tố nào được coi là then chốt để thành công theo khóa học?',['A. Tài năng bẩm sinh','B. Sự kiên trì và luyện tập','C. May mắn','D. Quan hệ xã hội'],'B'),
+    QT('Sau khi hoàn thành khóa học, học viên có thể làm gì?',['A. Áp dụng ngay vào công việc','B. Tiếp tục học nâng cao','C. Cả hai đều đúng','D. Chưa thể làm gì'],'C'),
+    QT('Định hướng của khóa học này là gì?',['A. Thực tiễn và ứng dụng','B. Chỉ nghiên cứu lý thuyết','C. Không có định hướng','D. Chỉ để thi cử'],'A'),
+  ],
+};
+
+function detectSubjects(courseTitle, chapterTitle) {
+  const text = (courseTitle + ' ' + chapterTitle).toLowerCase();
+  const subjects = [];
+  if (text.includes('html')) subjects.push('html');
+  if (text.includes('css')) subjects.push('css');
+  if (text.includes('responsive')) subjects.push('responsive');
+  if (text.includes('javascript') || text.includes('js') || text.includes('dom') || text.includes('async') || text.includes('event loop')) subjects.push('javascript');
+  if (text.includes('dom manipulation')) subjects.push('dom');
+  if (text.includes('react')) subjects.push('react');
+  if (text.includes('redux')) subjects.push('redux');
+  if (text.includes('python')) subjects.push('python');
+  if (text.includes('pandas') || text.includes('data analysis')) subjects.push('pandas');
+  if (text.includes('machine learning') || text.includes('ml ')) subjects.push('machine-learning');
+  if (text.includes('deep learning') || text.includes('pytorch') || text.includes('neural') || text.includes('transformer')) subjects.push('pytorch');
+  if (text.includes('figma') || text.includes('ui design')) subjects.push('figma');
+  if (text.includes('ux') || text.includes('user research') || text.includes('design thinking')) subjects.push('ux-research');
+  if (text.includes('animation') || text.includes('after effects') || text.includes('lottie')) subjects.push('figma');
+  if (text.includes('seo')) subjects.push('seo');
+  if (text.includes('content') || text.includes('social media') || text.includes('marketing')) subjects.push('content-marketing');
+  if (text.includes('google ads')) subjects.push('google-ads');
+  if (text.includes('facebook ads') || text.includes('meta ads')) subjects.push('google-ads');
+  if (text.includes('startup') || text.includes('mvp')) subjects.push('lean-startup');
+  if (text.includes('quản trị') || text.includes('business management') || text.includes('kpi') || text.includes('okr')) subjects.push('business-management');
+  if (text.includes('m&a') || text.includes('merger') || text.includes('chiến lược')) subjects.push('business-management');
+  if (text.includes('tiếng anh giao tiếp') || text.includes('communication') || text.includes('pronunciation')) subjects.push('communication-skills');
+  if (text.includes('ielts')) subjects.push('ielts');
+  if (text.includes('business english')) subjects.push('business-english');
+  if (text.includes('giao tiếp') || text.includes('thuyết trình') || text.includes('public speaking')) subjects.push('communication-skills');
+  if (text.includes('làm việc nhóm') || text.includes('teamwork') || text.includes('belbin')) subjects.push('teamwork');
+  if (text.includes('xung đột') || text.includes('conflict')) subjects.push('teamwork');
+  if (text.includes('quản lý thời gian') || text.includes('time management') || text.includes('productivity')) subjects.push('time-management');
+  if (text.includes('mạng máy tính') || text.includes('networking') || text.includes('osi') || text.includes('tcp/ip')) subjects.push('networking');
+  if (text.includes('linux')) subjects.push('linux');
+  if (text.includes('hacking') || text.includes('penetration') || text.includes('pentest') || text.includes('owasp')) subjects.push('ethical-hacking');
+  if (text.includes('cloud security') || text.includes('devsecops') || text.includes('iam')) subjects.push('cloud-security');
+  if (text.includes('devsecops') || text.includes('ci/cd')) subjects.push('devsecops');
+  if (subjects.length === 0) subjects.push('general');
+  return subjects;
+}
+
+function pickQuestions(subjects, count) {
+  const pool = [];
+  for (const s of subjects) {
+    const arr = QUESTION_TEMPLATES[s] || QUESTION_TEMPLATES['general'];
+    if (arr) pool.push(...arr);
+  }
+  if (pool.length === 0) return QUESTION_TEMPLATES['general'];
+  // Shuffle and pick
+  const shuffled = [...pool].sort(() => 0.5 - Math.random());
+  return shuffled.slice(0, Math.min(count, shuffled.length));
+}
+
+function generateChapterQuestions(courseTitle, chapterTitle) {
+  const subjects = detectSubjects(courseTitle, chapterTitle);
+  return pickQuestions(subjects, 3);
+}
+
+function generateFinalQuestions(courseTitle, chapterTitles) {
+  const allSubjects = new Set();
+  for (const ct of chapterTitles) {
+    detectSubjects(courseTitle, ct).forEach(s => allSubjects.add(s));
+  }
+  return pickQuestions([...allSubjects], 10);
+}
+
+// ============================================================================
 // 4. SEED FUNCTIONS
 // ============================================================================
 
@@ -1228,7 +1463,7 @@ async function createCategories() {
 }
 
 async function createCoursesAndLectures(categories, teachers) {
-  const { Course, Chapter, Lecture, Quiz, LearningPath, PathCourse } = models;
+  const { Course, Chapter, Lecture, Quiz, Question, LearningPath, PathCourse } = models;
   console.log('📚 Đang tạo khóa học, chương & bài giảng...');
   let lectureCount = 0;
 
@@ -1297,20 +1532,20 @@ async function createCoursesAndLectures(categories, teachers) {
 
           for (let lecIndex = 0; lecIndex < chInfo.lectures.length; lecIndex++) {
             const lecInfo = chInfo.lectures[lecIndex];
-            const safeUrl = SAFE_YOUTUBE_URLS[lectureCount % SAFE_YOUTUBE_URLS.length];
+            const safeId = SAFE_YOUTUBE_IDS[lectureCount % SAFE_YOUTUBE_IDS.length];
             lectureCount++;
             await Lecture.create({
               title: lecInfo.title,
               type: 'video',
               duration: lecInfo.duration,
-              contentUrl: safeUrl,
+              contentUrl: buildYouTubeWatchUrl(safeId),
               chapterId: chapter.id,
               order: lecIndex + 1,
               isPreview: lecIndex === 0,
             });
           }
 
-          await Quiz.create({
+          const chapterQuiz = await Quiz.create({
             title: `Quiz ${chInfo.title}`,
             description: `Kiểm tra kiến thức ${chInfo.title} - ${courseInfo.title}`,
             passingScore: 70,
@@ -1319,13 +1554,44 @@ async function createCoursesAndLectures(categories, teachers) {
             courseId: course.id,
             status: 'published',
             createdBy: teacherId,
+            type: 'chapter',
           });
+
+          // Add chapter-specific questions
+          const chapterQuestions = generateChapterQuestions(courseInfo.title, chInfo.title);
+          for (const q of chapterQuestions) {
+            await Question.create({ quizId: chapterQuiz.id, ...q });
+          }
         }
       } else {
         if (course.categoryId !== categoryId) {
           await course.update({ categoryId });
         }
       }
+
+      // Create Final Exam for this course
+      const finalExam = await Quiz.create({
+        title: `Bài thi cuối kỳ - ${courseInfo.title}`,
+        description: `Bài thi tổng hợp kiến thức toàn khóa ${courseInfo.title}. Bạn cần đạt ít nhất 70% để hoàn thành khóa học.`,
+        passingScore: 70,
+        timeLimit: 30,
+        maxScore: 100,
+        maxAttempts: 3,
+        chapterId: null,
+        courseId: course.id,
+        status: 'published',
+        createdBy: teacherId,
+        type: 'final',
+      });
+
+      // Add 10 course-specific final exam questions
+      const chapterTitles = courseInfo.chapters.map(ch => ch.title);
+      const finalQuestions = generateFinalQuestions(courseInfo.title, chapterTitles);
+
+      for (const q of finalQuestions) {
+        await Question.create({ quizId: finalExam.id, ...q });
+      }
+      console.log(`      ✓ Final Exam: ${finalExam.title} (${finalQuestions.length} câu)`);
 
       const existingPathCourse = await PathCourse.findOne({
         where: { pathId: path.id, courseId: course.id },
@@ -1343,22 +1609,390 @@ async function createCoursesAndLectures(categories, teachers) {
   }
 }
 
+// ============================================================================
+// 5. STUDENTS, ENROLLMENTS, PROGRESS & INTERACTIONS
+// ============================================================================
+
+const STUDENT_FIRST_NAMES = [
+  'Nguyễn','Trần','Lê','Phạm','Hoàng','Vũ','Võ','Đặng','Bùi','Đỗ',
+  'Hồ','Ngô','Dương','Lý','Phan','Trương','Đinh','Hà','Mai','Tô',
+];
+const STUDENT_MIDDLE_NAMES = [
+  'Văn','Thị','Minh','Hoàng','Anh','Quốc','Thế','Hữu','Đình','Tuấn',
+  'Thanh','Ngọc','Thùy','Mỹ','Bảo','Kim','Nhật','Gia','Tấn','Công',
+];
+const STUDENT_GIVEN_NAMES = [
+  'An','Bình','Chi','Dũng','Em','Phương','Giang','Hà','Hùng','Hương',
+  'Khang','Lan','Linh','Long','Mai','Nam','Ngọc','Nga','Nhi','Phúc',
+  'Quân','Quỳnh','Sơn','Tâm','Thảo','Thi','Thùy','Trang','Tú','Tuấn',
+  'Uyên','Vân','Việt','Vũ','Xuân','Yến','Anh','Bảo','Châu','Cường',
+  'Đạt','Đức','Hạnh','Hiếu','Hoa','Huy','Khánh','Kiên','Lâm','Lộc',
+  'Minh','Nhân','Nhung','Phong','Phú','Quang','Sang','Tài','Thắng','Thiên',
+  'Thịnh','Thu','Thuy','Tiến','Trà','Trung','Tuyết','Vinh','Vũ','Vy',
+];
+
+function generateStudents(count) {
+  const students = [];
+  const usedEmails = new Set();
+  for (let i = 0; i < count; i++) {
+    const fn = STUDENT_FIRST_NAMES[i % STUDENT_FIRST_NAMES.length];
+    const mn = STUDENT_MIDDLE_NAMES[Math.floor(Math.random() * STUDENT_MIDDLE_NAMES.length)];
+    const gn = STUDENT_GIVEN_NAMES[Math.floor(Math.random() * STUDENT_GIVEN_NAMES.length)];
+    const name = `${fn} ${mn} ${gn}`;
+    const baseUsername = `${gn.toLowerCase()}${mn.toLowerCase().substring(0,1)}${i+1}`;
+    const email = `${baseUsername}@student.lms.vn`;
+    if (usedEmails.has(email)) continue;
+    usedEmails.add(email);
+    students.push({
+      name,
+      username: baseUsername,
+      email,
+      passwordHash: bcrypt.hashSync('student123', 10),
+    });
+  }
+  return students;
+}
+
+async function createStudents() {
+  const { User } = models;
+  console.log('👨‍🎓 Đang tạo học viên...');
+  const studentData = generateStudents(80);
+  const students = [];
+  for (const s of studentData) {
+    let user = await User.findOne({ where: { email: s.email } });
+    if (!user) {
+      user = await User.create({
+        name: s.name,
+        email: s.email,
+        username: s.username,
+        passwordHash: s.passwordHash,
+        role: 'student',
+        isActive: true,
+        isEmailVerified: true,
+      });
+    }
+    students.push(user);
+  }
+  console.log(`  ✓ ${students.length} học viên đã tạo`);
+  return students;
+}
+
+async function createEnrollmentsProgressAndAttempts(students) {
+  const { Course, Chapter, Lecture, Quiz, Question, Enrollment, LectureProgress, Attempt } = models;
+  console.log('📊 Đang tạo enrollments, tiến độ và bài làm...');
+
+  const courses = await Course.findAll({ where: { status: 'published' } });
+  let enrollmentCount = 0;
+  let progressCount = 0;
+  let attemptCount = 0;
+
+  for (const course of courses) {
+    // Get all lectures for this course
+    const chapters = await Chapter.findAll({
+      where: { courseId: course.id },
+      include: [{ model: Lecture, as: 'lectures' }],
+    });
+    const allLectures = chapters.flatMap(ch => ch.lectures);
+    allLectures.sort((a, b) => a.order - b.order);
+
+    // Get all chapter quizzes and final exam for this course
+    const quizzes = await Quiz.findAll({
+      where: { courseId: course.id, status: 'published' },
+      include: [{ model: Question, as: 'questions' }],
+    });
+    const chapterQuizzes = quizzes.filter(q => q.type === 'chapter');
+    const finalExam = quizzes.find(q => q.type === 'final');
+
+    // Determine how many students enroll in this course (10-40)
+    const numEnroll = 10 + Math.floor(Math.random() * 31);
+    const shuffled = [...students].sort(() => 0.5 - Math.random());
+    const courseStudents = shuffled.slice(0, numEnroll);
+
+    for (const student of courseStudents) {
+      // Create enrollment
+      const [enrollment] = await Enrollment.findOrCreate({
+        where: { userId: student.id, courseId: course.id },
+        defaults: {
+          userId: student.id,
+          courseId: course.id,
+          status: 'active',
+          enrollmentType: Math.random() > 0.3 ? 'paid' : 'free',
+          progressPercent: 0,
+          enrolledAt: new Date(Date.now() - Math.random() * 90 * 24 * 60 * 60 * 1000),
+          enrollmentStatus: 'active',
+        },
+      });
+      enrollmentCount++;
+
+      // Decide student completion level: completed (20%), progressing (50%), started (20%), dormant (10%)
+      const rand = Math.random();
+      let completedLectures = 0;
+      let passedChapterQuizzes = 0;
+      let passedFinal = false;
+
+      if (rand < 0.20) {
+        // Completed: all lectures done
+        completedLectures = allLectures.length;
+      } else if (rand < 0.70) {
+        // Progressing: 30-90% done
+        completedLectures = Math.floor(allLectures.length * (0.3 + Math.random() * 0.6));
+      } else if (rand < 0.90) {
+        // Started: 1-3 lectures
+        completedLectures = Math.min(3, Math.floor(Math.random() * 3) + 1);
+      } else {
+        // Dormant: enrolled but no progress
+        completedLectures = 0;
+      }
+
+      // Create lecture progress
+      for (let li = 0; li < allLectures.length; li++) {
+        const lecture = allLectures[li];
+        let watchedPercent = 0;
+        let isCompleted = false;
+        let completedAt = null;
+
+        if (li < completedLectures) {
+          watchedPercent = 95 + Math.floor(Math.random() * 6); // 95-100%
+          isCompleted = true;
+          completedAt = new Date(Date.now() - Math.random() * 60 * 24 * 60 * 60 * 1000);
+        } else if (li === completedLectures && completedLectures < allLectures.length) {
+          // Currently watching this lecture
+          watchedPercent = Math.floor(Math.random() * 60) + 10;
+        }
+
+        if (watchedPercent > 0) {
+          await LectureProgress.create({
+            userId: student.id,
+            lectureId: lecture.id,
+            courseId: course.id,
+            watchedPercent,
+            isCompleted,
+            lastAccessedAt: new Date(),
+            completedAt,
+          });
+          progressCount++;
+        }
+      }
+
+      // Create quiz attempts for chapter quizzes
+      for (const quiz of chapterQuizzes) {
+        // Only attempt if student has watched at least some lectures in this chapter
+        // For simplicity, attempt if completedLectures > 0 and random chance
+        if (completedLectures > 0 && Math.random() > 0.3) {
+          const pass = Math.random() > 0.35; // 65% pass rate
+          const score = pass
+            ? 70 + Math.floor(Math.random() * 31) // 70-100
+            : Math.floor(Math.random() * 65); // 0-64
+
+          await Attempt.create({
+            userId: student.id,
+            quizId: quiz.id,
+            score,
+            percentageScore: score,
+            passed: pass,
+            answers: {},
+            startedAt: new Date(Date.now() - Math.random() * 30 * 24 * 60 * 60 * 1000),
+            completedAt: new Date(Date.now() - Math.random() * 30 * 24 * 60 * 60 * 1000),
+          });
+          attemptCount++;
+          if (pass) passedChapterQuizzes++;
+        }
+      }
+
+      // Final exam attempt (only if all lectures completed)
+      if (finalExam && completedLectures === allLectures.length) {
+        const pass = Math.random() > 0.25; // 75% pass rate for final
+        const score = pass
+          ? 70 + Math.floor(Math.random() * 31)
+          : Math.floor(Math.random() * 65);
+
+        await Attempt.create({
+          userId: student.id,
+          quizId: finalExam.id,
+          score,
+          percentageScore: score,
+          passed: pass,
+          answers: {},
+          startedAt: new Date(Date.now() - Math.random() * 14 * 24 * 60 * 60 * 1000),
+          completedAt: new Date(Date.now() - Math.random() * 14 * 24 * 60 * 60 * 1000),
+        });
+        attemptCount++;
+        passedFinal = pass;
+      }
+
+      // Update enrollment progressPercent
+      const totalItems = allLectures.length + chapterQuizzes.length;
+      const completedItems = completedLectures + passedChapterQuizzes;
+      const progressPercent = totalItems > 0 ? Math.round((completedItems / totalItems) * 100) : 0;
+      await enrollment.update({ progressPercent });
+    }
+  }
+
+  console.log(`  ✓ ${enrollmentCount} enrollments`);
+  console.log(`  ✓ ${progressCount} lecture progress records`);
+  console.log(`  ✓ ${attemptCount} quiz attempts`);
+}
+
+async function createReviews(students) {
+  const { Course, Enrollment, Review } = models;
+  console.log('⭐ Đang tạo đánh giá khóa học...');
+  let reviewCount = 0;
+
+  const courses = await Course.findAll({ where: { status: 'published' } });
+  const reviewComments = [
+    'Khóa học rất hay và bổ ích, giảng viên giảng dạy dễ hiểu. Tôi đã học được nhiều kiến thức mới.',
+    'Nội dung khóa học phong phú, bài tập thực hành giúp tôi nắm vững kiến thức nhanh chóng.',
+    'Một khóa học tuyệt vời! Rất đáng đồng tiền bát gạo.',
+    'Giảng viên nhiệt tình, giải thích kỹ lưỡng. Tuy nhiên phần âm thanh video đôi khi không rõ.',
+    'Khóa học phù hợp cho người mới bắt đầu, nội dung dễ theo dõi.',
+    'Rất hài lòng với chất lượng khóa học. Tôi sẽ giới thiệu cho bạn bè.',
+    'Nội dung hơi nhanh ở phần sau, nhưng nhìn chung rất tốt.',
+    'Khóa học giúp tôi tự tin hơn khi áp dụng kiến thức vào thực tế.',
+    'Tuyệt vời! Tôi đã hoàn thành khóa học và cảm thấy rất đáng.',
+    'Cần thêm nhiều bài tập thực hành hơn nữa, nhưng nội dung rất chất lượng.',
+    'Khóa học rất chi tiết, tôi đã học được nhiều điều mới mẻ.',
+    'Giảng viên có chuyên môn cao, truyền đạt dễ hiểu. Rất recommend!',
+  ];
+
+  for (const course of courses) {
+    // Find students who completed this course (enrollment progress >= 80%)
+    const enrollments = await Enrollment.findAll({
+      where: { courseId: course.id, progressPercent: { [require('sequelize').Op.gte]: 80 } },
+    });
+    const numReviews = Math.min(enrollments.length, Math.floor(Math.random() * 8) + 3);
+    const shuffled = enrollments.sort(() => 0.5 - Math.random()).slice(0, numReviews);
+
+    for (const en of shuffled) {
+      try {
+        await Review.create({
+          userId: en.userId,
+          courseId: course.id,
+          rating: Math.floor(Math.random() * 3) + 3, // 3-5 stars
+          comment: reviewComments[Math.floor(Math.random() * reviewComments.length)],
+        });
+        reviewCount++;
+      } catch (err) {
+        // Ignore duplicate review errors
+      }
+    }
+  }
+
+  console.log(`  ✓ ${reviewCount} reviews`);
+}
+
+async function createForumData(students, teachers) {
+  const { ForumTopic, ForumPost } = models;
+  console.log('💬 Đang tạo dữ liệu diễn đàn...');
+
+  const globalTopics = [
+    { title: 'Chào mừng các bạn đến với cộng đồng học tập!', content: 'Mình rất vui được gặp các bạn ở đây. Hãy cùng nhau học tập và phát triển nhé!' },
+    { title: 'Chia sẻ kinh nghiệm học online hiệu quả', content: 'Mọi người có tips gì để học online không bị mất tập trung không? Mình hay bị xao nhãng lắm.' },
+    { title: 'Tìm bạn học nhóm lập trình Web', content: 'Mình đang học HTML/CSS và muốn tìm bạn cùng học để trao đổi. Ai quan tâm thì reply nhé!' },
+    { title: 'Hỏi về chứng chỉ hoàn thành khóa học', content: 'Sau khi hoàn thành 100% khóa học thì mình nhận chứng chỉ ở đâu vậy các bạn?' },
+    { title: 'Review khóa học JavaScript Modern ES6+', content: 'Mình vừa hoàn thành khóa học này. Nội dung rất chất lượng, giảng viên giảng rất kỹ về async/await và closure.' },
+    { title: 'Góp ý cải thiện nền tảng E-Learning', content: 'Mình thấy nền tảng rất tốt rồi, nhưng nếu thêm tính năng ghi chú trong video thì tuyệt vời.' },
+    { title: 'Kinh nghiệm chuẩn bị phỏng vấn Frontend Developer', content: 'Mình vừa pass phỏng vấn nhờ kiến thức từ các khóa học ở đây. Chia sẻ một chút tips cho các bạn.' },
+    { title: 'Cần tư vấn chọn khóa học phù hợp', content: 'Mình đang phân vân giữa khóa React và Vue. Mọi người cho mình xin ý kiến với.' },
+  ];
+
+  let topicCount = 0;
+  let postCount = 0;
+
+  // Create global topics
+  for (let i = 0; i < globalTopics.length; i++) {
+    const author = i % 3 === 0 ? teachers[0] : students[Math.floor(Math.random() * students.length)];
+    const topic = await ForumTopic.create({
+      title: globalTopics[i].title,
+      content: globalTopics[i].content,
+      type: 'global',
+      userId: author.id,
+      views: Math.floor(Math.random() * 200) + 10,
+      postCount: 0,
+    });
+    topicCount++;
+
+    // Add 2-6 replies
+    const numReplies = Math.floor(Math.random() * 5) + 2;
+    for (let r = 0; r < numReplies; r++) {
+      const replier = students[Math.floor(Math.random() * students.length)];
+      await ForumPost.create({
+        topicId: topic.id,
+        userId: replier.id,
+        content: `Mình đồng ý với ý kiến trên. ${globalTopics[i].title} là một chủ đề rất hay. Cảm ơn bạn đã chia sẻ!`,
+        likes: Math.floor(Math.random() * 10),
+      });
+      postCount++;
+    }
+    await topic.update({ postCount: numReplies });
+  }
+
+  // Create some course-specific topics
+  const { Course } = models;
+  const courses = await Course.findAll({ where: { status: 'published' }, limit: 12 });
+  for (const course of courses) {
+    const topicAuthor = students[Math.floor(Math.random() * students.length)];
+    const topic = await ForumTopic.create({
+      title: `Thảo luận về khóa học: ${course.title}`,
+      content: `Mọi người đang học khóa ${course.title} thấy thế nào? Mình đang gặp khó khăn ở phần bài tập thực hành.`,
+      type: 'course',
+      courseId: course.id,
+      userId: topicAuthor.id,
+      views: Math.floor(Math.random() * 100) + 5,
+      postCount: 0,
+    });
+    topicCount++;
+
+    const numReplies = Math.floor(Math.random() * 4) + 1;
+    for (let r = 0; r < numReplies; r++) {
+      const replier = students[Math.floor(Math.random() * students.length)];
+      const replies = [
+        'Mình cũng đang học khóa này, phần thực hành khá thú vị nhé. Cố lên!',
+        'Khóa học này hay lắm, mình recommend bạn xem lại video bài giảng nhé.',
+        'Mình đã hoàn thành khóa này rồi, nếu bạn cần hỗ trợ thì inbox mình nhé.',
+        'Phần bài tập cuối chương hơi khó, nhưng làm xong thì hiểu sâu lắm.',
+      ];
+      await ForumPost.create({
+        topicId: topic.id,
+        userId: replier.id,
+        content: replies[r % replies.length],
+        likes: Math.floor(Math.random() * 8),
+      });
+      postCount++;
+    }
+    await topic.update({ postCount: numReplies });
+  }
+
+  console.log(`  ✓ ${topicCount} forum topics`);
+  console.log(`  ✓ ${postCount} forum posts`);
+}
+
 async function seed() {
   try {
     await connectDB();
-    await sequelize.sync({ alter: false });
+    console.log('🔄 Đang xoá và tạo lại tất cả bảng (force: true)...');
+    await sequelize.sync({ force: true });
+    console.log('✅ Database đã được reset');
 
-    await cleanupDatabase();
     await createAdmin();
     await createAiBot();
     const teachers = await createTeachers();
     const categories = await createCategories();
     await createCoursesAndLectures(categories, teachers);
 
+    // Student data & interactions
+    const students = await createStudents();
+    await createEnrollmentsProgressAndAttempts(students);
+    await createReviews(students);
+    await createForumData(students, teachers);
+
     console.log('\n🎉 Seed-rich hoàn tất!');
+    console.log(`   - 1 admin`);
+    console.log(`   - 1 AI Bot`);
     console.log(`   - ${TEACHERS.length} giảng viên`);
     console.log(`   - ${Object.keys(CATEGORY_META).length} categories`);
     console.log(`   - ${COURSES_DATA.reduce((sum, c) => sum + c.courses.length, 0)} khóa học`);
+    console.log(`   - ${students.length} học viên`);
+    console.log(`   - Enrollments, tiến độ, bài làm, reviews & forum đã được seed`);
     process.exit(0);
   } catch (error) {
     console.error('❌ Seed thất bại:', error.message);

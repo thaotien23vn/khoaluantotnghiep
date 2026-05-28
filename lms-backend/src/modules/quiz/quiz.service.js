@@ -23,6 +23,7 @@ class QuizService {
       chapterId,
       level,
       isLevelFinal,
+      type,
     } = quizData;
 
     if (isLevelFinal) {
@@ -69,6 +70,7 @@ class QuizService {
       chapterId: chapterId || null,
       level: null,
       isLevelFinal: false,
+      type: type || 'chapter',
     });
 
     return { quiz };
@@ -315,7 +317,7 @@ class QuizService {
 
     const quizzes = await Quiz.findAll({
       where: { courseId, status: 'published' },
-      attributes: ['id', 'title', 'description', 'maxScore', 'timeLimit', 'passingScore', 'startTime', 'endTime', 'showResults'],
+      attributes: ['id', 'title', 'description', 'maxScore', 'timeLimit', 'passingScore', 'startTime', 'endTime', 'showResults', 'type'],
       include: [
         {
           model: Attempt,
@@ -395,7 +397,7 @@ class QuizService {
 
     const quizzes = await Quiz.findAll({
       where: { courseId: courseIds, status: 'published' },
-      attributes: ['id', 'title', 'description', 'maxScore', 'timeLimit', 'passingScore', 'startTime', 'endTime', 'showResults'],
+      attributes: ['id', 'title', 'description', 'maxScore', 'timeLimit', 'passingScore', 'startTime', 'endTime', 'showResults', 'type'],
       include: [
         { model: Course, as: 'course', attributes: ['id', 'title', 'imageUrl'] },
         {

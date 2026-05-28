@@ -47,11 +47,16 @@ module.exports = (sequelize) => {
       allowNull: true,
       comment: 'Difficulty level (e.g. beginner, intermediate, advanced)',
     },
+    type: {
+      type: DataTypes.ENUM('chapter', 'final'),
+      defaultValue: 'chapter',
+      comment: 'chapter: quiz trong chương, final: bài thi cuối kỳ của khóa học',
+    },
     isLevelFinal: {
       type: DataTypes.BOOLEAN,
       defaultValue: false,
       field: 'is_level_final',
-      comment: 'If true, this quiz is a level-final exam not tied to a course',
+      comment: '[LEGACY] If true, this quiz is a level-final exam not tied to a course',
     },
     createdBy: {
       type: DataTypes.INTEGER.UNSIGNED,

@@ -78,6 +78,18 @@ router.get(
 
 
 /**
+ * @route   GET /api/progress/courses/:courseId/final-exam
+ * @desc    Get final exam status for a student on a course
+ * @access  Private (Student)
+ */
+router.get(
+  '/courses/:courseId/final-exam',
+  authMiddleware,
+  authorizeRole('student'),
+  progressController.getFinalExamStatus
+);
+
+/**
  * @route   GET /api/progress/dashboard
  * @desc    Get student dashboard summary (enrollments, progress, quizzes, streak)
  * @access  Private (Student)

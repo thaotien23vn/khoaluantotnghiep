@@ -19,7 +19,7 @@ const {
 class ProgressService {
   async _computeCourseProgressSnapshot(userId, courseId) {
     const totalLectures = await this.countCourseLectures(courseId);
-    const totalQuizzes = await this.countCourseQuizzes(courseId);
+    const totalQuizzes = await this.countCourseQuizzes(courseId, /*excludeFinal=*/ true);
 
     const completedLectures = await LectureProgress.count({
       where: { userId, courseId, isCompleted: true },
@@ -273,8 +273,13 @@ class ProgressService {
     const isEligible = snapshot.progressPercent >= 100 && snapshot.totalLectures > 0;
     const quizzesPassed = snapshot.quizProgress;
 
+    // Check final exam requirement
+    const finalExamStatus = await this.getFinalExamStatus(userId, courseId);
+    const finalExamRequired = finalExamStatus.hasFinalExam;
+    const finalExamPassed = !finalExamRequired || finalExamStatus.passed;
+
     let completedAt = null;
-    if (isEligible && quizzesPassed.allPassed) {
+    if (isEligible && quizzesPassed.allPassed && finalExamPassed) {
       const latestCompleted = await LectureProgress.findOne({
         where: { userId, courseId, isCompleted: true },
         attributes: ['completedAt'],
@@ -284,18 +289,20 @@ class ProgressService {
     }
 
     const user = enrollment.User || await db.models.User.findByPk(userId);
+    const fullyEligible = isEligible && quizzesPassed.allPassed && finalExamPassed;
 
     return {
       courseId,
       course: enrollment.Course,
       user,
-      isEligible: isEligible && quizzesPassed.allPassed,
+      isEligible: fullyEligible,
       progressPercent: snapshot.progressPercent,
       totalLectures: snapshot.totalLectures,
       completedLectures: snapshot.completedLectures,
       quizRequirement: quizzesPassed,
+      finalExam: finalExamStatus,
       completedAt,
-      certificateData: isEligible && quizzesPassed.allPassed ? {
+      certificateData: fullyEligible ? {
         studentId: userId,
         studentName: user?.name || 'Học viên',
         courseId,
@@ -312,7 +319,7 @@ class ProgressService {
   async _checkAllQuizzesPassed(userId, courseId) {
     try {
       const { Quiz, Attempt, Chapter } = db.models;
-      // Only check quizzes attached to chapters (like lectures)
+      // Only check chapter quizzes (exclude final exam)
       const publishedQuizzes = await Quiz.findAll({
         include: [{
           model: Chapter,
@@ -320,7 +327,7 @@ class ProgressService {
           where: { courseId },
           required: true,
         }],
-        where: { status: 'published' },
+        where: { status: 'published', type: { [Op.ne]: 'final' } },
         attributes: ['id', 'title', 'passingScore'],
       });
 
@@ -709,10 +716,64 @@ class ProgressService {
   }
 
   /**
+   * Get final exam status for a student on a course
+   */
+  async getFinalExamStatus(userId, courseId) {
+    try {
+      const { Quiz, Attempt, Chapter } = db.models;
+      const finalExam = await Quiz.findOne({
+        include: [{
+          model: Chapter,
+          as: 'quizChapter',
+          where: { courseId },
+          required: true,
+        }],
+        where: { status: 'published', type: 'final' },
+        attributes: ['id', 'title', 'passingScore', 'maxScore', 'timeLimit', 'maxAttempts'],
+      });
+
+      if (!finalExam) {
+        return { hasFinalExam: false, quizId: null, passed: true, attemptsLeft: 0, bestScore: null };
+      }
+
+      const attempts = await Attempt.findAll({
+        where: { userId, quizId: finalExam.id },
+        order: [['startedAt', 'DESC']],
+        attributes: ['id', 'score', 'percentageScore', 'passed', 'startedAt', 'completedAt'],
+      });
+
+      const passedAttempt = attempts.find(a => a.passed === true);
+      const attemptCount = attempts.filter(a => a.completedAt !== null).length;
+      const maxAttempts = finalExam.maxAttempts || 3;
+
+      return {
+        hasFinalExam: true,
+        quizId: finalExam.id,
+        quizTitle: finalExam.title,
+        passed: !!passedAttempt,
+        bestScore: passedAttempt ? Number(passedAttempt.percentageScore) : null,
+        attemptsLeft: Math.max(0, maxAttempts - attemptCount),
+        attemptCount,
+        maxAttempts,
+        passingScore: finalExam.passingScore,
+        maxScore: finalExam.maxScore,
+        timeLimit: finalExam.timeLimit,
+      };
+    } catch (err) {
+      console.error('Final exam status error (silent):', err);
+      return { hasFinalExam: false, quizId: null, passed: true, attemptsLeft: 0, bestScore: null };
+    }
+  }
+
+  /**
    * Count total quizzes in a course (only quizzes attached to chapters)
    */
-  async countCourseQuizzes(courseId) {
+  async countCourseQuizzes(courseId, excludeFinal = false) {
     const { Chapter } = db.models;
+    const where = { status: 'published' };
+    if (excludeFinal) {
+      where.type = { [Op.ne]: 'final' };
+    }
     const count = await Quiz.count({
       include: [{
         model: Chapter,
@@ -720,7 +781,7 @@ class ProgressService {
         where: { courseId },
         required: true,
       }],
-      where: { status: 'published' },
+      where,
     });
     return count;
   }

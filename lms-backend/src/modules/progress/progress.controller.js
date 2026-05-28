@@ -115,6 +115,18 @@ class ProgressController {
       handleServiceError(error, res);
     }
   }
+
+  /** Get final exam status for a student on a course */
+  async getFinalExamStatus(req, res) {
+    try {
+      const { id: userId } = req.user;
+      const { courseId } = req.params;
+      const result = await progressService.getFinalExamStatus(userId, courseId);
+      res.json({ success: true, data: result });
+    } catch (error) {
+      handleServiceError(error, res);
+    }
+  }
 }
 
 module.exports = new ProgressController();
