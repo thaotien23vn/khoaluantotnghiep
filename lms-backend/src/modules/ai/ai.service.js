@@ -650,6 +650,7 @@ class AiService {
       timeLimit: quizData.timeLimit || 30,
       passingScore: quizData.passingScore || 60,
       maxScore: quizData.maxScore || 100,
+      type: quizData.type || 'chapter',
       status: 'draft',
       showResults: true,
       createdBy: reqUser.id,

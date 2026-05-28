@@ -1095,9 +1095,15 @@ Hãy đánh giá và cho điểm theo các tiêu chí đã nêu.`;
       }
 
       if (question.type === 'true_false') {
-        if (!question.options || question.options.length === 0) {
-          question.options = ['A. True', 'B. False'];
+        // Normalize correctAnswer: 'A' → 'true', 'B' → 'false'
+        const ca = String(question.correctAnswer || '').trim().toUpperCase();
+        if (ca === 'A' || ca === 'TRUE') {
+          question.correctAnswer = 'true';
+        } else if (ca === 'B' || ca === 'FALSE') {
+          question.correctAnswer = 'false';
         }
+        // Standardize options to match quiz editor format
+        question.options = ['true', 'false'];
       }
 
       if (question.type === 'short_answer') {

@@ -71,13 +71,13 @@ const validateEnv = () => {
       });
     }
 
-    // 3. SEED
-    try {
-      await autoSeed();
-      logger.info('AUTO_SEED_COMPLETED');
-    } catch (err) {
-      logger.warn('AUTO_SEED_FAILED_CONTINUE', { error: err.message });
-    }
+    // 3. SEED (disabled — run manually with npm run seed if needed)
+    // try {
+    //   await autoSeed();
+    //   logger.info('AUTO_SEED_COMPLETED');
+    // } catch (err) {
+    //   logger.warn('AUTO_SEED_FAILED_CONTINUE', { error: err.message });
+    // }
 
     // 4. EMAIL CHECK
     const emailConnected = await emailService.verifyEmailConnection();

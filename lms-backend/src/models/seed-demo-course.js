@@ -349,10 +349,11 @@ async function seedDemoCourse() {
         userId: finalStudent.id,
         courseId: course.id,
         lectureId: lecture.id,
-        watchTime: 600, // 10 phút / 10 phút
-        completed: true,
-        percentWatched: 100,
-        lastWatchedAt: new Date(),
+        watchTime: 600,
+        isCompleted: true,
+        watchedPercent: 100,
+        lastAccessedAt: new Date(),
+        completedAt: new Date(),
       });
       console.log('✅ Lecture progress cho học viên sắp thi');
     }
@@ -365,13 +366,12 @@ async function seedDemoCourse() {
       await Attempt.create({
         userId: finalStudent.id,
         quizId: chapterQuiz.id,
-        score: 30, // 30/30
-        maxScore: 30,
-        percentage: 100,
-        status: 'passed',
+        score: 30,
+        percentageScore: 100,
+        passed: true,
         answers: JSON.stringify({}),
         startedAt: new Date(Date.now() - 10 * 24 * 60 * 60 * 1000),
-        submittedAt: new Date(Date.now() - 10 * 24 * 60 * 60 * 1000 + 5 * 60 * 1000),
+        completedAt: new Date(Date.now() - 10 * 24 * 60 * 60 * 1000 + 5 * 60 * 1000),
       });
       console.log('✅ Quiz attempt cho học viên sắp thi (đạt 100%)');
     }
@@ -446,10 +446,10 @@ async function seedDemoCourse() {
         userId: learningStudent.id,
         courseId: course.id,
         lectureId: lecture.id,
-        watchTime: 270, // 4.5 phút / 10 phút
-        completed: false,
-        percentWatched: 45,
-        lastWatchedAt: new Date(),
+        watchTime: 270,
+        isCompleted: false,
+        watchedPercent: 45,
+        lastAccessedAt: new Date(),
       });
       console.log('✅ Lecture progress cho học viên đang học');
     }
