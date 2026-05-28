@@ -99,6 +99,15 @@ class ReviewController {
     }
   }
 
+  async getTeacherReviews(req, res) {
+    try {
+      const result = await reviewService.getTeacherReviews(req.user.id, req.query);
+      res.json({ success: true, data: result });
+    } catch (error) {
+      handleServiceError(error, res);
+    }
+  }
+
   async getAllReviews(req, res) {
     try {
       const result = await reviewService.getAllReviews(req.query);

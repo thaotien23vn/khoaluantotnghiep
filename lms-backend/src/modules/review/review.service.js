@@ -116,6 +116,56 @@ class ReviewService {
     return { review };
   }
 
+  async getTeacherReviews(teacherId, query) {
+    const { page = 1, limit = 20, courseId, minRating } = query;
+    const offset = (page - 1) * limit;
+
+    // Find all courses owned by this teacher
+    const teacherCourses = await Course.findAll({
+      where: { createdBy: teacherId },
+      attributes: ['id'],
+    });
+    const teacherCourseIds = teacherCourses.map(c => c.id);
+
+    if (teacherCourseIds.length === 0) {
+      return { reviews: [], pagination: { total: 0, page: 1, limit: parseInt(limit), totalPages: 0 } };
+    }
+
+    // If filtering by a specific course, ensure it belongs to this teacher
+    const whereClause = {};
+    if (courseId) {
+      const courseIdNum = Number(courseId);
+      if (!teacherCourseIds.includes(courseIdNum)) {
+        return { reviews: [], pagination: { total: 0, page: parseInt(page), limit: parseInt(limit), totalPages: 0 } };
+      }
+      whereClause.courseId = courseIdNum;
+    } else {
+      whereClause.courseId = { [db.Sequelize.Op.in]: teacherCourseIds };
+    }
+    if (minRating) whereClause.rating = { [db.Sequelize.Op.gte]: minRating };
+
+    const { count, rows: reviews } = await Review.findAndCountAll({
+      where: whereClause,
+      include: [
+        { model: User, as: 'user', attributes: ['id', 'name', 'avatar'] },
+        { model: Course, as: 'course', attributes: ['id', 'title', 'slug'] },
+      ],
+      order: [['created_at', 'DESC']],
+      limit: parseInt(limit),
+      offset: parseInt(offset),
+    });
+
+    return {
+      reviews,
+      pagination: {
+        total: count,
+        page: parseInt(page),
+        limit: parseInt(limit),
+        totalPages: Math.ceil(count / limit),
+      },
+    };
+  }
+
   async getAllReviews(query) {
     const { page = 1, limit = 20, courseId, userId, minRating } = query;
     const offset = (page - 1) * limit;

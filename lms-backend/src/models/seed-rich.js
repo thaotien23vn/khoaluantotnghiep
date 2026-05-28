@@ -2,29 +2,36 @@ const path = require('path');
 require('dotenv').config({ path: path.resolve(__dirname, '../../.env') });
 const bcrypt = require('bcryptjs');
 const { sequelize, connectDB, models } = require('./index');
+const { recomputeCourseRating } = require('../services/courseAggregates.service');
 
 // Danh sách video YouTube IDs (public/educational, chắc chắn embed được)
+// Chỉ dùng video từ kênh lớn (freeCodeCamp 8M+ subs, CrashCourse) vì ít bị xóa
 const SAFE_YOUTUBE_IDS = [
-  'pQN-pnXPaVg', // freeCodeCamp HTML/CSS
-  'yfoY53QX3Oo', // freeCodeCamp Flexbox
+  'pQN-pnXPaVg', // freeCodeCamp HTML & CSS Full Course
+  'yfoY53QX3Oo', // freeCodeCamp CSS Flexbox
   'JJSoEo8JSnc', // freeCodeCamp CSS Grid
-  'jS4aFq5v9do', // freeCodeCamp CSS
-  'bMknfKXIFA8', // freeCodeCamp React
-  'rfscVS0vtbw', // freeCodeCamp Python
-  'i_LwzRVP7bg', // freeCodeCamp JS
-  'nU-IIXBWlFw', // freeCodeCamp Git
-  'FTFaQ1O3nHQ', // freeCodeCamp APIs
-  'W0zLllV8b1c', // freeCodeCamp SQL
-  'ZtqBQ68AwJU', // freeCodeCamp ML
-  'M7lc1UVf-VE', // YouTube embed demo (public)
-  'PkZNo7MFNFg', // freeCodeCamp JS Full
-  '9zBudxeYIH4', // freeCodeCamp Data Structures
-  '2uvysTqdh-U', // freeCodeCamp Portfolio
-  'ycXq8AhJWbc', // freeCodeCamp Python ML
+  'jS4aFq5v9do', // freeCodeCamp CSS Full Course
+  'bMknfKXIFA8', // freeCodeCamp React Full Course
+  'rfscVS0vtbw', // freeCodeCamp Python Full Course
+  'i_LwzRVP7bg', // freeCodeCamp JavaScript Full Course
+  'nU-IIXBWlFw', // freeCodeCamp Git & GitHub
+  'W0zLllV8b1c', // freeCodeCamp SQL & Database
+  'ZtqBQ68AwJU', // freeCodeCamp Machine Learning
+  'PkZNo7MFNFg', // freeCodeCamp JS Algorithms & Data Structures
+  '2uvysTqdh-U', // freeCodeCamp Portfolio Website
+  'ycXq8AhJWbc', // freeCodeCamp Python for ML
   '4zfkehO2hDM', // freeCodeCamp Neural Networks
   '1nXzzBg8g8U', // freeCodeCamp NLP
   'WtlvKp1lRLk', // freeCodeCamp Pandas
   '9jR6mL1TN0A', // freeCodeCamp Linux
+  'kqtD5dpn2C0', // freeCodeCamp GitHub Actions
+  'FLs9oWkFSlc', // freeCodeCamp Next.js
+  'gwD9awr3TBo', // freeCodeCamp Docker
+  'pTFZFxc4M6M', // freeCodeCamp Node.js
+  'EHTWMRkNtEM', // freeCodeCamp TypeScript
+  'tpIctDW7GWA', // Crash Course Computer Science
+  'GvYYFloV0aA', // Crash Course AI
+  'WXsD0ZgxjRw', // freeCodeCamp APIs for Beginners
 ];
 
 const buildYouTubeWatchUrl = (id) => `https://www.youtube.com/watch?v=${id}`;
@@ -1708,6 +1715,10 @@ async function createEnrollmentsProgressAndAttempts(students) {
     const shuffled = [...students].sort(() => 0.5 - Math.random());
     const courseStudents = shuffled.slice(0, numEnroll);
 
+    const progressBatch = [];
+    const attemptBatch = [];
+    const enrollmentUpdates = [];
+
     for (const student of courseStudents) {
       // Create enrollment
       const [enrollment] = await Enrollment.findOrCreate({
@@ -1724,27 +1735,22 @@ async function createEnrollmentsProgressAndAttempts(students) {
       });
       enrollmentCount++;
 
-      // Decide student completion level: completed (20%), progressing (50%), started (20%), dormant (10%)
+      // Decide student completion level
       const rand = Math.random();
       let completedLectures = 0;
       let passedChapterQuizzes = 0;
-      let passedFinal = false;
 
       if (rand < 0.20) {
-        // Completed: all lectures done
         completedLectures = allLectures.length;
       } else if (rand < 0.70) {
-        // Progressing: 30-90% done
         completedLectures = Math.floor(allLectures.length * (0.3 + Math.random() * 0.6));
       } else if (rand < 0.90) {
-        // Started: 1-3 lectures
         completedLectures = Math.min(3, Math.floor(Math.random() * 3) + 1);
       } else {
-        // Dormant: enrolled but no progress
         completedLectures = 0;
       }
 
-      // Create lecture progress
+      // Build lecture progress batch
       for (let li = 0; li < allLectures.length; li++) {
         const lecture = allLectures[li];
         let watchedPercent = 0;
@@ -1752,16 +1758,15 @@ async function createEnrollmentsProgressAndAttempts(students) {
         let completedAt = null;
 
         if (li < completedLectures) {
-          watchedPercent = 95 + Math.floor(Math.random() * 6); // 95-100%
+          watchedPercent = 95 + Math.floor(Math.random() * 6);
           isCompleted = true;
           completedAt = new Date(Date.now() - Math.random() * 60 * 24 * 60 * 60 * 1000);
         } else if (li === completedLectures && completedLectures < allLectures.length) {
-          // Currently watching this lecture
           watchedPercent = Math.floor(Math.random() * 60) + 10;
         }
 
         if (watchedPercent > 0) {
-          await LectureProgress.create({
+          progressBatch.push({
             userId: student.id,
             lectureId: lecture.id,
             courseId: course.id,
@@ -1770,21 +1775,15 @@ async function createEnrollmentsProgressAndAttempts(students) {
             lastAccessedAt: new Date(),
             completedAt,
           });
-          progressCount++;
         }
       }
 
-      // Create quiz attempts for chapter quizzes
+      // Build quiz attempts batch
       for (const quiz of chapterQuizzes) {
-        // Only attempt if student has watched at least some lectures in this chapter
-        // For simplicity, attempt if completedLectures > 0 and random chance
         if (completedLectures > 0 && Math.random() > 0.3) {
-          const pass = Math.random() > 0.35; // 65% pass rate
-          const score = pass
-            ? 70 + Math.floor(Math.random() * 31) // 70-100
-            : Math.floor(Math.random() * 65); // 0-64
-
-          await Attempt.create({
+          const pass = Math.random() > 0.35;
+          const score = pass ? 70 + Math.floor(Math.random() * 31) : Math.floor(Math.random() * 65);
+          attemptBatch.push({
             userId: student.id,
             quizId: quiz.id,
             score,
@@ -1794,19 +1793,15 @@ async function createEnrollmentsProgressAndAttempts(students) {
             startedAt: new Date(Date.now() - Math.random() * 30 * 24 * 60 * 60 * 1000),
             completedAt: new Date(Date.now() - Math.random() * 30 * 24 * 60 * 60 * 1000),
           });
-          attemptCount++;
           if (pass) passedChapterQuizzes++;
         }
       }
 
-      // Final exam attempt (only if all lectures completed)
+      // Final exam attempt
       if (finalExam && completedLectures === allLectures.length) {
-        const pass = Math.random() > 0.25; // 75% pass rate for final
-        const score = pass
-          ? 70 + Math.floor(Math.random() * 31)
-          : Math.floor(Math.random() * 65);
-
-        await Attempt.create({
+        const pass = Math.random() > 0.25;
+        const score = pass ? 70 + Math.floor(Math.random() * 31) : Math.floor(Math.random() * 65);
+        attemptBatch.push({
           userId: student.id,
           quizId: finalExam.id,
           score,
@@ -1816,16 +1811,31 @@ async function createEnrollmentsProgressAndAttempts(students) {
           startedAt: new Date(Date.now() - Math.random() * 14 * 24 * 60 * 60 * 1000),
           completedAt: new Date(Date.now() - Math.random() * 14 * 24 * 60 * 60 * 1000),
         });
-        attemptCount++;
-        passedFinal = pass;
       }
 
-      // Update enrollment progressPercent
+      // Track enrollment update
       const totalItems = allLectures.length + chapterQuizzes.length;
       const completedItems = completedLectures + passedChapterQuizzes;
       const progressPercent = totalItems > 0 ? Math.round((completedItems / totalItems) * 100) : 0;
-      await enrollment.update({ progressPercent });
+      enrollmentUpdates.push({ id: enrollment.id, progressPercent });
     }
+
+    // Bulk insert progress & attempts for this course
+    if (progressBatch.length > 0) {
+      await LectureProgress.bulkCreate(progressBatch, { ignoreDuplicates: true });
+      progressCount += progressBatch.length;
+    }
+    if (attemptBatch.length > 0) {
+      await Attempt.bulkCreate(attemptBatch, { ignoreDuplicates: true });
+      attemptCount += attemptBatch.length;
+    }
+
+    // Bulk update enrollments
+    for (const up of enrollmentUpdates) {
+      await Enrollment.update({ progressPercent: up.progressPercent }, { where: { id: up.id } });
+    }
+
+    console.log(`    ✓ ${course.title.slice(0, 40)}: ${courseStudents.length} enrollments`);
   }
 
   console.log(`  ✓ ${enrollmentCount} enrollments`);
@@ -1874,6 +1884,13 @@ async function createReviews(students) {
       } catch (err) {
         // Ignore duplicate review errors
       }
+    }
+
+    // Recompute course rating after creating reviews
+    try {
+      await recomputeCourseRating(course.id);
+    } catch (err) {
+      console.error(`  ⚠️ Failed to recompute rating for course ${course.id}:`, err.message);
     }
   }
 

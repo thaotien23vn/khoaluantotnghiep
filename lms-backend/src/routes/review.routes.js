@@ -92,6 +92,20 @@ router.get(
   reviewController.getReview
 );
 
+// ========== TEACHER ROUTES ==========
+
+/**
+ * @route   GET /api/teacher/reviews
+ * @desc    Get reviews for teacher's courses
+ * @access  Private (Teacher & Admin)
+ */
+router.get(
+  '/teacher/reviews',
+  authMiddleware,
+  authorizeRole('teacher', 'admin'),
+  reviewController.getTeacherReviews
+);
+
 // ========== ADMIN ROUTES ==========
 
 /**

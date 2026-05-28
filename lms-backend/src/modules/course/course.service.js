@@ -435,8 +435,17 @@ class CourseService {
       offset,
     });
 
+    const formattedCourses = courses.map((course) => {
+      const plain = course.toJSON ? course.toJSON() : course;
+      return {
+        ...plain,
+        rating: parseFloat(plain.rating) || 0,
+        reviewCount: Number(plain.reviewCount) || 0,
+      };
+    });
+
     return {
-      courses,
+      courses: formattedCourses,
       pagination: {
         total,
         page: pageNum,
