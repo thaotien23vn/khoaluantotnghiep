@@ -720,15 +720,9 @@ class ProgressService {
    */
   async getFinalExamStatus(userId, courseId) {
     try {
-      const { Quiz, Attempt, Chapter } = db.models;
+      const { Quiz, Attempt } = db.models;
       const finalExam = await Quiz.findOne({
-        include: [{
-          model: Chapter,
-          as: 'quizChapter',
-          where: { courseId },
-          required: true,
-        }],
-        where: { status: 'published', type: 'final' },
+        where: { status: 'published', type: 'final', courseId },
         attributes: ['id', 'title', 'passingScore', 'maxScore', 'timeLimit', 'maxAttempts'],
       });
 

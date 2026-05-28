@@ -6,36 +6,15 @@ const { recomputeCourseRating } = require('../services/courseAggregates.service'
 
 // Danh sách video YouTube IDs (public/educational, chắc chắn embed được)
 // Chỉ dùng video từ kênh lớn (freeCodeCamp 8M+ subs, CrashCourse) vì ít bị xóa
-const SAFE_YOUTUBE_IDS = [
-  'pQN-pnXPaVg', // freeCodeCamp HTML & CSS Full Course
-  'yfoY53QX3Oo', // freeCodeCamp CSS Flexbox
-  'JJSoEo8JSnc', // freeCodeCamp CSS Grid
-  'jS4aFq5v9do', // freeCodeCamp CSS Full Course
-  'bMknfKXIFA8', // freeCodeCamp React Full Course
-  'rfscVS0vtbw', // freeCodeCamp Python Full Course
-  'i_LwzRVP7bg', // freeCodeCamp JavaScript Full Course
-  'nU-IIXBWlFw', // freeCodeCamp Git & GitHub
-  'W0zLllV8b1c', // freeCodeCamp SQL & Database
-  'ZtqBQ68AwJU', // freeCodeCamp Machine Learning
-  'PkZNo7MFNFg', // freeCodeCamp JS Algorithms & Data Structures
-  '2uvysTqdh-U', // freeCodeCamp Portfolio Website
-  'ycXq8AhJWbc', // freeCodeCamp Python for ML
-  '4zfkehO2hDM', // freeCodeCamp Neural Networks
-  '1nXzzBg8g8U', // freeCodeCamp NLP
-  'WtlvKp1lRLk', // freeCodeCamp Pandas
-  '9jR6mL1TN0A', // freeCodeCamp Linux
-  'kqtD5dpn2C0', // freeCodeCamp GitHub Actions
-  'FLs9oWkFSlc', // freeCodeCamp Next.js
-  'gwD9awr3TBo', // freeCodeCamp Docker
-  'pTFZFxc4M6M', // freeCodeCamp Node.js
-  'EHTWMRkNtEM', // freeCodeCamp TypeScript
-  'tpIctDW7GWA', // Crash Course Computer Science
-  'GvYYFloV0aA', // Crash Course AI
-  'WXsD0ZgxjRw', // freeCodeCamp APIs for Beginners
+const DEMO_MP4_VIDEOS = [
+  'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4',
+  'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ElephantsDream.mp4',
+  'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerBlazes.mp4',
+  'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerEscapes.mp4',
+  'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/SubaruOutbackOnStreetAndDirt.mp4',
 ];
 
-const buildYouTubeWatchUrl = (id) => `https://www.youtube.com/watch?v=${id}`;
-const buildYouTubeEmbedUrl = (id) => `https://www.youtube.com/embed/${id}`;
+const getDemoVideoUrl = (index) => DEMO_MP4_VIDEOS[index % DEMO_MP4_VIDEOS.length];
 
 // ============================================================================
 // 1. CATEGORIES WITH UNSPLASH THUMBNAILS
@@ -208,24 +187,24 @@ const COURSES_DATA = [
           {
             title: 'Chương 1: HTML5 Semantic & Structure',
             lectures: [
-              { title: 'Giới thiệu HTML & Công cụ cần thiết', videoUrl: 'https://www.youtube.com/embed/pQN-pnXPaVg', duration: 900 },
-              { title: 'HTML Tags cơ bản: headings, paragraphs, links', videoUrl: 'https://www.youtube.com/embed/HD13eq_Pmp8', duration: 1200 },
-              { title: 'HTML Forms & Input Elements', videoUrl: 'https://www.youtube.com/embed/mJgBOIoGihA', duration: 1100 },
+              { title: 'Giới thiệu HTML & Công cụ cần thiết', videoUrl: 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4', duration: 900 },
+              { title: 'HTML Tags cơ bản: headings, paragraphs, links', videoUrl: 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ElephantsDream.mp4', duration: 1200 },
+              { title: 'HTML Forms & Input Elements', videoUrl: 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerBlazes.mp4', duration: 1100 },
             ],
           },
           {
             title: 'Chương 2: CSS3 Styling & Layout',
             lectures: [
-              { title: 'Selectors, Colors, Fonts & Box Model', videoUrl: 'https://www.youtube.com/embed/yfoY53QX3Oo', duration: 1300 },
-              { title: 'Flexbox - Layout 1 chiều hiệu quả', videoUrl: 'https://www.youtube.com/embed/JJSoEo8JSnc', duration: 1400 },
-              { title: 'CSS Grid - Layout 2 chiều mạnh mẽ', videoUrl: 'https://www.youtube.com/embed/9zBudxeYIH4', duration: 1500 },
+              { title: 'Selectors, Colors, Fonts & Box Model', videoUrl: 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerEscapes.mp4', duration: 1300 },
+              { title: 'Flexbox - Layout 1 chiều hiệu quả', videoUrl: 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/SubaruOutbackOnStreetAndDirt.mp4', duration: 1400 },
+              { title: 'CSS Grid - Layout 2 chiều mạnh mẽ', videoUrl: 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4', duration: 1500 },
             ],
           },
           {
             title: 'Chương 3: Responsive Design & Project',
             lectures: [
-              { title: 'Media Queries & Mobile-first', videoUrl: 'https://www.youtube.com/embed/2KL-z9A56jU', duration: 1000 },
-              { title: 'Xây dựng Portfolio Website hoàn chỉnh', videoUrl: 'https://www.youtube.com/embed/5ccq_nLHneE', duration: 2000 },
+              { title: 'Media Queries & Mobile-first', videoUrl: 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ElephantsDream.mp4', duration: 1000 },
+              { title: 'Xây dựng Portfolio Website hoàn chỉnh', videoUrl: 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerBlazes.mp4', duration: 2000 },
             ],
           },
         ],
@@ -242,25 +221,25 @@ const COURSES_DATA = [
           {
             title: 'Chương 1: JavaScript Fundamentals',
             lectures: [
-              { title: 'Variables, Data Types & Operators', videoUrl: 'https://www.youtube.com/embed/jS4aFq5v9do', duration: 1100 },
-              { title: 'Functions, Arrow Functions & Scope', videoUrl: 'https://www.youtube.com/embed/PkZNo7MFNFg', duration: 1200 },
-              { title: 'Arrays, Objects & Destructuring', videoUrl: 'https://www.youtube.com/embed/3PHXvlpOkf4', duration: 1300 },
+              { title: 'Variables, Data Types & Operators', videoUrl: 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerEscapes.mp4', duration: 1100 },
+              { title: 'Functions, Arrow Functions & Scope', videoUrl: 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/SubaruOutbackOnStreetAndDirt.mp4', duration: 1200 },
+              { title: 'Arrays, Objects & Destructuring', videoUrl: 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4', duration: 1300 },
             ],
           },
           {
             title: 'Chương 2: DOM & Asynchronous JS',
             lectures: [
-              { title: 'DOM Manipulation & Events', videoUrl: 'https://www.youtube.com/embed/y17RuWkWdn8', duration: 1400 },
-              { title: 'Fetch API, Promises & Async/Await', videoUrl: 'https://www.youtube.com/embed/ZuQNGv4dBVs', duration: 1500 },
-              { title: 'Event Loop & Microtasks', videoUrl: 'https://www.youtube.com/embed/8aGhZQkoW2E', duration: 900 },
+              { title: 'DOM Manipulation & Events', videoUrl: 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ElephantsDream.mp4', duration: 1400 },
+              { title: 'Fetch API, Promises & Async/Await', videoUrl: 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerBlazes.mp4', duration: 1500 },
+              { title: 'Event Loop & Microtasks', videoUrl: 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerEscapes.mp4', duration: 900 },
             ],
           },
           {
             title: 'Chương 3: Dự án Todo App',
             lectures: [
-              { title: 'Thiết kế UI & Cấu trúc dữ liệu', videoUrl: 'https://www.youtube.com/embed/Ttf3CEsYwMQ', duration: 1000 },
-              { title: 'Implement CRUD với LocalStorage', videoUrl: 'https://www.youtube.com/embed/jS4aFq5v9do', duration: 1600 },
-              { title: 'Deploy lên Vercel/Netlify', videoUrl: 'https://www.youtube.com/embed/lEH8zEZEtrc', duration: 800 },
+              { title: 'Thiết kế UI & Cấu trúc dữ liệu', videoUrl: 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/SubaruOutbackOnStreetAndDirt.mp4', duration: 1000 },
+              { title: 'Implement CRUD với LocalStorage', videoUrl: 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4', duration: 1600 },
+              { title: 'Deploy lên Vercel/Netlify', videoUrl: 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ElephantsDream.mp4', duration: 800 },
             ],
           },
         ],
@@ -277,24 +256,24 @@ const COURSES_DATA = [
           {
             title: 'Chương 1: React Core Concepts',
             lectures: [
-              { title: 'Components, Props, State & JSX', videoUrl: 'https://www.youtube.com/embed/bMknfKXIFA8', duration: 1200 },
-              { title: 'useEffect, useRef & Custom Hooks', videoUrl: 'https://www.youtube.com/embed/0h2b4ftbDJc', duration: 1400 },
-              { title: 'Context API & useReducer', videoUrl: 'https://www.youtube.com/embed/5Ql-Qwej4UQ', duration: 1100 },
+              { title: 'Components, Props, State & JSX', videoUrl: 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerBlazes.mp4', duration: 1200 },
+              { title: 'useEffect, useRef & Custom Hooks', videoUrl: 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerEscapes.mp4', duration: 1400 },
+              { title: 'Context API & useReducer', videoUrl: 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/SubaruOutbackOnStreetAndDirt.mp4', duration: 1100 },
             ],
           },
           {
             title: 'Chương 2: State Management & Routing',
             lectures: [
-              { title: 'Redux Toolkit & RTK Query', videoUrl: 'https://www.youtube.com/embed/9jR6mL1TN0A', duration: 1600 },
-              { title: 'React Router v6 - Navigation bảo mật', videoUrl: 'https://www.youtube.com/embed/2a8PgTVFfRm', duration: 1000 },
+              { title: 'Redux Toolkit & RTK Query', videoUrl: 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4', duration: 1600 },
+              { title: 'React Router v6 - Navigation bảo mật', videoUrl: 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ElephantsDream.mp4', duration: 1000 },
             ],
           },
           {
             title: 'Chương 3: Dự án E-commerce Dashboard',
             lectures: [
-              { title: 'Setup project với Vite + Tailwind', videoUrl: 'https://www.youtube.com/embed/lHZwlzOUOZU', duration: 900 },
-              { title: 'Product List, Filter & Pagination', videoUrl: 'https://www.youtube.com/embed/bMknfKXIFA8', duration: 1800 },
-              { title: 'Giỏ hàng, Checkout & Dark Mode', videoUrl: 'https://www.youtube.com/embed/1m3lS3mE9Vc', duration: 1500 },
+              { title: 'Setup project với Vite + Tailwind', videoUrl: 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerBlazes.mp4', duration: 900 },
+              { title: 'Product List, Filter & Pagination', videoUrl: 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerEscapes.mp4', duration: 1800 },
+              { title: 'Giỏ hàng, Checkout & Dark Mode', videoUrl: 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/SubaruOutbackOnStreetAndDirt.mp4', duration: 1500 },
             ],
           },
         ],
@@ -321,25 +300,25 @@ const COURSES_DATA = [
           {
             title: 'Chương 1: Python Basics',
             lectures: [
-              { title: 'Cài đặt môi trường & Jupyter Notebook', videoUrl: 'https://www.youtube.com/embed/rfscVS0vtbw', duration: 800 },
-              { title: 'Variables, Data Types & Control Flow', videoUrl: 'https://www.youtube.com/embed/k9TUPpGqYTo', duration: 1100 },
-              { title: 'Functions, Modules & List Comprehension', videoUrl: 'https://www.youtube.com/embed/Kyh1RlUcD_8', duration: 1000 },
+              { title: 'Cài đặt môi trường & Jupyter Notebook', videoUrl: 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4', duration: 800 },
+              { title: 'Variables, Data Types & Control Flow', videoUrl: 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ElephantsDream.mp4', duration: 1100 },
+              { title: 'Functions, Modules & List Comprehension', videoUrl: 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerBlazes.mp4', duration: 1000 },
             ],
           },
           {
             title: 'Chương 2: Data Analysis với Pandas',
             lectures: [
-              { title: 'DataFrames, Series & Indexing', videoUrl: 'https://www.youtube.com/embed/2uvysTqdh-U', duration: 1200 },
-              { title: 'Filtering, GroupBy & Aggregation', videoUrl: 'https://www.youtube.com/embed/tN-vQXi-7Hg', duration: 1300 },
-              { title: 'Merge, Join & Pivot Tables', videoUrl: 'https://www.youtube.com/embed/Ztltua3Y0Lc', duration: 1100 },
+              { title: 'DataFrames, Series & Indexing', videoUrl: 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerEscapes.mp4', duration: 1200 },
+              { title: 'Filtering, GroupBy & Aggregation', videoUrl: 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/SubaruOutbackOnStreetAndDirt.mp4', duration: 1300 },
+              { title: 'Merge, Join & Pivot Tables', videoUrl: 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4', duration: 1100 },
             ],
           },
           {
             title: 'Chương 3: Dự án Phân tích Doanh thu',
             lectures: [
-              { title: 'Đọc & làm sạch dataset cửa hàng', videoUrl: 'https://www.youtube.com/embed/QpTqV9H3Egk', duration: 1000 },
-              { title: 'Trực quan hóa với Matplotlib', videoUrl: 'https://www.youtube.com/embed/3Xwb3WMBI4Y', duration: 1400 },
-              { title: 'Xuất báo cáo & Insights', videoUrl: 'https://www.youtube.com/embed/F-7pf9x13KI', duration: 900 },
+              { title: 'Đọc & làm sạch dataset cửa hàng', videoUrl: 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ElephantsDream.mp4', duration: 1000 },
+              { title: 'Trực quan hóa với Matplotlib', videoUrl: 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerBlazes.mp4', duration: 1400 },
+              { title: 'Xuất báo cáo & Insights', videoUrl: 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerEscapes.mp4', duration: 900 },
             ],
           },
         ],
@@ -356,25 +335,25 @@ const COURSES_DATA = [
           {
             title: 'Chương 1: ML Foundations',
             lectures: [
-              { title: 'Giới thiệu ML & Pipeline cơ bản', videoUrl: 'https://www.youtube.com/embed/i_LwzRVP7bg', duration: 1000 },
-              { title: 'Data Preprocessing & Feature Scaling', videoUrl: 'https://www.youtube.com/embed/0Lt9w-BxKFQ', duration: 1200 },
-              { title: 'Train/Test Split & Cross-Validation', videoUrl: 'https://www.youtube.com/embed/BgzZjybkYH8', duration: 1100 },
+              { title: 'Giới thiệu ML & Pipeline cơ bản', videoUrl: 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/SubaruOutbackOnStreetAndDirt.mp4', duration: 1000 },
+              { title: 'Data Preprocessing & Feature Scaling', videoUrl: 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4', duration: 1200 },
+              { title: 'Train/Test Split & Cross-Validation', videoUrl: 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ElephantsDream.mp4', duration: 1100 },
             ],
           },
           {
             title: 'Chương 2: Supervised Learning Algorithms',
             lectures: [
-              { title: 'Linear & Polynomial Regression', videoUrl: 'https://www.youtube.com/embed/WtlvKp1lRLk', duration: 1400 },
-              { title: 'Logistic Regression & SVM', videoUrl: 'https://www.youtube.com/embed/J5bXv5O5wZk', duration: 1300 },
-              { title: 'Decision Trees & Random Forest', videoUrl: 'https://www.youtube.com/embed/W8adIcfRkyU', duration: 1500 },
+              { title: 'Linear & Polynomial Regression', videoUrl: 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerBlazes.mp4', duration: 1400 },
+              { title: 'Logistic Regression & SVM', videoUrl: 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerEscapes.mp4', duration: 1300 },
+              { title: 'Decision Trees & Random Forest', videoUrl: 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/SubaruOutbackOnStreetAndDirt.mp4', duration: 1500 },
             ],
           },
           {
             title: 'Chương 3: Dự án Dự đoán Giá Nhà',
             lectures: [
-              { title: 'EDA & Feature Engineering', videoUrl: 'https://www.youtube.com/embed/f2yu5eK1wZQ', duration: 1600 },
-              { title: 'Model Selection & Hyperparameter Tuning', videoUrl: 'https://www.youtube.com/embed/NUXmp0E46x8', duration: 1400 },
-              { title: 'Đánh giá Model & Deploy', videoUrl: 'https://www.youtube.com/embed/PePkLlQJIek', duration: 1000 },
+              { title: 'EDA & Feature Engineering', videoUrl: 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4', duration: 1600 },
+              { title: 'Model Selection & Hyperparameter Tuning', videoUrl: 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ElephantsDream.mp4', duration: 1400 },
+              { title: 'Đánh giá Model & Deploy', videoUrl: 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerBlazes.mp4', duration: 1000 },
             ],
           },
         ],
@@ -391,24 +370,24 @@ const COURSES_DATA = [
           {
             title: 'Chương 1: Neural Networks & PyTorch',
             lectures: [
-              { title: 'Tensors, Autograd & Optimizers', videoUrl: 'https://www.youtube.com/embed/c36UNSo_0Pw', duration: 1200 },
-              { title: 'Building Neural Networks với nn.Module', videoUrl: 'https://www.youtube.com/embed/3kL1P4c4y2E', duration: 1400 },
-              { title: 'Training Loop & GPU Acceleration', videoUrl: 'https://www.youtube.com/embed/V_xro1BCp1M', duration: 1100 },
+              { title: 'Tensors, Autograd & Optimizers', videoUrl: 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerEscapes.mp4', duration: 1200 },
+              { title: 'Building Neural Networks với nn.Module', videoUrl: 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/SubaruOutbackOnStreetAndDirt.mp4', duration: 1400 },
+              { title: 'Training Loop & GPU Acceleration', videoUrl: 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4', duration: 1100 },
             ],
           },
           {
             title: 'Chương 2: CNN & Computer Vision',
             lectures: [
-              { title: 'Convolution, Pooling & BatchNorm', videoUrl: 'https://www.youtube.com/embed/ycXq8AhJWbc', duration: 1500 },
-              { title: 'Transfer Learning với ResNet/EfficientNet', videoUrl: 'https://www.youtube.com/embed/9C06ZPF8Uuc', duration: 1300 },
+              { title: 'Convolution, Pooling & BatchNorm', videoUrl: 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ElephantsDream.mp4', duration: 1500 },
+              { title: 'Transfer Learning với ResNet/EfficientNet', videoUrl: 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerBlazes.mp4', duration: 1300 },
             ],
           },
           {
             title: 'Chương 3: NLP & Transformer',
             lectures: [
-              { title: 'Word Embeddings & LSTM', videoUrl: 'https://www.youtube.com/embed/4Bdc55j80j8', duration: 1200 },
-              { title: 'Attention Mechanism & Transformer', videoUrl: 'https://www.youtube.com/embed/4zfkehO2hDM', duration: 1600 },
-              { title: 'Fine-tuning BERT cho tiếng Việt', videoUrl: 'https://www.youtube.com/embed/1nXzzBg8g8U', duration: 1800 },
+              { title: 'Word Embeddings & LSTM', videoUrl: 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerEscapes.mp4', duration: 1200 },
+              { title: 'Attention Mechanism & Transformer', videoUrl: 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/SubaruOutbackOnStreetAndDirt.mp4', duration: 1600 },
+              { title: 'Fine-tuning BERT cho tiếng Việt', videoUrl: 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4', duration: 1800 },
             ],
           },
         ],
@@ -435,25 +414,25 @@ const COURSES_DATA = [
           {
             title: 'Chương 1: Figma Fundamentals',
             lectures: [
-              { title: 'Giao diện Figma & Công cụ cơ bản', videoUrl: 'https://www.youtube.com/embed/FTFaQ1O3nHQ', duration: 900 },
-              { title: 'Frames, Groups & Constraints', videoUrl: 'https://www.youtube.com/embed/c9Wg6CbYsrU', duration: 1100 },
-              { title: 'Components & Instances', videoUrl: 'https://www.youtube.com/embed/OZ1HhLao-EQ', duration: 1000 },
+              { title: 'Giao diện Figma & Công cụ cơ bản', videoUrl: 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ElephantsDream.mp4', duration: 900 },
+              { title: 'Frames, Groups & Constraints', videoUrl: 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerBlazes.mp4', duration: 1100 },
+              { title: 'Components & Instances', videoUrl: 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerEscapes.mp4', duration: 1000 },
             ],
           },
           {
             title: 'Chương 2: Auto Layout & Design Systems',
             lectures: [
-              { title: 'Auto Layout - Responsive trong Figma', videoUrl: 'https://www.youtube.com/embed/FTFaQ1O3nHQ', duration: 1200 },
-              { title: 'Variants & Interactive Components', videoUrl: 'https://www.youtube.com/embed/c9Wg6CbYsrU', duration: 1000 },
-              { title: 'Color Theory & Typography cho UI', videoUrl: 'https://www.youtube.com/embed/OZ1HhLao-EQ', duration: 1100 },
+              { title: 'Auto Layout - Responsive trong Figma', videoUrl: 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/SubaruOutbackOnStreetAndDirt.mp4', duration: 1200 },
+              { title: 'Variants & Interactive Components', videoUrl: 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4', duration: 1000 },
+              { title: 'Color Theory & Typography cho UI', videoUrl: 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ElephantsDream.mp4', duration: 1100 },
             ],
           },
           {
             title: 'Chương 3: Dự án App Đặt Vé Xem Phim',
             lectures: [
-              { title: 'Wireframe & User Flow', videoUrl: 'https://www.youtube.com/embed/c9Wg6CbYsrU', duration: 900 },
-              { title: 'Visual Design & Component Library', videoUrl: 'https://www.youtube.com/embed/OZ1HhLao-EQ', duration: 1300 },
-              { title: 'Prototype & Handoff cho Developer', videoUrl: 'https://www.youtube.com/embed/FTFaQ1O3nHQ', duration: 1000 },
+              { title: 'Wireframe & User Flow', videoUrl: 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerBlazes.mp4', duration: 900 },
+              { title: 'Visual Design & Component Library', videoUrl: 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerEscapes.mp4', duration: 1300 },
+              { title: 'Prototype & Handoff cho Developer', videoUrl: 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/SubaruOutbackOnStreetAndDirt.mp4', duration: 1000 },
             ],
           },
         ],
@@ -470,25 +449,25 @@ const COURSES_DATA = [
           {
             title: 'Chương 1: UX Research Methods',
             lectures: [
-              { title: 'User Interviews & Affinity Mapping', videoUrl: 'https://www.youtube.com/embed/c9Wg6CbYsrU', duration: 1000 },
-              { title: 'Surveys & Quantitative Analysis', videoUrl: 'https://www.youtube.com/embed/OZ1HhLao-EQ', duration: 1100 },
-              { title: 'Usability Testing & Heuristic Evaluation', videoUrl: 'https://www.youtube.com/embed/FTFaQ1O3nHQ', duration: 1200 },
+              { title: 'User Interviews & Affinity Mapping', videoUrl: 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4', duration: 1000 },
+              { title: 'Surveys & Quantitative Analysis', videoUrl: 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ElephantsDream.mp4', duration: 1100 },
+              { title: 'Usability Testing & Heuristic Evaluation', videoUrl: 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerBlazes.mp4', duration: 1200 },
             ],
           },
           {
             title: 'Chương 2: Design Thinking Process',
             lectures: [
-              { title: 'Empathize - Journey Map & Personas', videoUrl: 'https://www.youtube.com/embed/FTFaQ1O3nHQ', duration: 1100 },
-              { title: 'Define - Problem Statements & HMW', videoUrl: 'https://www.youtube.com/embed/c9Wg6CbYsrU', duration: 900 },
-              { title: 'Ideate & Prototype - Crazy 8s & Testing', videoUrl: 'https://www.youtube.com/embed/OZ1HhLao-EQ', duration: 1300 },
+              { title: 'Empathize - Journey Map & Personas', videoUrl: 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerEscapes.mp4', duration: 1100 },
+              { title: 'Define - Problem Statements & HMW', videoUrl: 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/SubaruOutbackOnStreetAndDirt.mp4', duration: 900 },
+              { title: 'Ideate & Prototype - Crazy 8s & Testing', videoUrl: 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4', duration: 1300 },
             ],
           },
           {
             title: 'Chương 3: Dự án Cải thiện App Giao Hàng',
             lectures: [
-              { title: 'Research & Phát hiện Pain Points', videoUrl: 'https://www.youtube.com/embed/OZ1HhLao-EQ', duration: 1000 },
-              { title: 'Redesign Checkout Flow & Tracking', videoUrl: 'https://www.youtube.com/embed/FTFaQ1O3nHQ', duration: 1400 },
-              { title: 'A/B Testing & Iteration', videoUrl: 'https://www.youtube.com/embed/c9Wg6CbYsrU', duration: 1000 },
+              { title: 'Research & Phát hiện Pain Points', videoUrl: 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ElephantsDream.mp4', duration: 1000 },
+              { title: 'Redesign Checkout Flow & Tracking', videoUrl: 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerBlazes.mp4', duration: 1400 },
+              { title: 'A/B Testing & Iteration', videoUrl: 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerEscapes.mp4', duration: 1000 },
             ],
           },
         ],
@@ -505,24 +484,24 @@ const COURSES_DATA = [
           {
             title: 'Chương 1: Motion Design Principles',
             lectures: [
-              { title: '12 Principles of Animation áp dụng UI', videoUrl: 'https://www.youtube.com/embed/OZ1HhLao-EQ', duration: 1100 },
-              { title: 'Easing Curves & Timing Functions', videoUrl: 'https://www.youtube.com/embed/c9Wg6CbYsrU', duration: 1000 },
-              { title: 'Storytelling qua Motion', videoUrl: 'https://www.youtube.com/embed/FTFaQ1O3nHQ', duration: 1200 },
+              { title: '12 Principles of Animation áp dụng UI', videoUrl: 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/SubaruOutbackOnStreetAndDirt.mp4', duration: 1100 },
+              { title: 'Easing Curves & Timing Functions', videoUrl: 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4', duration: 1000 },
+              { title: 'Storytelling qua Motion', videoUrl: 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ElephantsDream.mp4', duration: 1200 },
             ],
           },
           {
             title: 'Chương 2: After Effects cho UI',
             lectures: [
-              { title: 'Shape Layers & Keyframes', videoUrl: 'https://www.youtube.com/embed/FTFaQ1O3nHQ', duration: 1300 },
-              { title: 'Export Lottie JSON & Integration', videoUrl: 'https://www.youtube.com/embed/OZ1HhLao-EQ', duration: 1100 },
+              { title: 'Shape Layers & Keyframes', videoUrl: 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerBlazes.mp4', duration: 1300 },
+              { title: 'Export Lottie JSON & Integration', videoUrl: 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerEscapes.mp4', duration: 1100 },
             ],
           },
           {
             title: 'Chương 3: Dự án Fintech Animation Set',
             lectures: [
-              { title: 'Onboarding Flow Animation', videoUrl: 'https://www.youtube.com/embed/c9Wg6CbYsrU', duration: 1200 },
-              { title: 'Transaction Success & Error States', videoUrl: 'https://www.youtube.com/embed/FTFaQ1O3nHQ', duration: 1400 },
-              { title: 'Dashboard Charts & Loading Skeleton', videoUrl: 'https://www.youtube.com/embed/OZ1HhLao-EQ', duration: 1000 },
+              { title: 'Onboarding Flow Animation', videoUrl: 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/SubaruOutbackOnStreetAndDirt.mp4', duration: 1200 },
+              { title: 'Transaction Success & Error States', videoUrl: 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4', duration: 1400 },
+              { title: 'Dashboard Charts & Loading Skeleton', videoUrl: 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ElephantsDream.mp4', duration: 1000 },
             ],
           },
         ],
@@ -549,25 +528,25 @@ const COURSES_DATA = [
           {
             title: 'Chương 1: SEO Foundations',
             lectures: [
-              { title: 'Hiểu cách Google Search hoạt động', videoUrl: 'https://www.youtube.com/embed/nU-IIXBWlFw', duration: 900 },
-              { title: 'Keyword Research với Ahrefs & Ubersuggest', videoUrl: 'https://www.youtube.com/embed/xsVTqzT3I2c', duration: 1200 },
-              { title: 'On-Page SEO: Title, Meta, Heading', videoUrl: 'https://www.youtube.com/embed/nU-IIXBWlFw', duration: 1100 },
+              { title: 'Hiểu cách Google Search hoạt động', videoUrl: 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerBlazes.mp4', duration: 900 },
+              { title: 'Keyword Research với Ahrefs & Ubersuggest', videoUrl: 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerEscapes.mp4', duration: 1200 },
+              { title: 'On-Page SEO: Title, Meta, Heading', videoUrl: 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/SubaruOutbackOnStreetAndDirt.mp4', duration: 1100 },
             ],
           },
           {
             title: 'Chương 2: Technical SEO & Content',
             lectures: [
-              { title: 'Site Speed, Mobile-friendly & Core Web Vitals', videoUrl: 'https://www.youtube.com/embed/xsVTqzT3I2c', duration: 1000 },
-              { title: 'Content Strategy & E-E-A-T', videoUrl: 'https://www.youtube.com/embed/nU-IIXBWlFw', duration: 1300 },
-              { title: 'Internal Linking & Schema Markup', videoUrl: 'https://www.youtube.com/embed/xsVTqzT3I2c', duration: 900 },
+              { title: 'Site Speed, Mobile-friendly & Core Web Vitals', videoUrl: 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4', duration: 1000 },
+              { title: 'Content Strategy & E-E-A-T', videoUrl: 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ElephantsDream.mp4', duration: 1300 },
+              { title: 'Internal Linking & Schema Markup', videoUrl: 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerBlazes.mp4', duration: 900 },
             ],
           },
           {
             title: 'Chương 3: Dự án SEO Blog 30 ngày',
             lectures: [
-              { title: 'Audit website & Lập kế hoạch từ khóa', videoUrl: 'https://www.youtube.com/embed/nU-IIXBWlFw', duration: 1100 },
-              { title: 'Viết bài chuẩn SEO & Track ranking', videoUrl: 'https://www.youtube.com/embed/xsVTqzT3I2c', duration: 1400 },
-              { title: 'Backlink building & Đánh giá kết quả', videoUrl: 'https://www.youtube.com/embed/nU-IIXBWlFw', duration: 1000 },
+              { title: 'Audit website & Lập kế hoạch từ khóa', videoUrl: 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerEscapes.mp4', duration: 1100 },
+              { title: 'Viết bài chuẩn SEO & Track ranking', videoUrl: 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/SubaruOutbackOnStreetAndDirt.mp4', duration: 1400 },
+              { title: 'Backlink building & Đánh giá kết quả', videoUrl: 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4', duration: 1000 },
             ],
           },
         ],
@@ -584,25 +563,25 @@ const COURSES_DATA = [
           {
             title: 'Chương 1: Content Strategy',
             lectures: [
-              { title: 'Content Pillars & Editorial Calendar', videoUrl: 'https://www.youtube.com/embed/eL2vPDCN40w', duration: 1000 },
-              { title: 'Copywriting: Headlines, Hooks & CTA', videoUrl: 'https://www.youtube.com/embed/pW4bP8l7VoE', duration: 1200 },
-              { title: 'Visual Content với Canva Pro', videoUrl: 'https://www.youtube.com/embed/eL2vPDCN40w', duration: 900 },
+              { title: 'Content Pillars & Editorial Calendar', videoUrl: 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ElephantsDream.mp4', duration: 1000 },
+              { title: 'Copywriting: Headlines, Hooks & CTA', videoUrl: 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerBlazes.mp4', duration: 1200 },
+              { title: 'Visual Content với Canva Pro', videoUrl: 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerEscapes.mp4', duration: 900 },
             ],
           },
           {
             title: 'Chương 2: Social Media Growth',
             lectures: [
-              { title: 'TikTok Algorithm & Trend jacking', videoUrl: 'https://www.youtube.com/embed/pW4bP8l7VoE', duration: 1300 },
-              { title: 'Instagram Reels & Facebook Ads cơ bản', videoUrl: 'https://www.youtube.com/embed/eL2vPDCN40w', duration: 1100 },
-              { title: 'LinkedIn B2B Content & Personal Branding', videoUrl: 'https://www.youtube.com/embed/pW4bP8l7VoE', duration: 1000 },
+              { title: 'TikTok Algorithm & Trend jacking', videoUrl: 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/SubaruOutbackOnStreetAndDirt.mp4', duration: 1300 },
+              { title: 'Instagram Reels & Facebook Ads cơ bản', videoUrl: 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4', duration: 1100 },
+              { title: 'LinkedIn B2B Content & Personal Branding', videoUrl: 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ElephantsDream.mp4', duration: 1000 },
             ],
           },
           {
             title: 'Chương 3: Dự án TikTok 10K Followers',
             lectures: [
-              { title: 'Niche research & Content series', videoUrl: 'https://www.youtube.com/embed/eL2vPDCN40w', duration: 1100 },
-              { title: 'Quay & edit video với CapCut', videoUrl: 'https://www.youtube.com/embed/pW4bP8l7VoE', duration: 1400 },
-              { title: 'Analytics, Iterate & Monetization', videoUrl: 'https://www.youtube.com/embed/eL2vPDCN40w', duration: 1000 },
+              { title: 'Niche research & Content series', videoUrl: 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerBlazes.mp4', duration: 1100 },
+              { title: 'Quay & edit video với CapCut', videoUrl: 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerEscapes.mp4', duration: 1400 },
+              { title: 'Analytics, Iterate & Monetization', videoUrl: 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/SubaruOutbackOnStreetAndDirt.mp4', duration: 1000 },
             ],
           },
         ],
@@ -619,25 +598,25 @@ const COURSES_DATA = [
           {
             title: 'Chương 1: Google Ads Mastery',
             lectures: [
-              { title: 'Campaign Structure & Keyword Match Types', videoUrl: 'https://www.youtube.com/embed/t6o2B7fN8bE', duration: 1200 },
-              { title: 'Ad Copywriting & Quality Score', videoUrl: 'https://www.youtube.com/embed/nU-IIXBWlFw', duration: 1100 },
-              { title: 'Conversion Tracking & Remarketing', videoUrl: 'https://www.youtube.com/embed/t6o2B7fN8bE', duration: 1300 },
+              { title: 'Campaign Structure & Keyword Match Types', videoUrl: 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4', duration: 1200 },
+              { title: 'Ad Copywriting & Quality Score', videoUrl: 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ElephantsDream.mp4', duration: 1100 },
+              { title: 'Conversion Tracking & Remarketing', videoUrl: 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerBlazes.mp4', duration: 1300 },
             ],
           },
           {
             title: 'Chương 2: Facebook/Meta Ads',
             lectures: [
-              { title: 'Pixel, Custom Audience & Lookalike', videoUrl: 'https://www.youtube.com/embed/pW4bP8l7VoE', duration: 1400 },
-              { title: 'Creative Testing & CBO Strategy', videoUrl: 'https://www.youtube.com/embed/t6o2B7fN8bE', duration: 1200 },
-              { title: 'Landing Page Optimization', videoUrl: 'https://www.youtube.com/embed/nU-IIXBWlFw', duration: 1000 },
+              { title: 'Pixel, Custom Audience & Lookalike', videoUrl: 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerEscapes.mp4', duration: 1400 },
+              { title: 'Creative Testing & CBO Strategy', videoUrl: 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/SubaruOutbackOnStreetAndDirt.mp4', duration: 1200 },
+              { title: 'Landing Page Optimization', videoUrl: 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4', duration: 1000 },
             ],
           },
           {
             title: 'Chương 3: Dự án Chiến dịch 50 Triệu',
             lectures: [
-              { title: 'Lập ngân sách & Target audience', videoUrl: 'https://www.youtube.com/embed/t6o2B7fN8bE', duration: 1100 },
-              { title: 'A/B test creative & bidding strategy', videoUrl: 'https://www.youtube.com/embed/pW4bP8l7VoE', duration: 1500 },
-              { title: 'Báo cáo ROAS & Scale campaign', videoUrl: 'https://www.youtube.com/embed/nU-IIXBWlFw', duration: 1200 },
+              { title: 'Lập ngân sách & Target audience', videoUrl: 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ElephantsDream.mp4', duration: 1100 },
+              { title: 'A/B test creative & bidding strategy', videoUrl: 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerBlazes.mp4', duration: 1500 },
+              { title: 'Báo cáo ROAS & Scale campaign', videoUrl: 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerEscapes.mp4', duration: 1200 },
             ],
           },
         ],
@@ -664,25 +643,25 @@ const COURSES_DATA = [
           {
             title: 'Chương 1: Idea & Validation',
             lectures: [
-              { title: 'Lean Startup & Design Thinking', videoUrl: 'https://www.youtube.com/embed/qkWuMPy4_Fc', duration: 1000 },
-              { title: 'Customer Discovery & Problem Interview', videoUrl: 'https://www.youtube.com/embed/RLi_1xK4VCE', duration: 1200 },
-              { title: 'Business Model Canvas thực hành', videoUrl: 'https://www.youtube.com/embed/qkWuMPy4_Fc', duration: 1100 },
+              { title: 'Lean Startup & Design Thinking', videoUrl: 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/SubaruOutbackOnStreetAndDirt.mp4', duration: 1000 },
+              { title: 'Customer Discovery & Problem Interview', videoUrl: 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4', duration: 1200 },
+              { title: 'Business Model Canvas thực hành', videoUrl: 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ElephantsDream.mp4', duration: 1100 },
             ],
           },
           {
             title: 'Chương 2: MVP & Traction',
             lectures: [
-              { title: 'Xây dựng MVP với no-code tools', videoUrl: 'https://www.youtube.com/embed/RLi_1xK4VCE', duration: 1300 },
-              { title: 'Growth Hacking & Acquisition Channels', videoUrl: 'https://www.youtube.com/embed/qkWuMPy4_Fc', duration: 1000 },
-              { title: 'Metrics: CAC, LTV, Churn, PMF', videoUrl: 'https://www.youtube.com/embed/RLi_1xK4VCE', duration: 1100 },
+              { title: 'Xây dựng MVP với no-code tools', videoUrl: 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerBlazes.mp4', duration: 1300 },
+              { title: 'Growth Hacking & Acquisition Channels', videoUrl: 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerEscapes.mp4', duration: 1000 },
+              { title: 'Metrics: CAC, LTV, Churn, PMF', videoUrl: 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/SubaruOutbackOnStreetAndDirt.mp4', duration: 1100 },
             ],
           },
           {
             title: 'Chương 3: Pitch & Fundraising',
             lectures: [
-              { title: 'Storytelling & Pitch Deck Design', videoUrl: 'https://www.youtube.com/embed/qkWuMPy4_Fc', duration: 1200 },
-              { title: 'Định giá startup & Term Sheet', videoUrl: 'https://www.youtube.com/embed/RLi_1xK4VCE', duration: 1000 },
-              { title: 'Demo Day & Q&A với Investor', videoUrl: 'https://www.youtube.com/embed/qkWuMPy4_Fc', duration: 900 },
+              { title: 'Storytelling & Pitch Deck Design', videoUrl: 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4', duration: 1200 },
+              { title: 'Định giá startup & Term Sheet', videoUrl: 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ElephantsDream.mp4', duration: 1000 },
+              { title: 'Demo Day & Q&A với Investor', videoUrl: 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerBlazes.mp4', duration: 900 },
             ],
           },
         ],
@@ -699,25 +678,25 @@ const COURSES_DATA = [
           {
             title: 'Chương 1: Leadership & Team Building',
             lectures: [
-              { title: 'Tuyển dụng & Onboarding hiệu quả', videoUrl: 'https://www.youtube.com/embed/6c4BqV7WacI', duration: 1100 },
-              { title: 'KPI, OKR & Performance Review', videoUrl: 'https://www.youtube.com/embed/iONDebHX9qk', duration: 1000 },
-              { title: 'Văn hóa doanh nghiệp & Employee Engagement', videoUrl: 'https://www.youtube.com/embed/6c4BqV7WacI', duration: 1200 },
+              { title: 'Tuyển dụng & Onboarding hiệu quả', videoUrl: 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerEscapes.mp4', duration: 1100 },
+              { title: 'KPI, OKR & Performance Review', videoUrl: 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/SubaruOutbackOnStreetAndDirt.mp4', duration: 1000 },
+              { title: 'Văn hóa doanh nghiệp & Employee Engagement', videoUrl: 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4', duration: 1200 },
             ],
           },
           {
             title: 'Chương 2: Finance & Operations',
             lectures: [
-              { title: 'Kế toán cơ bản & Dòng tiền', videoUrl: 'https://www.youtube.com/embed/iONDebHX9qk', duration: 1300 },
-              { title: 'Quản lý kho, chuỗi cung ứng & Logistics', videoUrl: 'https://www.youtube.com/embed/6c4BqV7WacI', duration: 1100 },
-              { title: 'Pháp lý, hợp đồng & Thuế cho SME', videoUrl: 'https://www.youtube.com/embed/iONDebHX9qk', duration: 1000 },
+              { title: 'Kế toán cơ bản & Dòng tiền', videoUrl: 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ElephantsDream.mp4', duration: 1300 },
+              { title: 'Quản lý kho, chuỗi cung ứng & Logistics', videoUrl: 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerBlazes.mp4', duration: 1100 },
+              { title: 'Pháp lý, hợp đồng & Thuế cho SME', videoUrl: 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerEscapes.mp4', duration: 1000 },
             ],
           },
           {
             title: 'Chương 3: Dự án Tái cấu trúc Công ty',
             lectures: [
-              { title: 'Audit quy trình hiện tại', videoUrl: 'https://www.youtube.com/embed/6c4BqV7WacI', duration: 1000 },
-              { title: 'Thiết kế workflow & Automation', videoUrl: 'https://www.youtube.com/embed/iONDebHX9qk', duration: 1400 },
-              { title: 'Đo lường hiệu quả sau tái cấu trúc', videoUrl: 'https://www.youtube.com/embed/6c4BqV7WacI', duration: 1100 },
+              { title: 'Audit quy trình hiện tại', videoUrl: 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/SubaruOutbackOnStreetAndDirt.mp4', duration: 1000 },
+              { title: 'Thiết kế workflow & Automation', videoUrl: 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4', duration: 1400 },
+              { title: 'Đo lường hiệu quả sau tái cấu trúc', videoUrl: 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ElephantsDream.mp4', duration: 1100 },
             ],
           },
         ],
@@ -734,25 +713,25 @@ const COURSES_DATA = [
           {
             title: 'Chương 1: Strategic Analysis',
             lectures: [
-              { title: 'SWOT, PESTEL & Porter Five Forces', videoUrl: 'https://www.youtube.com/embed/qkWuMPy4_Fc', duration: 1200 },
-              { title: 'Blue Ocean Strategy & Value Innovation', videoUrl: 'https://www.youtube.com/embed/RLi_1xK4VCE', duration: 1100 },
-              { title: 'Competitive Advantage & Moat', videoUrl: 'https://www.youtube.com/embed/qkWuMPy4_Fc', duration: 1300 },
+              { title: 'SWOT, PESTEL & Porter Five Forces', videoUrl: 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerBlazes.mp4', duration: 1200 },
+              { title: 'Blue Ocean Strategy & Value Innovation', videoUrl: 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerEscapes.mp4', duration: 1100 },
+              { title: 'Competitive Advantage & Moat', videoUrl: 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/SubaruOutbackOnStreetAndDirt.mp4', duration: 1300 },
             ],
           },
           {
             title: 'Chương 2: M&A & Due Diligence',
             lectures: [
-              { title: 'M&A Process & Deal Structuring', videoUrl: 'https://www.youtube.com/embed/RLi_1xK4VCE', duration: 1400 },
-              { title: 'Financial Due Diligence & Valuation', videoUrl: 'https://www.youtube.com/embed/qkWuMPy4_Fc', duration: 1200 },
-              { title: 'Post-Merger Integration & Change Management', videoUrl: 'https://www.youtube.com/embed/RLi_1xK4VCE', duration: 1100 },
+              { title: 'M&A Process & Deal Structuring', videoUrl: 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4', duration: 1400 },
+              { title: 'Financial Due Diligence & Valuation', videoUrl: 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ElephantsDream.mp4', duration: 1200 },
+              { title: 'Post-Merger Integration & Change Management', videoUrl: 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerBlazes.mp4', duration: 1100 },
             ],
           },
           {
             title: 'Chương 3: Dự án M&A Simulation',
             lectures: [
-              { title: 'Chọn target & Phân tích synergy', videoUrl: 'https://www.youtube.com/embed/qkWuMPy4_Fc', duration: 1300 },
-              { title: 'Negotiation & Term Sheet', videoUrl: 'https://www.youtube.com/embed/RLi_1xK4VCE', duration: 1500 },
-              { title: 'Integration roadmap & Risk assessment', videoUrl: 'https://www.youtube.com/embed/qkWuMPy4_Fc', duration: 1200 },
+              { title: 'Chọn target & Phân tích synergy', videoUrl: 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerEscapes.mp4', duration: 1300 },
+              { title: 'Negotiation & Term Sheet', videoUrl: 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/SubaruOutbackOnStreetAndDirt.mp4', duration: 1500 },
+              { title: 'Integration roadmap & Risk assessment', videoUrl: 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4', duration: 1200 },
             ],
           },
         ],
@@ -779,25 +758,25 @@ const COURSES_DATA = [
           {
             title: 'Chương 1: Pronunciation & Basic Grammar',
             lectures: [
-              { title: 'IPA Sounds & Word Stress', videoUrl: 'https://www.youtube.com/embed/lIz6JmVhQZs', duration: 900 },
-              { title: 'Present Simple, Continuous & Past Simple', videoUrl: 'https://www.youtube.com/embed/8Smb1b6s7Uw', duration: 1100 },
-              { title: 'Question Forms & Short Answers', videoUrl: 'https://www.youtube.com/embed/lIz6JmVhQZs', duration: 1000 },
+              { title: 'IPA Sounds & Word Stress', videoUrl: 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ElephantsDream.mp4', duration: 900 },
+              { title: 'Present Simple, Continuous & Past Simple', videoUrl: 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerBlazes.mp4', duration: 1100 },
+              { title: 'Question Forms & Short Answers', videoUrl: 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerEscapes.mp4', duration: 1000 },
             ],
           },
           {
             title: 'Chương 2: Daily Communication',
             lectures: [
-              { title: 'Greetings, Introductions & Small Talk', videoUrl: 'https://www.youtube.com/embed/8Smb1b6s7Uw', duration: 1200 },
-              { title: 'Shopping, Dining & Travel English', videoUrl: 'https://www.youtube.com/embed/lIz6JmVhQZs', duration: 1000 },
-              { title: 'Phone Calls & Appointments', videoUrl: 'https://www.youtube.com/embed/8Smb1b6s7Uw', duration: 1100 },
+              { title: 'Greetings, Introductions & Small Talk', videoUrl: 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/SubaruOutbackOnStreetAndDirt.mp4', duration: 1200 },
+              { title: 'Shopping, Dining & Travel English', videoUrl: 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4', duration: 1000 },
+              { title: 'Phone Calls & Appointments', videoUrl: 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ElephantsDream.mp4', duration: 1100 },
             ],
           },
           {
             title: 'Chương 3: Dự án Hội Thoại 5 phút',
             lectures: [
-              { title: 'Luyện nghe qua TED-Ed & Podcasts', videoUrl: 'https://www.youtube.com/embed/lIz6JmVhQZs', duration: 1000 },
-              { title: 'Shadowing & Recording bản thân', videoUrl: 'https://www.youtube.com/embed/8Smb1b6s7Uw', duration: 1300 },
-              { title: 'Live practice qua Cambly/HelloTalk', videoUrl: 'https://www.youtube.com/embed/lIz6JmVhQZs', duration: 900 },
+              { title: 'Luyện nghe qua TED-Ed & Podcasts', videoUrl: 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerBlazes.mp4', duration: 1000 },
+              { title: 'Shadowing & Recording bản thân', videoUrl: 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerEscapes.mp4', duration: 1300 },
+              { title: 'Live practice qua Cambly/HelloTalk', videoUrl: 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/SubaruOutbackOnStreetAndDirt.mp4', duration: 900 },
             ],
           },
         ],
@@ -814,25 +793,25 @@ const COURSES_DATA = [
           {
             title: 'Chương 1: Listening & Reading',
             lectures: [
-              { title: 'Listening Strategy & Note-taking', videoUrl: 'https://www.youtube.com/embed/8Smb1b6s7Uw', duration: 1200 },
-              { title: 'Reading: Skimming, Scanning & Keywords', videoUrl: 'https://www.youtube.com/embed/bN4Lb0xO05A', duration: 1400 },
-              { title: 'True/False/Not Given & Matching Tricks', videoUrl: 'https://www.youtube.com/embed/8Smb1b6s7Uw', duration: 1100 },
+              { title: 'Listening Strategy & Note-taking', videoUrl: 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4', duration: 1200 },
+              { title: 'Reading: Skimming, Scanning & Keywords', videoUrl: 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ElephantsDream.mp4', duration: 1400 },
+              { title: 'True/False/Not Given & Matching Tricks', videoUrl: 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerBlazes.mp4', duration: 1100 },
             ],
           },
           {
             title: 'Chương 2: Writing Band 7+',
             lectures: [
-              { title: 'Task 1: Line, Bar, Pie, Map, Process', videoUrl: 'https://www.youtube.com/embed/bN4Lb0xO05A', duration: 1500 },
-              { title: 'Task 2: Opinion, Discussion, Problem-Solution', videoUrl: 'https://www.youtube.com/embed/8Smb1b6s7Uw', duration: 1300 },
-              { title: 'Academic Vocabulary & Complex Sentences', videoUrl: 'https://www.youtube.com/embed/bN4Lb0xO05A', duration: 1200 },
+              { title: 'Task 1: Line, Bar, Pie, Map, Process', videoUrl: 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerEscapes.mp4', duration: 1500 },
+              { title: 'Task 2: Opinion, Discussion, Problem-Solution', videoUrl: 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/SubaruOutbackOnStreetAndDirt.mp4', duration: 1300 },
+              { title: 'Academic Vocabulary & Complex Sentences', videoUrl: 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4', duration: 1200 },
             ],
           },
           {
             title: 'Chương 3: Speaking Fluency',
             lectures: [
-              { title: 'Part 1: Hobbies, Work, Study - Natural Flow', videoUrl: 'https://www.youtube.com/embed/lIz6JmVhQZs', duration: 1100 },
-              { title: 'Part 2: Cue Card & 2-minute Monologue', videoUrl: 'https://www.youtube.com/embed/bN4Lb0xO05A', duration: 1400 },
-              { title: 'Part 3: Abstract Discussion & Opinion', videoUrl: 'https://www.youtube.com/embed/8Smb1b6s7Uw', duration: 1200 },
+              { title: 'Part 1: Hobbies, Work, Study - Natural Flow', videoUrl: 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ElephantsDream.mp4', duration: 1100 },
+              { title: 'Part 2: Cue Card & 2-minute Monologue', videoUrl: 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerBlazes.mp4', duration: 1400 },
+              { title: 'Part 3: Abstract Discussion & Opinion', videoUrl: 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerEscapes.mp4', duration: 1200 },
             ],
           },
         ],
@@ -849,25 +828,25 @@ const COURSES_DATA = [
           {
             title: 'Chương 1: Business Communication',
             lectures: [
-              { title: 'Email Writing: Formal, Inquiry, Complaint', videoUrl: 'https://www.youtube.com/embed/bN4Lb0xO05A', duration: 1000 },
-              { title: 'Meeting Language: Chairing, Minutes, Action items', videoUrl: 'https://www.youtube.com/embed/lIz6JmVhQZs', duration: 1200 },
-              { title: 'Negotiation Phrases & Tactics', videoUrl: 'https://www.youtube.com/embed/bN4Lb0xO05A', duration: 1100 },
+              { title: 'Email Writing: Formal, Inquiry, Complaint', videoUrl: 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/SubaruOutbackOnStreetAndDirt.mp4', duration: 1000 },
+              { title: 'Meeting Language: Chairing, Minutes, Action items', videoUrl: 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4', duration: 1200 },
+              { title: 'Negotiation Phrases & Tactics', videoUrl: 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ElephantsDream.mp4', duration: 1100 },
             ],
           },
           {
             title: 'Chương 2: Presentation & Report',
             lectures: [
-              { title: 'Structuring Presentation & Slides', videoUrl: 'https://www.youtube.com/embed/lIz6JmVhQZs', duration: 1300 },
-              { title: 'Data Description & Trend Language', videoUrl: 'https://www.youtube.com/embed/bN4Lb0xO05A', duration: 1000 },
-              { title: 'Q&A Handling & Impromptu Speaking', videoUrl: 'https://www.youtube.com/embed/lIz6JmVhQZs', duration: 1100 },
+              { title: 'Structuring Presentation & Slides', videoUrl: 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerBlazes.mp4', duration: 1300 },
+              { title: 'Data Description & Trend Language', videoUrl: 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerEscapes.mp4', duration: 1000 },
+              { title: 'Q&A Handling & Impromptu Speaking', videoUrl: 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/SubaruOutbackOnStreetAndDirt.mp4', duration: 1100 },
             ],
           },
           {
             title: 'Chương 3: Dự án Thuyết Trình Business Case',
             lectures: [
-              { title: 'Chọn case study & Research data', videoUrl: 'https://www.youtube.com/embed/bN4Lb0xO05A', duration: 1000 },
-              { title: 'Viết script & Design slides chuyên nghiệp', videoUrl: 'https://www.youtube.com/embed/lIz6JmVhQZs', duration: 1400 },
-              { title: 'Thuyết trình trước hội đồng & Feedback', videoUrl: 'https://www.youtube.com/embed/bN4Lb0xO05A', duration: 1200 },
+              { title: 'Chọn case study & Research data', videoUrl: 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4', duration: 1000 },
+              { title: 'Viết script & Design slides chuyên nghiệp', videoUrl: 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ElephantsDream.mp4', duration: 1400 },
+              { title: 'Thuyết trình trước hội đồng & Feedback', videoUrl: 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerBlazes.mp4', duration: 1200 },
             ],
           },
         ],
@@ -894,25 +873,25 @@ const COURSES_DATA = [
           {
             title: 'Chương 1: Communication Foundations',
             lectures: [
-              { title: 'Active Listening & Empathy', videoUrl: 'https://www.youtube.com/embed/HAnwNfHSC3Q', duration: 900 },
-              { title: 'Non-verbal Communication & Body Language', videoUrl: 'https://www.youtube.com/embed/6c4BqV7WacI', duration: 1100 },
-              { title: 'Feedback: Giving & Receiving', videoUrl: 'https://www.youtube.com/embed/HAnwNfHSC3Q', duration: 1000 },
+              { title: 'Active Listening & Empathy', videoUrl: 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerEscapes.mp4', duration: 900 },
+              { title: 'Non-verbal Communication & Body Language', videoUrl: 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/SubaruOutbackOnStreetAndDirt.mp4', duration: 1100 },
+              { title: 'Feedback: Giving & Receiving', videoUrl: 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4', duration: 1000 },
             ],
           },
           {
             title: 'Chương 2: Public Speaking',
             lectures: [
-              { title: 'Cấu trúc bài nói: Mở - Thân - Kết', videoUrl: 'https://www.youtube.com/embed/6c4BqV7WacI', duration: 1200 },
-              { title: 'Voice Control, Pause & Storytelling', videoUrl: 'https://www.youtube.com/embed/HAnwNfHSC3Q', duration: 1000 },
-              { title: 'Xử lý sự cố & Q&A tự tin', videoUrl: 'https://www.youtube.com/embed/6c4BqV7WacI', duration: 1100 },
+              { title: 'Cấu trúc bài nói: Mở - Thân - Kết', videoUrl: 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ElephantsDream.mp4', duration: 1200 },
+              { title: 'Voice Control, Pause & Storytelling', videoUrl: 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerBlazes.mp4', duration: 1000 },
+              { title: 'Xử lý sự cố & Q&A tự tin', videoUrl: 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerEscapes.mp4', duration: 1100 },
             ],
           },
           {
             title: 'Chương 3: Dự án Thuyết Trình 10 phút',
             lectures: [
-              { title: 'Chọn chủ đề & Outline bài nói', videoUrl: 'https://www.youtube.com/embed/HAnwNfHSC3Q', duration: 1000 },
-              { title: 'Slide design & Rehearsal techniques', videoUrl: 'https://www.youtube.com/embed/6c4BqV7WacI', duration: 1300 },
-              { title: 'Record & Self-review trước audience', videoUrl: 'https://www.youtube.com/embed/HAnwNfHSC3Q', duration: 900 },
+              { title: 'Chọn chủ đề & Outline bài nói', videoUrl: 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/SubaruOutbackOnStreetAndDirt.mp4', duration: 1000 },
+              { title: 'Slide design & Rehearsal techniques', videoUrl: 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4', duration: 1300 },
+              { title: 'Record & Self-review trước audience', videoUrl: 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ElephantsDream.mp4', duration: 900 },
             ],
           },
         ],
@@ -929,25 +908,25 @@ const COURSES_DATA = [
           {
             title: 'Chương 1: Team Dynamics',
             lectures: [
-              { title: 'Belbin Team Roles & Self-assessment', videoUrl: 'https://www.youtube.com/embed/6c4BqV7WacI', duration: 1000 },
-              { title: 'Effective Meeting & Decision Making', videoUrl: 'https://www.youtube.com/embed/iONDebHX9qk', duration: 1100 },
-              { title: 'Remote Teamwork & Async Communication', videoUrl: 'https://www.youtube.com/embed/6c4BqV7WacI', duration: 1000 },
+              { title: 'Belbin Team Roles & Self-assessment', videoUrl: 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerBlazes.mp4', duration: 1000 },
+              { title: 'Effective Meeting & Decision Making', videoUrl: 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerEscapes.mp4', duration: 1100 },
+              { title: 'Remote Teamwork & Async Communication', videoUrl: 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/SubaruOutbackOnStreetAndDirt.mp4', duration: 1000 },
             ],
           },
           {
             title: 'Chương 2: Conflict Management',
             lectures: [
-              { title: 'Thomas-Kilmann Conflict Mode', videoUrl: 'https://www.youtube.com/embed/iONDebHX9qk', duration: 1200 },
-              { title: 'Difficult Conversations & Mediation', videoUrl: 'https://www.youtube.com/embed/6c4BqV7WacI', duration: 1300 },
-              { title: 'Negotiation & Win-Win Solutions', videoUrl: 'https://www.youtube.com/embed/iONDebHX9qk', duration: 1100 },
+              { title: 'Thomas-Kilmann Conflict Mode', videoUrl: 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4', duration: 1200 },
+              { title: 'Difficult Conversations & Mediation', videoUrl: 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ElephantsDream.mp4', duration: 1300 },
+              { title: 'Negotiation & Win-Win Solutions', videoUrl: 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerBlazes.mp4', duration: 1100 },
             ],
           },
           {
             title: 'Chương 3: Dự án Giải Quyết Xung Đột',
             lectures: [
-              { title: 'Phân tích case study xung đột nhóm', videoUrl: 'https://www.youtube.com/embed/6c4BqV7WacI', duration: 1000 },
-              { title: 'Thiết kế giải pháp & Mediation plan', videoUrl: 'https://www.youtube.com/embed/iONDebHX9qk', duration: 1400 },
-              { title: 'Role-play & Feedback từ mentor', videoUrl: 'https://www.youtube.com/embed/6c4BqV7WacI', duration: 1000 },
+              { title: 'Phân tích case study xung đột nhóm', videoUrl: 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerEscapes.mp4', duration: 1000 },
+              { title: 'Thiết kế giải pháp & Mediation plan', videoUrl: 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/SubaruOutbackOnStreetAndDirt.mp4', duration: 1400 },
+              { title: 'Role-play & Feedback từ mentor', videoUrl: 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4', duration: 1000 },
             ],
           },
         ],
@@ -964,25 +943,25 @@ const COURSES_DATA = [
           {
             title: 'Chương 1: Time Management Systems',
             lectures: [
-              { title: 'Eisenhower Matrix & Pareto Principle', videoUrl: 'https://www.youtube.com/embed/HAnwNfHSC3Q', duration: 900 },
-              { title: 'GTD: Capture, Clarify, Organize, Reflect', videoUrl: 'https://www.youtube.com/embed/iONDebHX9qk', duration: 1200 },
-              { title: 'Time Blocking & Calendar Management', videoUrl: 'https://www.youtube.com/embed/HAnwNfHSC3Q', duration: 1000 },
+              { title: 'Eisenhower Matrix & Pareto Principle', videoUrl: 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ElephantsDream.mp4', duration: 900 },
+              { title: 'GTD: Capture, Clarify, Organize, Reflect', videoUrl: 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerBlazes.mp4', duration: 1200 },
+              { title: 'Time Blocking & Calendar Management', videoUrl: 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerEscapes.mp4', duration: 1000 },
             ],
           },
           {
             title: 'Chương 2: Deep Work & Habits',
             lectures: [
-              { title: 'Deep Work vs Shallow Work', videoUrl: 'https://www.youtube.com/embed/iONDebHX9qk', duration: 1100 },
-              { title: 'Eliminate Distraction: Digital Minimalism', videoUrl: 'https://www.youtube.com/embed/HAnwNfHSC3Q', duration: 1300 },
-              { title: 'Habit Stacking & Atomic Habits', videoUrl: 'https://www.youtube.com/embed/iONDebHX9qk', duration: 1000 },
+              { title: 'Deep Work vs Shallow Work', videoUrl: 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/SubaruOutbackOnStreetAndDirt.mp4', duration: 1100 },
+              { title: 'Eliminate Distraction: Digital Minimalism', videoUrl: 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4', duration: 1300 },
+              { title: 'Habit Stacking & Atomic Habits', videoUrl: 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ElephantsDream.mp4', duration: 1000 },
             ],
           },
           {
             title: 'Chương 3: Dự án 30 Ngày Năng Suất',
             lectures: [
-              { title: 'Audit thời gian hiện tại & Xác định mục tiêu', videoUrl: 'https://www.youtube.com/embed/HAnwNfHSC3Q', duration: 1000 },
-              { title: 'Thiết kế hệ thống cá nhân hóa', videoUrl: 'https://www.youtube.com/embed/iONDebHX9qk', duration: 1200 },
-              { title: 'Tracking, Review & Iteration', videoUrl: 'https://www.youtube.com/embed/HAnwNfHSC3Q', duration: 900 },
+              { title: 'Audit thời gian hiện tại & Xác định mục tiêu', videoUrl: 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerBlazes.mp4', duration: 1000 },
+              { title: 'Thiết kế hệ thống cá nhân hóa', videoUrl: 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerEscapes.mp4', duration: 1200 },
+              { title: 'Tracking, Review & Iteration', videoUrl: 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/SubaruOutbackOnStreetAndDirt.mp4', duration: 900 },
             ],
           },
         ],
@@ -1009,25 +988,25 @@ const COURSES_DATA = [
           {
             title: 'Chương 1: Networking Fundamentals',
             lectures: [
-              { title: 'OSI Model & TCP/IP Stack', videoUrl: 'https://www.youtube.com/embed/W0zLllV8b1c', duration: 1000 },
-              { title: 'IP Addressing, Subnetting & Routing', videoUrl: 'https://www.youtube.com/embed/ZtqBQ68AwJU', duration: 1200 },
-              { title: 'DNS, DHCP & NAT explained', videoUrl: 'https://www.youtube.com/embed/W0zLllV8b1c', duration: 1100 },
+              { title: 'OSI Model & TCP/IP Stack', videoUrl: 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4', duration: 1000 },
+              { title: 'IP Addressing, Subnetting & Routing', videoUrl: 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ElephantsDream.mp4', duration: 1200 },
+              { title: 'DNS, DHCP & NAT explained', videoUrl: 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerBlazes.mp4', duration: 1100 },
             ],
           },
           {
             title: 'Chương 2: Linux Essentials',
             lectures: [
-              { title: 'Linux Distros & Terminal Basics', videoUrl: 'https://www.youtube.com/embed/ZtqBQ68AwJU', duration: 1000 },
-              { title: 'File System, Permissions & Users', videoUrl: 'https://www.youtube.com/embed/W0zLllV8b1c', duration: 1300 },
-              { title: 'Shell Scripting & Cron Jobs', videoUrl: 'https://www.youtube.com/embed/ZtqBQ68AwJU', duration: 1100 },
+              { title: 'Linux Distros & Terminal Basics', videoUrl: 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerEscapes.mp4', duration: 1000 },
+              { title: 'File System, Permissions & Users', videoUrl: 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/SubaruOutbackOnStreetAndDirt.mp4', duration: 1300 },
+              { title: 'Shell Scripting & Cron Jobs', videoUrl: 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4', duration: 1100 },
             ],
           },
           {
             title: 'Chương 3: Dự án LAMP Server',
             lectures: [
-              { title: 'Cài đặt Ubuntu Server trên VPS', videoUrl: 'https://www.youtube.com/embed/W0zLllV8b1c', duration: 1000 },
-              { title: 'Cấu hình Apache, MySQL, PHP', videoUrl: 'https://www.youtube.com/embed/ZtqBQ68AwJU', duration: 1400 },
-              { title: 'Security hardening & Monitoring', videoUrl: 'https://www.youtube.com/embed/W0zLllV8b1c', duration: 1000 },
+              { title: 'Cài đặt Ubuntu Server trên VPS', videoUrl: 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ElephantsDream.mp4', duration: 1000 },
+              { title: 'Cấu hình Apache, MySQL, PHP', videoUrl: 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerBlazes.mp4', duration: 1400 },
+              { title: 'Security hardening & Monitoring', videoUrl: 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerEscapes.mp4', duration: 1000 },
             ],
           },
         ],
@@ -1044,25 +1023,25 @@ const COURSES_DATA = [
           {
             title: 'Chương 1: Recon & Scanning',
             lectures: [
-              { title: 'Passive vs Active Reconnaissance', videoUrl: 'https://www.youtube.com/embed/ZtqBQ68AwJU', duration: 1100 },
-              { title: 'Nmap, Masscan & Service Enumeration', videoUrl: 'https://www.youtube.com/embed/9zUHg7xjIqQ', duration: 1300 },
-              { title: 'Vulnerability Scanning với Nessus/OpenVAS', videoUrl: 'https://www.youtube.com/embed/ZtqBQ68AwJU', duration: 1200 },
+              { title: 'Passive vs Active Reconnaissance', videoUrl: 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/SubaruOutbackOnStreetAndDirt.mp4', duration: 1100 },
+              { title: 'Nmap, Masscan & Service Enumeration', videoUrl: 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4', duration: 1300 },
+              { title: 'Vulnerability Scanning với Nessus/OpenVAS', videoUrl: 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ElephantsDream.mp4', duration: 1200 },
             ],
           },
           {
             title: 'Chương 2: Web App Exploitation',
             lectures: [
-              { title: 'OWASP Top 10: Injection & Broken Auth', videoUrl: 'https://www.youtube.com/embed/9zUHg7xjIqQ', duration: 1400 },
-              { title: 'XSS, CSRF & IDOR Exploitation', videoUrl: 'https://www.youtube.com/embed/ZtqBQ68AwJU', duration: 1300 },
-              { title: 'Burp Suite: Proxy, Repeater, Intruder', videoUrl: 'https://www.youtube.com/embed/9zUHg7xjIqQ', duration: 1200 },
+              { title: 'OWASP Top 10: Injection & Broken Auth', videoUrl: 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerBlazes.mp4', duration: 1400 },
+              { title: 'XSS, CSRF & IDOR Exploitation', videoUrl: 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerEscapes.mp4', duration: 1300 },
+              { title: 'Burp Suite: Proxy, Repeater, Intruder', videoUrl: 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/SubaruOutbackOnStreetAndDirt.mp4', duration: 1200 },
             ],
           },
           {
             title: 'Chương 3: Dự án Pentest Web App',
             lectures: [
-              { title: 'Scope definition & Rules of Engagement', videoUrl: 'https://www.youtube.com/embed/ZtqBQ68AwJU', duration: 1000 },
-              { title: 'Thực hiện pentest & Khai thác lỗ hổng', videoUrl: 'https://www.youtube.com/embed/9zUHg7xjIqQ', duration: 1600 },
-              { title: 'Viết báo cáo & Remediation plan', videoUrl: 'https://www.youtube.com/embed/ZtqBQ68AwJU', duration: 1100 },
+              { title: 'Scope definition & Rules of Engagement', videoUrl: 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4', duration: 1000 },
+              { title: 'Thực hiện pentest & Khai thác lỗ hổng', videoUrl: 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ElephantsDream.mp4', duration: 1600 },
+              { title: 'Viết báo cáo & Remediation plan', videoUrl: 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerBlazes.mp4', duration: 1100 },
             ],
           },
         ],
@@ -1079,25 +1058,25 @@ const COURSES_DATA = [
           {
             title: 'Chương 1: Cloud Security Architecture',
             lectures: [
-              { title: 'Shared Responsibility Model', videoUrl: 'https://www.youtube.com/embed/9zUHg7xjIqQ', duration: 1200 },
-              { title: 'IAM, VPC, Security Groups & NACLs', videoUrl: 'https://www.youtube.com/embed/W0zLllV8b1c', duration: 1400 },
-              { title: 'Encryption at Rest & In Transit', videoUrl: 'https://www.youtube.com/embed/9zUHg7xjIqQ', duration: 1100 },
+              { title: 'Shared Responsibility Model', videoUrl: 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerEscapes.mp4', duration: 1200 },
+              { title: 'IAM, VPC, Security Groups & NACLs', videoUrl: 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/SubaruOutbackOnStreetAndDirt.mp4', duration: 1400 },
+              { title: 'Encryption at Rest & In Transit', videoUrl: 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4', duration: 1100 },
             ],
           },
           {
             title: 'Chương 2: DevSecOps Pipeline',
             lectures: [
-              { title: 'SAST/DAST trong CI/CD', videoUrl: 'https://www.youtube.com/embed/ZtqBQ68AwJU', duration: 1300 },
-              { title: 'Container Security: Docker, Kubernetes', videoUrl: 'https://www.youtube.com/embed/9zUHg7xjIqQ', duration: 1500 },
-              { title: 'IaC Security: Terraform, CloudFormation', videoUrl: 'https://www.youtube.com/embed/W0zLllV8b1c', duration: 1200 },
+              { title: 'SAST/DAST trong CI/CD', videoUrl: 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ElephantsDream.mp4', duration: 1300 },
+              { title: 'Container Security: Docker, Kubernetes', videoUrl: 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerBlazes.mp4', duration: 1500 },
+              { title: 'IaC Security: Terraform, CloudFormation', videoUrl: 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerEscapes.mp4', duration: 1200 },
             ],
           },
           {
             title: 'Chương 3: Dự án DevSecOps Pipeline',
             lectures: [
-              { title: 'Thiết kế kiến trúc an toàn trên AWS', videoUrl: 'https://www.youtube.com/embed/9zUHg7xjIqQ', duration: 1400 },
-              { title: 'Xây dựng CI/CD với Jenkins/GitLab CI', videoUrl: 'https://www.youtube.com/embed/ZtqBQ68AwJU', duration: 1600 },
-              { title: 'Monitoring, SIEM & Incident Response', videoUrl: 'https://www.youtube.com/embed/W0zLllV8b1c', duration: 1300 },
+              { title: 'Thiết kế kiến trúc an toàn trên AWS', videoUrl: 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/SubaruOutbackOnStreetAndDirt.mp4', duration: 1400 },
+              { title: 'Xây dựng CI/CD với Jenkins/GitLab CI', videoUrl: 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4', duration: 1600 },
+              { title: 'Monitoring, SIEM & Incident Response', videoUrl: 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ElephantsDream.mp4', duration: 1300 },
             ],
           },
         ],
@@ -1539,13 +1518,13 @@ async function createCoursesAndLectures(categories, teachers) {
 
           for (let lecIndex = 0; lecIndex < chInfo.lectures.length; lecIndex++) {
             const lecInfo = chInfo.lectures[lecIndex];
-            const safeId = SAFE_YOUTUBE_IDS[lectureCount % SAFE_YOUTUBE_IDS.length];
+            const demoUrl = DEMO_MP4_VIDEOS[lectureCount % DEMO_MP4_VIDEOS.length];
             lectureCount++;
             await Lecture.create({
               title: lecInfo.title,
               type: 'video',
               duration: lecInfo.duration,
-              contentUrl: buildYouTubeWatchUrl(safeId),
+              contentUrl: demoUrl,
               chapterId: chapter.id,
               order: lecIndex + 1,
               isPreview: lecIndex === 0,
@@ -1685,13 +1664,14 @@ async function createStudents() {
 }
 
 async function createEnrollmentsProgressAndAttempts(students) {
-  const { Course, Chapter, Lecture, Quiz, Question, Enrollment, LectureProgress, Attempt } = models;
+  const { Course, Chapter, Lecture, Quiz, Question, Enrollment, LectureProgress, Attempt, Payment } = models;
   console.log('📊 Đang tạo enrollments, tiến độ và bài làm...');
 
   const courses = await Course.findAll({ where: { status: 'published' } });
   let enrollmentCount = 0;
   let progressCount = 0;
   let attemptCount = 0;
+  let paymentCount = 0;
 
   for (const course of courses) {
     // Get all lectures for this course
@@ -1721,19 +1701,43 @@ async function createEnrollmentsProgressAndAttempts(students) {
 
     for (const student of courseStudents) {
       // Create enrollment
+      const isPaid = Math.random() > 0.3;
       const [enrollment] = await Enrollment.findOrCreate({
         where: { userId: student.id, courseId: course.id },
         defaults: {
           userId: student.id,
           courseId: course.id,
           status: 'active',
-          enrollmentType: Math.random() > 0.3 ? 'paid' : 'free',
+          enrollmentType: isPaid ? 'paid' : 'free',
           progressPercent: 0,
           enrolledAt: new Date(Date.now() - Math.random() * 90 * 24 * 60 * 60 * 1000),
           enrollmentStatus: 'active',
         },
       });
       enrollmentCount++;
+
+      // Create completed payment for paid enrollments
+      if (isPaid && course.price > 0) {
+        try {
+          await Payment.create({
+            userId: student.id,
+            courseId: course.id,
+            amount: Number(course.price),
+            currency: 'USD',
+            provider: 'mock',
+            providerTxn: `SEED-${Date.now()}-${Math.random().toString(36).substring(2, 10)}`,
+            status: 'completed',
+            paymentDetails: {
+              initiatedAt: enrollment.enrolledAt.toISOString(),
+              processedAt: new Date().toISOString(),
+              source: 'seed',
+            },
+          });
+          paymentCount++;
+        } catch (err) {
+          // Ignore duplicate payment errors
+        }
+      }
 
       // Decide student completion level
       const rand = Math.random();
@@ -1839,6 +1843,7 @@ async function createEnrollmentsProgressAndAttempts(students) {
   }
 
   console.log(`  ✓ ${enrollmentCount} enrollments`);
+  console.log(`  ✓ ${paymentCount} payments`);
   console.log(`  ✓ ${progressCount} lecture progress records`);
   console.log(`  ✓ ${attemptCount} quiz attempts`);
 }

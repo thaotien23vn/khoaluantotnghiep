@@ -173,7 +173,10 @@ class EnrollmentController {
     try {
       const { id } = req.params;
       const months = parseFloat(req.query.months) || 1; // Support fractional months (0.25 = 1 week)
-      const result = await enrollmentService.getRenewalPrice(id, months);
+      const discountPercent = req.query.discountPercent !== undefined
+        ? parseFloat(req.query.discountPercent)
+        : null;
+      const result = await enrollmentService.getRenewalPrice(id, months, discountPercent);
       
       res.json({
         success: true,

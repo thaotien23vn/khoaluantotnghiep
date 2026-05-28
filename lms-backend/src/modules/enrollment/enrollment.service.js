@@ -342,7 +342,7 @@ class EnrollmentService {
    * Calculate renewal price for an enrollment
    * 🔒 FIXED: Use Math.floor to prevent float precision issues
    */
-  async getRenewalPrice(enrollmentId, renewalMonths) {
+  async getRenewalPrice(enrollmentId, renewalMonths, presetDiscountPercent = null) {
     const enrollment = await Enrollment.findByPk(Number(enrollmentId), {
       include: [{ model: Course, as: 'Course' }],
     });
@@ -351,7 +351,8 @@ class EnrollmentService {
 
     const course = enrollment.Course;
     const basePrice = Number(course.price) || 0;
-    const discountPercent = course.renewalDiscountPercent || 0;
+    const baseDiscount = course.renewalDiscountPercent || 0;
+    const discountPercent = presetDiscountPercent !== null ? presetDiscountPercent : baseDiscount;
     
     // Get course duration (in months) to calculate unit price
     const courseDurationValue = course.durationValue || 1;
