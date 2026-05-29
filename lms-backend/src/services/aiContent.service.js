@@ -235,13 +235,21 @@ Format: Markdown với headings rõ ràng.`;
 
       const chapter = lecture.chapter;
 
-      const systemPrompt = `Bạn là một chuyên gia giáo dục trong việc tạo câu hỏi kiểm tra chất lượng cao. Tạo câu hỏi dựa trên nội dung lecture được cung cấp.
+      const systemPrompt = `Bạn là chuyên gia giáo dục tạo câu hỏi kiểm tra chất lượng cao bám sát nội dung bài giảng.
 
-Yêu cầu:
-- Câu hỏi phải rõ ràng và không ambiguous
-- Đáp án phải chính xác
-- Phù hợp với mục tiêu learning objectives
-- Test cả comprehension và application`;
+QUY TẮC BẮT BUỘC:
+1. CHỈ trả về một JSON array thuần túy, không có text nào ngoài JSON
+2. Mỗi câu hỏi PHẢI có đủ 6 trường: type, question, options, correctAnswer, explanation, difficulty
+3. Loại multiple_choice: 
+   - options là array 4 phần tử ["A. Option 1", "B. Option 2", "C. Option 3", "D. Option 4"]
+   - correctAnswer là chỉ một trong: "A", "B", "C" hoặc "D" (không phải letter.text, chỉ letter)
+4. Loại true_false: 
+   - options PHẢI là ["A. True", "B. False"] (không bao giờ đổi)
+   - correctAnswer là "A" (true) hoặc "B" (false) - chỉ letter, không có text
+5. Loại short_answer: correctAnswer là text ngắn, rõ ràng
+6. Câu hỏi phải bám sát NỘI DUNG được cung cấp, không tạo câu hỏi ngoài ngữ cảnh
+7. explanation phải giải thích rõ tại sao đáp án đúng dựa trên nội dung bài học
+8. Tất cả câu hỏi phải ở mức độ độ khó vừa phải (medium) nếu không có yêu cầu khác`;
 
       const prompt = `Tạo ${questionCount} câu hỏi quiz từ nội dung lecture sau:
 
@@ -249,26 +257,36 @@ COURSE: ${lecture.chapter?.course?.title}
 CHAPTER: ${lecture.chapter?.title}
 LECTURE: ${lecture.title}
 
-LECTURE CONTENT:
+NỘI DUNG BÀI GIẢNG:
 ${lecture.content || lecture.aiNotes || 'Nội dung không available'}
 
-Yêu cầu:
-- Số lượng câu hỏi: ${questionCount}
-- Loại câu hỏi: ${questionTypes.join(', ')}
+YÊU CẦU:
+- Số câu hỏi: ${questionCount}
+- Loại câu hỏi được phép: ${questionTypes.join(', ')}
 - Độ khó: ${difficulty}
+- Câu hỏi multiple_choice PHẢI có đúng 4 lựa chọn, true_false PHẢI có 2 lựa chọn
 
-Format mỗi câu hỏi như sau:
-{
-  "type": "multiple_choice|true_false|short_answer",
-  "question": "Nội dung câu hỏi",
-  "options": ["A. Option 1", "B. Option 2", "C. Option 3", "D. Option 4"],
-  "correctAnswer": "A hoặc true/false hoặc text answer",
-  "explanation": "Giải thích tại sao đáp án đúng",
-  "difficulty": "easy|medium|hard",
-  "topic": "Chủ đề liên quan"
-}
-
-Trả về danh sách các câu hỏi trong format JSON array.`;
+ĐỊNH DẠNG JSON BẮT BUỘC (trả về array, không có text ngoài JSON):
+[
+  {
+    "type": "multiple_choice",
+    "question": "Câu hỏi rõ ràng dựa trên nội dung bài học?",
+    "options": ["A. Lựa chọn 1", "B. Lựa chọn 2", "C. Lựa chọn 3", "D. Lựa chọn 4"],
+    "correctAnswer": "A",
+    "explanation": "Giải thích dựa trên nội dung bài học...",
+    "difficulty": "medium",
+    "topic": "Chủ đề"
+  },
+  {
+    "type": "true_false",
+    "question": "Câu khẳng định hoặc phủ định dựa trên nội dung?",
+    "options": ["A. True", "B. False"],
+    "correctAnswer": "A",
+    "explanation": "Giải thích tại sao khẳng định này đúng...",
+    "difficulty": "medium",
+    "topic": "Chủ đề"
+  }
+]`;
 
       let aiResponse;
       let retries = 0;
@@ -442,10 +460,15 @@ Trả về danh sách các câu hỏi trong format JSON array.`;
 QUY TẮC BẮT BUỘC:
 1. CHỈ trả về một JSON array thuần túy, không có text nào ngoài JSON
 2. Mỗi câu hỏi PHẢI có đủ 6 trường: type, question, options, correctAnswer, explanation, difficulty
-3. Loại multiple_choice: options là array 4 phần tử ["A. ...", "B. ...", "C. ...", "D. ..."], correctAnswer là "A", "B", "C" hoặc "D"
-4. Loại true_false: options PHẢI là ["A. True", "B. False"], correctAnswer là "A" hoặc "B"
+3. Loại multiple_choice: 
+   - options là array 4 phần tử ["A. Option 1", "B. Option 2", "C. Option 3", "D. Option 4"]
+   - correctAnswer là chỉ một trong: "A", "B", "C" hoặc "D" (không phải letter.text, chỉ letter)
+4. Loại true_false: 
+   - options PHẢI là ["A. True", "B. False"] (không bao giờ đổi)
+   - correctAnswer là "A" (true) hoặc "B" (false) - chỉ letter, không có text
 5. Câu hỏi phải bám sát NỘI DUNG được cung cấp, không tạo câu hỏi ngoài ngữ cảnh
-6. explanation phải giải thích rõ tại sao đáp án đúng dựa trên nội dung bài học`;
+6. explanation phải giải thích rõ tại sao đáp án đúng dựa trên nội dung bài học
+7. Tất cả câu hỏi phải ở mức độ độ khó vừa phải (medium) nếu không có yêu cầu khác`;
 
       const prompt = `Tạo ${questionCount} câu hỏi quiz từ nội dung bài giảng sau:
 
