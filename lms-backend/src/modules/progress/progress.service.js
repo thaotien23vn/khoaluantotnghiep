@@ -738,7 +738,6 @@ class ProgressService {
 
       const passedAttempt = attempts.find(a => a.passed === true);
       const attemptCount = attempts.filter(a => a.completedAt !== null).length;
-      const maxAttempts = finalExam.maxAttempts || 3;
 
       return {
         hasFinalExam: true,
@@ -746,9 +745,9 @@ class ProgressService {
         quizTitle: finalExam.title,
         passed: !!passedAttempt,
         bestScore: passedAttempt ? Number(passedAttempt.percentageScore) : null,
-        attemptsLeft: Math.max(0, maxAttempts - attemptCount),
+        attemptsLeft: Infinity,
         attemptCount,
-        maxAttempts,
+        maxAttempts: null,
         passingScore: finalExam.passingScore,
         maxScore: finalExam.maxScore,
         timeLimit: finalExam.timeLimit,
