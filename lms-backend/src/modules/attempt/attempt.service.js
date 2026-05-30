@@ -286,7 +286,7 @@ class AttemptService {
         include: [{
           model: Quiz,
           as: 'quiz',
-          attributes: ['id', 'title', 'description', 'passingScore', 'showResults', 'timeLimit', 'courseId', 'isLevelFinal', 'level'],
+          attributes: ['id', 'title', 'description', 'passingScore', 'showResults', 'timeLimit', 'courseId', 'isLevelFinal', 'level', 'type'],
           include: [{ model: Question, as: 'questions' }],
         }],
         lock: {
@@ -302,7 +302,7 @@ class AttemptService {
           include: [{
             model: Quiz,
             as: 'quiz',
-            attributes: ['id', 'title', 'description', 'passingScore', 'showResults', 'timeLimit', 'courseId', 'isLevelFinal', 'level'],
+            attributes: ['id', 'title', 'description', 'passingScore', 'showResults', 'timeLimit', 'courseId', 'isLevelFinal', 'level', 'type'],
             include: [{ model: Question, as: 'questions' }],
           }],
         });
@@ -379,7 +379,7 @@ class AttemptService {
             timedOut: true,
             summary: { totalQuestions: attempt.quiz.questions.length, correctCount: 0, incorrectCount: 0, manualGradingCount: attempt.quiz.questions.filter(q => q.type === 'essay').length },
           },
-          quiz: { id: attempt.quiz.id, title: attempt.quiz.title },
+          quiz: { id: attempt.quiz.id, title: attempt.quiz.title, type: attempt.quiz.type },
           results: [],
           message: 'Bài thi đã hết thời gian, đã tự động nộp với đáp án hiện tại',
         };
@@ -465,7 +465,7 @@ class AttemptService {
           completedAt: result.completedAt,
           summary: result.summary,
         },
-        quiz: { id: result.quizId, title: result.quizTitle, type: result.quiz?.type },
+        quiz: { id: result.quizId, title: result.quizTitle, type: result.quiz?.type, isLevelFinal: result.quiz?.isLevelFinal },
         results: result.results,
       };
 
@@ -503,6 +503,28 @@ class AttemptService {
           }
         } catch (e) {
           console.error('[CourseFinal] Lỗi cấp chứng chỉ:', e);
+        }
+      }
+
+      // Level final exam: award certificate and level up on pass
+      if (result.quiz?.isLevelFinal && result.passed === true && result.quiz?.level) {
+        try {
+          // Get user info for certificate
+          const user = await db.models.User.findByPk(userId);
+          
+          if (user) {
+            // Award certificate directly when level final exam is passed
+            response.certificate = {
+              studentId: userId,
+              studentName: user.name || 'Học viên',
+              level: result.quiz.level,
+              issuedAt: new Date().toISOString(),
+              certificateId: `LEVEL-CERT-${result.quiz.level}-${userId}-${Date.now()}`,
+            };
+            console.log('[DEBUG LevelFinal] Certificate awarded directly:', response.certificate);
+          }
+        } catch (e) {
+          console.error('[LevelFinal] Lỗi cấp chứng chỉ:', e);
         }
       }
 
