@@ -129,7 +129,7 @@ class AttemptService {
         { model: Course, as: 'course', attributes: ['id', 'title', 'published'] },
         { model: Question, as: 'questions', attributes: ['id', 'type', 'content', 'options', 'points'] },
       ],
-      attributes: ['id', 'title', 'description', 'timeLimit', 'maxScore', 'passingScore', 'maxAttempts', 'startTime', 'endTime', 'courseId', 'isLevelFinal', 'level'],
+      attributes: ['id', 'title', 'description', 'timeLimit', 'maxScore', 'passingScore', 'maxAttempts', 'startTime', 'endTime', 'courseId', 'isLevelFinal', 'level', 'type'],
     });
 
     if (!quiz) throw { status: 404, message: 'Không tìm thấy quiz' };
@@ -200,6 +200,9 @@ class AttemptService {
               timeLimit: quiz.timeLimit,
               maxScore: quiz.maxScore,
               questions: quiz.questions,
+              type: quiz.type,
+              isLevelFinal: quiz.isLevelFinal,
+              level: quiz.level,
             },
             resumed: true,
           };
@@ -219,6 +222,9 @@ class AttemptService {
             timeLimit: quiz.timeLimit,
             maxScore: quiz.maxScore,
             questions: quiz.questions,
+            type: quiz.type,
+            isLevelFinal: quiz.isLevelFinal,
+            level: quiz.level,
           },
           resumed: true,
         };
@@ -263,6 +269,9 @@ class AttemptService {
         timeLimit: quiz.timeLimit,
         maxScore: quiz.maxScore,
         questions: quiz.questions,
+        type: quiz.type,
+        isLevelFinal: quiz.isLevelFinal,
+        level: quiz.level,
       },
       resumed: false,
     };
