@@ -2,6 +2,7 @@ const { Op } = require('sequelize');
 const db = require('../../models');
 const EnrollmentAccess = require('../enrollment/enrollment.access');
 const quizService = require('../quiz/quiz.service');
+const progressService = require('../progress/progress.service');
 const { Attempt, Quiz, Question, Course, User, Enrollment } = db.models;
 
 /**
@@ -464,11 +465,11 @@ class AttemptService {
           completedAt: result.completedAt,
           summary: result.summary,
         },
-        quiz: { id: result.quizId, title: result.quizTitle },
+        quiz: { id: result.quizId, title: result.quizTitle, type: result.quiz?.type },
         results: result.results,
       };
 
-      // Final quiz: award certificate and level up on pass
+      // Final quiz (level): award certificate and level up on pass
       console.log(`[DEBUG FinalQuiz] isLevelFinal=${result.quiz?.isLevelFinal}, passed=${result.passed}, level=${result.quiz?.level}`);
       if (result.quiz?.isLevelFinal && result.passed === true) {
         try {
@@ -478,6 +479,30 @@ class AttemptService {
           console.log('[DEBUG FinalQuiz] Certificate awarded:', certificate, 'LevelUp:', levelUp);
         } catch (e) {
           console.error('[FinalQuiz] Lỗi cấp chứng chỉ/nâng cấp:', e);
+        }
+      }
+
+      // Course final exam: award completion certificate on pass
+      if (result.quiz?.type === 'final' && result.passed === true && result.courseId) {
+        try {
+          // Get course and user info for certificate
+          const course = await db.models.Course.findByPk(result.courseId);
+          const user = await db.models.User.findByPk(userId);
+          
+          if (course && user) {
+            // Award certificate directly when final exam is passed
+            response.certificate = {
+              studentId: userId,
+              studentName: user.name || 'Học viên',
+              courseId: result.courseId,
+              courseTitle: course.title,
+              issuedAt: new Date().toISOString(),
+              certificateId: `CERT-${result.courseId}-${userId}-${Date.now()}`,
+            };
+            console.log('[DEBUG CourseFinal] Certificate awarded directly:', response.certificate);
+          }
+        } catch (e) {
+          console.error('[CourseFinal] Lỗi cấp chứng chỉ:', e);
         }
       }
 
@@ -531,7 +556,7 @@ class AttemptService {
       include: [{
         model: Quiz,
         as: 'quiz',
-        attributes: ['id', 'title', 'description', 'showResults', 'maxScore', 'passingScore', 'timeLimit', 'isLevelFinal', 'level'],
+        attributes: ['id', 'title', 'description', 'showResults', 'maxScore', 'passingScore', 'timeLimit', 'isLevelFinal', 'level', 'type'],
         include: [
           { model: Question, as: 'questions' },
           { model: Course, as: 'course', attributes: ['id', 'title'], required: false },
