@@ -760,21 +760,47 @@ class AttemptService {
       try { userAnswers = JSON.parse(userAnswers); } catch (e) { break; }
     }
 
-    const questions = attempt.quiz.questions;
-    const results = questions.map(question => {
-      const qId = question.id || question.toJSON?.().id;
-      const userAnswer = typeof userAnswers === 'object' && userAnswers !== null ? userAnswers[qId] : undefined;
-      const { isCorrect, pointsEarned } = gradeAnswer(question, userAnswer);
+    const questions = attempt.quiz.questions.map(question => {
+      const q = question.toJSON ? question.toJSON() : question;
+      const qId = q.id;
+      let userAnswer = typeof userAnswers === 'object' && userAnswers !== null ? userAnswers[qId] : undefined;
+      let pointsEarned = 0;
+      let feedback = '';
+      let isCorrect;
+
+      if (q.type === 'essay') {
+        if (userAnswer && typeof userAnswer === 'object') {
+          feedback = userAnswer.feedback || '';
+          pointsEarned = Number(userAnswer.pointsEarned) || 0;
+          if (userAnswer.answer !== undefined) {
+            userAnswer = userAnswer.answer;
+          } else if (userAnswer.text !== undefined) {
+            userAnswer = userAnswer.text;
+          }
+        }
+      } else {
+        const graded = gradeAnswer(question, userAnswer);
+        pointsEarned = graded.pointsEarned;
+        isCorrect = attempt.completedAt ? graded.isCorrect : undefined;
+      }
+
       return {
-        questionId: question.id,
+        ...q,
         userAnswer,
-        correctAnswer: question.correctAnswer,
-        isCorrect: attempt.completedAt ? isCorrect : undefined,
-        pointsEarned: isCorrect ? question.points : 0,
-        maxPoints: question.points,
-        explanation: question.explanation,
+        feedback,
+        isCorrect,
+        pointsEarned,
       };
     });
+
+    const results = questions.map(q => ({
+      questionId: q.id,
+      userAnswer: q.userAnswer,
+      isCorrect: q.isCorrect,
+      pointsEarned: q.pointsEarned,
+      maxPoints: q.points,
+      feedback: q.feedback,
+    }));
 
     return {
       attempt: {
@@ -785,8 +811,10 @@ class AttemptService {
         passed: attempt.passed,
         startedAt: attempt.startedAt,
         completedAt: attempt.completedAt,
+        questions, // expose questions directly on attempt for grading modal
       },
       quiz: { ...attempt.quiz.toJSON(), questions },
+      questions, // also expose at top level
       results,
     };
   }
